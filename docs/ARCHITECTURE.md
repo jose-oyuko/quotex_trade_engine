@@ -170,11 +170,11 @@ quotex_trade_engine/
 │   │   ├── events/            # bus.py, event types
 │   │   ├── api/               # routers/, schemas/, ws.py, deps.py
 │   │   └── reports/           # queries.py
+│   ├── data/                  # git-ignored: sqlite file, sessions, logs (owner decision, Phase 0)
 │   └── tests/                 # unit/, integration/, fixtures/
 ├── frontend/
 │   ├── package.json  vite.config.ts  tsconfig.json  eslint config
 │   └── src/ (api/, features/, components/, lib/, app/)
-├── data/                      # git-ignored: sqlite file, sessions, logs
 ├── .env.example
 ├── .gitignore
 └── README.md

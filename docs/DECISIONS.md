@@ -31,6 +31,9 @@ default host `quotex.com`, configurable `host`; uses `curl_cffi`). Pin to a spec
 `pyproject.toml`; record the hash and date in this file when chosen. Why: easy upstream updates, no
 copy to maintain. If a patch is unavoidable, fork the repo and pin the fork. The old local checkout
 (commit 8706f2c, 2025-07-16, hard-coded `qxbroker.com`) must **not** be used.
+**Pinned (Phase 0):** commit `a50a030b425937fec4595b1ff1c226e160c52943`, committed upstream on
+2026-10-13, `pyproject.toml` version 1.1.0, chosen 2026-11-01. Installed and imported on Python
+3.12.15 (import only). Phase 2 may change the pin if reading the source shows a problem.
 
 **D-6. All Quotex access sits behind `QuotexAdapter`.** Why: the library is **unofficial** (no public
 developer API exists as far as we could find), it breaks when Quotex changes, and automation may breach
@@ -86,16 +89,24 @@ Encrypted credential storage is a later item.
 **D-19. Python 3.12, `uv` or `pip` + venv (decide in Phase 0 and record).** Backend tooling: ruff
 (lint + format), mypy (strict on `app/`), pytest + pytest-asyncio. Frontend: ESLint, Prettier,
 TypeScript strict, Vitest + React Testing Library.
+**Decided (Phase 0, 2026-11-01): `uv`.** The backend lives in `backend/` with `pyproject.toml` and a
+committed-later `uv.lock`; `uv` also provides Python 3.12 (the machine's system Python is 3.9 and its
+registered 3.12 install is broken). Root `package.json` holds only convenience scripts.
 
 **D-20. In production FastAPI serves the built frontend** (single process, single port); in
 development Vite's dev server proxies `/api` and `/ws` to FastAPI.
+
+**D-21. Frontend toolchain pinned to what runs on Node 20.15.** The newest releases (Vite 8,
+`@vitejs/plugin-react` 6, Vitest 5, jest-dom 7) need Node ≥ 20.19/22 and failed on the owner's Node
+20.15.1 (Vite 8's bundler could not load its native binding). Chosen instead: React 18.3, Vite 6,
+plugin-react 4, Vitest 3, jest-dom 6.6, TypeScript 5.9, ESLint 9. Why: works on the machine as it is,
+no system change needed. Consequence: when the owner upgrades Node to 22 LTS, these can be raised.
 
 ---
 
 ## Decisions to be made later (record here when decided)
 
 - Money representation (integer minor units vs `Numeric`) — Phase 1.
-- Package manager for the backend (`uv` vs `pip`) — Phase 0.
 - Chart library — Phase 8.
-- pyquotex pinned commit hash — Phase 0/2.
+- (Decided in Phase 0: package manager = `uv`, pyquotex pin — see D-19 and D-5.)
 - Whether and how to support early close of single trades — after Phase 9.

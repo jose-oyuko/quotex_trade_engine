@@ -1,0 +1,57 @@
+[project]
+name = "quotex-trade-engine"
+version = "0.1.0"
+description = "Telegram signals to Quotex binary-option trades, with a live dashboard."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    "telethon>=1.37",
+    "structlog>=24.4",
+    # Unofficial Quotex client. Pinned to one commit (see docs/DECISIONS.md D-5); only
+    # app/quotex/ may import it.
+    "pyquotex @ git+https://github.com/cleitonleonel/pyquotex@a50a030b425937fec4595b1ff1c226e160c52943",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+]
+
+[tool.uv]
+# An application, not a library: no build step, tests import `app` from this folder.
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "C4", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app"]
+
+[[tool.mypy.overrides]]
+module = ["telethon.*", "pyquotex.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]

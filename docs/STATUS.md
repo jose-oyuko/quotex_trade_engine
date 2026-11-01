@@ -5,7 +5,7 @@ agent to start the next phase.
 
 | Phase | Name | State |
 |---|---|---|
-| 0 | Foundation and tooling | Not started |
+| 0 | Foundation and tooling | Done — awaiting owner approval |
 | 1 | Database and domain models | Not started |
 | 2 | Quotex adapter | Not started |
 | 3 | Telegram listener and parser | Not started |
@@ -18,10 +18,14 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** none — waiting for the owner to start Phase 0.
+**Current phase:** Phase 0 finished — waiting for the owner's review and "go on" for Phase 1.
+Report: [reports/phase-0.md](reports/phase-0.md).
 
-**Commits:** none yet. The agent does not commit unless the owner says so.
+**Commits:** only the owner's `77a5ded agent guide files`. The agent has made none and does not
+commit unless the owner says so. Phase 0 work is uncommitted in the working tree.
 
 ## Open questions for the owner
 
-_None yet._
+- Phase 0 report §7: two checks only the owner can do (clean-clone setup, page in a browser).
+- Decided: `data/` stays in `backend/` (`backend/data`, git-ignored).
+- Node upgrade (see D-21): owner is considering it; not required for any phase.
