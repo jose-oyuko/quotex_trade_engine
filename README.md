@@ -69,6 +69,29 @@ Open <http://127.0.0.1:5173>. The page should say **Health OK**. The dev server 
 Always start the backend with `npm run backend` (or `python -m app`), not with a bare `uvicorn`
 command: that is what enforces the loopback-only rule.
 
+## Quotex connection (Phase 2)
+
+Put your Quotex login in `backend/.env` (see `.env.example`): `QUOTEX_EMAIL`, `QUOTEX_PASSWORD`, and
+`QUOTEX_HOST` if the domain changes. These are secrets; the file is git-ignored.
+
+Check the connection **on the demo account** with the diagnostic:
+
+```
+npm run quotex:diagnose                  # connect, show balance and payout
+npm run quotex:diagnose -- --order       # also place ONE demo order and wait for its result
+```
+
+It can only use the demo account. If Quotex emails you a PIN, type it into that terminal once; the
+session is then stored in `backend/data/session.json` (a secret: it can act as you, keep that folder
+private) and the application never has to ask again.
+
+**When the domain stops working** (`getaddrinfo failed` = the name no longer resolves): set
+`QUOTEX_HOST` in `backend/.env` to the new bare domain (for example `quotex.io`), delete
+`backend/data/session.json`, and run the diagnostic again.
+
+Real-money trading is impossible unless `QUOTEX_ALLOW_REAL=true` *and* the account is switched to
+real explicitly. Keep it off while testing.
+
 ## Checks
 
 | Command | What it does |

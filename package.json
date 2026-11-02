@@ -19,6 +19,7 @@
     "build": "npm --prefix frontend run build",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "db:upgrade": "uv run --directory backend alembic upgrade head",
-    "db:downgrade": "uv run --directory backend alembic downgrade base"
+    "db:downgrade": "uv run --directory backend alembic downgrade base",
+    "quotex:diagnose": "uv run --directory backend python -m scripts.quotex_diagnose"
   }
 }

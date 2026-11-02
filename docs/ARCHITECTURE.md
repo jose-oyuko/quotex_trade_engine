@@ -165,7 +165,8 @@ quotex_trade_engine/
 │   │   ├── domain/            # enums, ids, plain records (what the DB stores); no framework imports
 │   │   ├── db/                # engine, session, models, column types, repositories, writer,
 │   │   │                      #   recovery query, migration helpers
-│   │   ├── quotex/            # base.py (interface), pyquotex_adapter.py, fake.py
+│   │   ├── quotex/            # base.py (interface), pyquotex_adapter.py (logic), pyquotex_client.py (the only
+│   │   │                      #   pyquotex importer), client.py (seam), fake.py, parsing.py, errors.py
 │   │   ├── telegram/          # listener.py
 │   │   ├── signals/           # parsers/, pipeline.py
 │   │   ├── engine/            # chain.py, strategies.py, executor.py, risk.py, manager.py

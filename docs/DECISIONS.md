@@ -131,6 +131,41 @@ took about 10 seconds to format one database error, which would freeze the event
 trading) while logging, and it cannot be printed on Windows consoles using cp1252. `core/logging.py`
 uses plain tracebacks (text) in development and `format_exc_info` in production.
 
+**D-26. Adapter structure: protocol, thin library seam, fake, contract tests.** `QuotexAdapter`
+(base.py) is the interface; `PyQuotexAdapter` holds all decisions (state, reconnect, safety checks)
+and talks to the library only through the small `QuotexClient` interface, whose single real
+implementation `PyQuotexClient` is the only module importing pyquotex (checked by a test).
+`FakeQuotexAdapter` follows the same rules. One contract test-suite runs against the fake and the
+real adapter. Why: the logic can be tested without the unofficial library, and the part that cannot
+be tested without the live service is as small as possible.
+
+**D-27. Orders bypass `Quotex.buy()` and are sent one at a time.** Reading pyquotex 1.1.0: `buy()`
+downloads the profile over HTTP and polls for a price tick (0.2 s steps) on every order, and
+waits `duration + 5` s for the confirmation; the server-time offset it fetches is not used by the
+order message. The adapter subscribes to an asset's prices once (`prepare_asset`, on the first
+order or ahead of time), sends via `api.buy`, and waits `ack_timeout` (10 s). pyquotex keeps ONE
+shared "order confirmed" slot, so an `asyncio.Lock` covers send-to-confirmation (normally
+milliseconds); results are awaited outside the lock. An order sent without a confirmation is
+reported as `OrderAckTimeoutError` ("may have been placed"): the chain must become `unknown`, never
+be retried blindly. Consequence: simultaneous signals queue for the confirmation round trip of the
+orders ahead of them.
+
+**D-28. The adapter owns reconnecting; session file stays in `data/`.** pyquotex's own websocket
+auto-reconnect is turned off so there is one owner with backoff (1 s doubling to 30 s, +-10 %
+jitter), events and a fresh client per attempt. The library writes `session.json` (cookies and
+token) into the current directory; the wrapper redirects it to `data/` (git-ignored). A rejected
+token is cleared from the file, because the library only forgets it in memory and would otherwise
+load the same dead token on every retry. Login PIN prompts never use `input()` inside the app
+(it would freeze the loop): unattended runs fail with an explanation, the diagnostic script asks
+in the terminal.
+
+**D-29. Result semantics.** pyquotex labels every profit <= 0 as "loss" and cannot report a draw.
+The adapter follows it: profit > 0 is WON, otherwise LOST (`classify_profit`). The fake can script
+a DRAW so the engine can handle one. `check_win()` is not used (it answers "loss" after a fixed 300 s,
+wrong for long expiries); the adapter waits on the library's per-order result slot and raises
+`ResultTimeoutError` instead. Default expiry mode is `TIME` (library default; clock-aligned expiry);
+`TIMER` (countdown) is a setting. Both are to be confirmed with the live diagnostic.
+
 ---
 
 ## Decisions to be made later (record here when decided)

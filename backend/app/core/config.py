@@ -7,7 +7,7 @@ from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LOOPBACK_NAMES = frozenset({"localhost"})
@@ -43,6 +43,24 @@ class Settings(BaseSettings):
 
     # Used by the dev proxy; production serves the frontend from the same origin.
     cors_origin: str = "http://127.0.0.1:5173"
+
+    # Quotex. Credentials are secrets: SecretStr never shows up in logs or repr().
+    quotex_email: SecretStr | None = None
+    quotex_password: SecretStr | None = None
+    # The broker's domain changes from time to time (the old qxbroker.com stopped resolving).
+    quotex_host: str = "quotex.com"
+    # Real-money trading must be switched on explicitly (decision D-15).
+    quotex_allow_real: bool = False
+    # TIME = expire at the next clock-aligned expiry, TIMER = a countdown of the given length.
+    quotex_time_mode: Literal["TIME", "TIMER"] = "TIME"
+
+    @field_validator("quotex_host")
+    @classmethod
+    def _bare_hostname(cls, value: str) -> str:
+        host = value.strip().lower()
+        if not host or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for c in host):
+            raise ValueError("QUOTEX_HOST must be a bare domain name such as quotex.com")
+        return host
 
     @property
     def database_path(self) -> Path:

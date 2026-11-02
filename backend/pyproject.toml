@@ -24,6 +24,7 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "httpx>=0.28",
+    "websockets>=17.4",
 ]
 
 [tool.uv]
@@ -42,7 +43,7 @@ select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "C4", "SIM", "RUF"]
 known-third-party = ["alembic"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S105", "S106"]  # asserts and obviously fake passwords are fine in tests
 
 [tool.mypy]
 python_version = "3.12"
@@ -59,3 +60,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["."]
 testpaths = ["tests"]
+filterwarnings = [
+    # Third-party noise from pyquotex / curl_cffi that we cannot act on:
+    "ignore:ssl.OP_NO_SSL:DeprecationWarning",
+    "ignore:(?s).*Proactor event loop does not implement add_reader",
+]

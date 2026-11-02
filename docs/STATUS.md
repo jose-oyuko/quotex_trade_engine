@@ -6,8 +6,8 @@ agent to start the next phase.
 | Phase | Name | State |
 |---|---|---|
 | 0 | Foundation and tooling | Approved |
-| 1 | Database and domain models | Done — awaiting owner approval |
-| 2 | Quotex adapter | Not started |
+| 1 | Database and domain models | Approved |
+| 2 | Quotex adapter | Done — awaiting owner approval (live checks pending) |
 | 3 | Telegram listener and parser | Not started |
 | 4 | Strategy and chain engine | Not started |
 | 5 | Safety and control | Not started |
@@ -18,15 +18,16 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 1 finished — waiting for the owner's review and "go on" for Phase 2.
-Report: [reports/phase-1.md](reports/phase-1.md) (includes "How to test it yourself").
+**Current phase:** Phase 2 finished — waiting for the owner's review. All offline checks pass; the
+**live demo checks (report section 12, steps 5-7) still need the owner's Quotex account**. Then "go on"
+for Phase 3. Report: [reports/phase-2.md](reports/phase-2.md).
 
-**Commits:** only the owner's (`77a5ded agent guide files`, `3463839 front end and backend project
-setup`). The agent has made none and does not commit unless the owner says so. Phase 1 work is
-uncommitted in the working tree.
+**Commits:** only the owner's (latest `310c3f5 upgrade front end toolchain to march node v22+`). The
+agent has made none and does not commit unless the owner says so. Phase 2 work is uncommitted in the
+working tree.
 
 ## Open questions for the owner
 
-- Decided earlier: `data/` stays in `backend/` (`backend/data`, git-ignored).
-- Resolved 2026-11-02: frontend toolchain upgraded (D-21 update); app wiring and `/health` additions
-  from Phase 1 accepted by the owner.
+- Phase 2 §7/§12: run the live demo checks and send back the timing lines and one losing-trade result
+  (to confirm a loss shows a negative profit).
+- Phase 2 §10: `TIME` (clock-aligned expiry, library default) or `TIMER` (countdown) expiry mode?
