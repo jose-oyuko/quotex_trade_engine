@@ -12,6 +12,7 @@ const NAV = [
   { to: '/signals', label: 'Signals', end: false },
   { to: '/groups', label: 'Groups', end: false },
   { to: '/history', label: 'History', end: false },
+  { to: '/reports', label: 'Reports', end: false },
 ]
 
 function Connection({ name, status }: { name: string; status: Snapshot }) {

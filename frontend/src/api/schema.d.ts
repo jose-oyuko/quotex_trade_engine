@@ -245,6 +245,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Breakdown
+         * @description The same figures split by group, asset, strategy, hour of day or weekday.
+         */
+        get: operations["get_breakdown_api_v1_reports_breakdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/depth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Depth
+         * @description How far chains go: how often each step is reached, and what it costs.
+         */
+        get: operations["get_depth_api_v1_reports_depth_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/equity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Equity
+         * @description The result of each day with trades and the running total, for the profit curve.
+         */
+        get: operations["get_equity_api_v1_reports_equity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/export/breakdown.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Breakdown Csv
+         * @description A breakdown as a CSV file.
+         */
+        get: operations["export_breakdown_csv_api_v1_reports_export_breakdown_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/export/trades.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Trades Csv
+         * @description Every trade in the range, whatever its status (the range here is when it was created), as a
+         *     UTF-8 CSV with a byte-order mark. Streamed, so a long history does not sit in memory.
+         */
+        get: operations["export_trades_csv_api_v1_reports_export_trades_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/summary": {
         parameters: {
             query?: never;
@@ -252,8 +353,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Reports Summary */
-        get: operations["reports_summary_api_v1_reports_summary_get"];
+        /**
+         * Get Summary
+         * @description Profit, win rate, drawdown, streaks and how the win rate compares with break-even.
+         */
+        get: operations["get_summary_api_v1_reports_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -491,6 +595,26 @@ export interface components {
              */
             type: "balance.updated";
         };
+        /**
+         * BreakdownKind
+         * @enum {string}
+         */
+        BreakdownKind: "group" | "asset" | "strategy" | "hour" | "weekday";
+        /** BreakdownOut */
+        BreakdownOut: {
+            by: components["schemas"]["BreakdownKind"];
+            filter: components["schemas"]["FilterOut"];
+            /** Rows */
+            rows: components["schemas"]["BreakdownRowOut"][];
+        };
+        /** BreakdownRowOut */
+        BreakdownRowOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            metrics: components["schemas"]["MetricsOut"];
+        };
         /** ChainAdvancedMessage */
         ChainAdvancedMessage: {
             /**
@@ -704,16 +828,96 @@ export interface components {
             since: string;
         };
         /**
+         * Delimiter
+         * @enum {string}
+         */
+        Delimiter: "comma" | "semicolon";
+        /** DepthOut */
+        DepthOut: {
+            /** Avg Chain Profit */
+            avg_chain_profit: string | null;
+            /** Chains */
+            chains: number;
+            /** Completed */
+            completed: number;
+            /** Exhausted */
+            exhausted: number;
+            filter: components["schemas"]["FilterOut"];
+            /** Other */
+            other: number;
+            /** Steps */
+            steps: components["schemas"]["DepthRowOut"][];
+        };
+        /** DepthRowOut */
+        DepthRowOut: {
+            /** Chain Profit Ending Here */
+            chain_profit_ending_here: string;
+            /** Chains Ending Here */
+            chains_ending_here: number;
+            /** Chains Reaching */
+            chains_reaching: number;
+            /** Chains Won Here */
+            chains_won_here: number;
+            /** Losses */
+            losses: number;
+            /** Profit */
+            profit: string;
+            /** Share Of Chains */
+            share_of_chains: number;
+            /** Staked */
+            staked: string;
+            /**
+             * Step
+             * @description Trade number in the chain; 1 is the original signal's trade.
+             */
+            step: number;
+            /** Trades */
+            trades: number;
+            /** Wins */
+            wins: number;
+        };
+        /**
          * Direction
          * @enum {string}
          */
         Direction: "call" | "put";
+        /** DrawdownOut */
+        DrawdownOut: {
+            /** Current Amount */
+            current_amount: string;
+            /** Max Amount */
+            max_amount: string;
+            /**
+             * Peak Day
+             * @description Null when the high point was the start of the range.
+             */
+            peak_day: string | null;
+            /** Trough Day */
+            trough_day: string | null;
+        };
         /** EngineStatus */
         EngineStatus: {
             /** Enabled */
             enabled: boolean;
             /** Running */
             running: boolean;
+        };
+        /** EquityOut */
+        EquityOut: {
+            filter: components["schemas"]["FilterOut"];
+            /** Points */
+            points: components["schemas"]["EquityPointOut"][];
+        };
+        /** EquityPointOut */
+        EquityPointOut: {
+            /** Cumulative */
+            cumulative: string;
+            /** Day */
+            day: string;
+            /** Profit */
+            profit: string;
+            /** Trades */
+            trades: number;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -733,12 +937,46 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** ExpectationOut */
+        ExpectationOut: {
+            /** Actual Win Rate */
+            actual_win_rate: number | null;
+            /** Breakeven Win Rate */
+            breakeven_win_rate: number | null;
+            /** Edge */
+            edge: number | null;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "not_enough_data" | "consistent_with_break_even" | "above_break_even" | "below_break_even";
+            /** Z Score */
+            z_score: number | null;
+        };
         /** FieldProblem */
         FieldProblem: {
             /** Field */
             field: string;
             /** Message */
             message: string;
+        };
+        /**
+         * FilterOut
+         * @description The filters the numbers below were computed with, echoed back.
+         */
+        FilterOut: {
+            account_type: components["schemas"]["AccountType"];
+            /** Asset */
+            asset: string | null;
+            /** Group Id */
+            group_id: number | null;
+            /** Since */
+            since: string | null;
+            strategy: components["schemas"]["Strategy"] | null;
+            /** Until */
+            until: string | null;
+            /** Utc Offset Minutes */
+            utc_offset_minutes: number;
         };
         /** GroupCreateIn */
         GroupCreateIn: {
@@ -925,6 +1163,59 @@ export interface components {
              */
             stop_chains: boolean;
         };
+        /** MetricsOut */
+        MetricsOut: {
+            /** Avg Payout Pct */
+            avg_payout_pct: number | null;
+            /** Avg Stake */
+            avg_stake: string | null;
+            /** Draws */
+            draws: number;
+            /** Losses */
+            losses: number;
+            /**
+             * Profit
+             * @description Net result; negative is a loss.
+             */
+            profit: string;
+            /**
+             * Roi
+             * @description profit / staked; null when nothing was staked.
+             */
+            roi: number | null;
+            /**
+             * Sample
+             * @description How much to trust the numbers: tiny (< 10 trades), small (< 30), ok.
+             * @enum {string}
+             */
+            sample: "tiny" | "small" | "ok";
+            /**
+             * Staked
+             * @description Total stake of these trades.
+             */
+            staked: string;
+            /**
+             * Trades
+             * @description Trades with a known result.
+             */
+            trades: number;
+            /**
+             * Win Rate
+             * @description wins / trades, 0 to 1; null with no trades.
+             */
+            win_rate: number | null;
+            /** Wins */
+            wins: number;
+        };
+        /** NotCountedOut */
+        NotCountedOut: {
+            /** Failed */
+            failed: number;
+            /** Open */
+            open: number;
+            /** Unknown */
+            unknown: number;
+        };
         /** Page[ChainOut] */
         Page_ChainOut_: {
             /** Items */
@@ -1095,6 +1386,19 @@ export interface components {
              */
             type: "risk.tripped";
         };
+        /** SampleGuideOut */
+        SampleGuideOut: {
+            /**
+             * Small Below
+             * @default 30
+             */
+            small_below: number;
+            /**
+             * Tiny Below
+             * @default 10
+             */
+            tiny_below: number;
+        };
         /**
          * ServerMessage
          * @description Every message the server can send on /ws; see app/api/schemas/ws.py.
@@ -1209,6 +1513,32 @@ export interface components {
          * @enum {string}
          */
         Strategy: "no_martingale" | "martingale" | "flip_every_loss" | "two_step_flip";
+        /** StreaksOut */
+        StreaksOut: {
+            /**
+             * Current
+             * @description Wins in a row now (positive) or losses in a row (negative).
+             */
+            current: number;
+            /** Longest Loss */
+            longest_loss: number;
+            /** Longest Win */
+            longest_win: number;
+        };
+        /** SummaryOut */
+        SummaryOut: {
+            drawdown: components["schemas"]["DrawdownOut"];
+            expectation: components["schemas"]["ExpectationOut"];
+            filter: components["schemas"]["FilterOut"];
+            /** First Day */
+            first_day: string | null;
+            /** Last Day */
+            last_day: string | null;
+            metrics: components["schemas"]["MetricsOut"];
+            not_counted: components["schemas"]["NotCountedOut"];
+            sample_guide: components["schemas"]["SampleGuideOut"];
+            streaks: components["schemas"]["StreaksOut"];
+        };
         /**
          * TradeLatency
          * @description Milliseconds between the steps of the hot path (docs/ARCHITECTURE.md section 4). A field is
@@ -2714,9 +3044,22 @@ export interface operations {
             };
         };
     };
-    reports_summary_api_v1_reports_summary_get: {
+    get_breakdown_api_v1_reports_breakdown_get: {
         parameters: {
-            query?: never;
+            query: {
+                by: components["schemas"]["BreakdownKind"];
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2729,7 +3072,441 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BreakdownOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_depth_api_v1_reports_depth_get: {
+        parameters: {
+            query?: {
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepthOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_equity_api_v1_reports_equity_get: {
+        parameters: {
+            query?: {
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquityOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    export_breakdown_csv_api_v1_reports_export_breakdown_csv_get: {
+        parameters: {
+            query: {
+                by: components["schemas"]["BreakdownKind"];
+                delimiter?: components["schemas"]["Delimiter"];
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per group of trades. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    export_trades_csv_api_v1_reports_export_trades_csv_get: {
+        parameters: {
+            query?: {
+                /** @description `semicolon` for Excel in many locales. */
+                delimiter?: components["schemas"]["Delimiter"];
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per trade. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_summary_api_v1_reports_summary_get: {
+        parameters: {
+            query?: {
+                /** @description Demo and real are never mixed. */
+                account_type?: components["schemas"]["AccountType"];
+                /** @description Start of the range (inclusive), ISO time with a zone. */
+                from?: string | null;
+                /** @description End of the range (exclusive), ISO time with a zone. */
+                to?: string | null;
+                group_id?: number | null;
+                strategy?: components["schemas"]["Strategy"] | null;
+                asset?: string | null;
+                /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
+                utc_offset_minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryOut"];
                 };
             };
             /** @description Not Found */

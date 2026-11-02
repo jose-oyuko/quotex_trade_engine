@@ -145,6 +145,63 @@
         "title": "BalanceUpdatedMessage",
         "type": "object"
       },
+      "BreakdownKind": {
+        "enum": [
+          "group",
+          "asset",
+          "strategy",
+          "hour",
+          "weekday"
+        ],
+        "title": "BreakdownKind",
+        "type": "string"
+      },
+      "BreakdownOut": {
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/BreakdownKind"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterOut"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BreakdownRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "filter",
+          "by",
+          "rows"
+        ],
+        "title": "BreakdownOut",
+        "type": "object"
+      },
+      "BreakdownRowOut": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/MetricsOut"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "metrics"
+        ],
+        "title": "BreakdownRowOut",
+        "type": "object"
+      },
       "ChainAdvancedMessage": {
         "properties": {
           "at": {
@@ -608,6 +665,130 @@
         "title": "DayOut",
         "type": "object"
       },
+      "Delimiter": {
+        "enum": [
+          "comma",
+          "semicolon"
+        ],
+        "title": "Delimiter",
+        "type": "string"
+      },
+      "DepthOut": {
+        "properties": {
+          "avg_chain_profit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Chain Profit"
+          },
+          "chains": {
+            "title": "Chains",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "exhausted": {
+            "title": "Exhausted",
+            "type": "integer"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterOut"
+          },
+          "other": {
+            "title": "Other",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/DepthRowOut"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "filter",
+          "chains",
+          "completed",
+          "exhausted",
+          "other",
+          "avg_chain_profit",
+          "steps"
+        ],
+        "title": "DepthOut",
+        "type": "object"
+      },
+      "DepthRowOut": {
+        "properties": {
+          "chain_profit_ending_here": {
+            "title": "Chain Profit Ending Here",
+            "type": "string"
+          },
+          "chains_ending_here": {
+            "title": "Chains Ending Here",
+            "type": "integer"
+          },
+          "chains_reaching": {
+            "title": "Chains Reaching",
+            "type": "integer"
+          },
+          "chains_won_here": {
+            "title": "Chains Won Here",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "share_of_chains": {
+            "title": "Share Of Chains",
+            "type": "number"
+          },
+          "staked": {
+            "title": "Staked",
+            "type": "string"
+          },
+          "step": {
+            "description": "Trade number in the chain; 1 is the original signal's trade.",
+            "title": "Step",
+            "type": "integer"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "chains_reaching",
+          "share_of_chains",
+          "trades",
+          "wins",
+          "losses",
+          "staked",
+          "profit",
+          "chains_ending_here",
+          "chains_won_here",
+          "chain_profit_ending_here"
+        ],
+        "title": "DepthRowOut",
+        "type": "object"
+      },
       "Direction": {
         "enum": [
           "call",
@@ -615,6 +796,49 @@
         ],
         "title": "Direction",
         "type": "string"
+      },
+      "DrawdownOut": {
+        "properties": {
+          "current_amount": {
+            "title": "Current Amount",
+            "type": "string"
+          },
+          "max_amount": {
+            "title": "Max Amount",
+            "type": "string"
+          },
+          "peak_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the high point was the start of the range.",
+            "title": "Peak Day"
+          },
+          "trough_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trough Day"
+          }
+        },
+        "required": [
+          "max_amount",
+          "peak_day",
+          "trough_day",
+          "current_amount"
+        ],
+        "title": "DrawdownOut",
+        "type": "object"
       },
       "EngineStatus": {
         "properties": {
@@ -632,6 +856,54 @@
           "running"
         ],
         "title": "EngineStatus",
+        "type": "object"
+      },
+      "EquityOut": {
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/FilterOut"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/EquityPointOut"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "filter",
+          "points"
+        ],
+        "title": "EquityOut",
+        "type": "object"
+      },
+      "EquityPointOut": {
+        "properties": {
+          "cumulative": {
+            "title": "Cumulative",
+            "type": "string"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "trades",
+          "profit",
+          "cumulative"
+        ],
+        "title": "EquityPointOut",
         "type": "object"
       },
       "ErrorBody": {
@@ -683,6 +955,73 @@
         "title": "ErrorDetail",
         "type": "object"
       },
+      "ExpectationOut": {
+        "properties": {
+          "actual_win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Win Rate"
+          },
+          "breakeven_win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakeven Win Rate"
+          },
+          "edge": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edge"
+          },
+          "verdict": {
+            "enum": [
+              "not_enough_data",
+              "consistent_with_break_even",
+              "above_break_even",
+              "below_break_even"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "z_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Score"
+          }
+        },
+        "required": [
+          "breakeven_win_rate",
+          "actual_win_rate",
+          "edge",
+          "z_score",
+          "verdict"
+        ],
+        "title": "ExpectationOut",
+        "type": "object"
+      },
       "FieldProblem": {
         "properties": {
           "field": {
@@ -699,6 +1038,85 @@
           "message"
         ],
         "title": "FieldProblem",
+        "type": "object"
+      },
+      "FilterOut": {
+        "description": "The filters the numbers below were computed with, echoed back.",
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset"
+          },
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Strategy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "utc_offset_minutes": {
+            "title": "Utc Offset Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "account_type",
+          "since",
+          "until",
+          "group_id",
+          "strategy",
+          "asset",
+          "utc_offset_minutes"
+        ],
+        "title": "FilterOut",
         "type": "object"
       },
       "GroupCreateIn": {
@@ -1185,6 +1603,131 @@
           }
         },
         "title": "KillSwitchIn",
+        "type": "object"
+      },
+      "MetricsOut": {
+        "properties": {
+          "avg_payout_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Payout Pct"
+          },
+          "avg_stake": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Stake"
+          },
+          "draws": {
+            "title": "Draws",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "profit": {
+            "description": "Net result; negative is a loss.",
+            "title": "Profit",
+            "type": "string"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "profit / staked; null when nothing was staked.",
+            "title": "Roi"
+          },
+          "sample": {
+            "description": "How much to trust the numbers: tiny (< 10 trades), small (< 30), ok.",
+            "enum": [
+              "tiny",
+              "small",
+              "ok"
+            ],
+            "title": "Sample",
+            "type": "string"
+          },
+          "staked": {
+            "description": "Total stake of these trades.",
+            "title": "Staked",
+            "type": "string"
+          },
+          "trades": {
+            "description": "Trades with a known result.",
+            "title": "Trades",
+            "type": "integer"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "wins / trades, 0 to 1; null with no trades.",
+            "title": "Win Rate"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trades",
+          "wins",
+          "losses",
+          "draws",
+          "win_rate",
+          "profit",
+          "staked",
+          "roi",
+          "avg_stake",
+          "avg_payout_pct",
+          "sample"
+        ],
+        "title": "MetricsOut",
+        "type": "object"
+      },
+      "NotCountedOut": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "unknown": {
+            "title": "Unknown",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "failed",
+          "unknown",
+          "open"
+        ],
+        "title": "NotCountedOut",
         "type": "object"
       },
       "Page_ChainOut_": {
@@ -1698,6 +2241,22 @@
         "title": "RiskTrippedMessage",
         "type": "object"
       },
+      "SampleGuideOut": {
+        "properties": {
+          "small_below": {
+            "default": 30,
+            "title": "Small Below",
+            "type": "integer"
+          },
+          "tiny_below": {
+            "default": 10,
+            "title": "Tiny Below",
+            "type": "integer"
+          }
+        },
+        "title": "SampleGuideOut",
+        "type": "object"
+      },
       "ServerMessage": {
         "description": "Every message the server can send on /ws; see app/api/schemas/ws.py.",
         "discriminator": {
@@ -2052,6 +2611,90 @@
         ],
         "title": "Strategy",
         "type": "string"
+      },
+      "StreaksOut": {
+        "properties": {
+          "current": {
+            "description": "Wins in a row now (positive) or losses in a row (negative).",
+            "title": "Current",
+            "type": "integer"
+          },
+          "longest_loss": {
+            "title": "Longest Loss",
+            "type": "integer"
+          },
+          "longest_win": {
+            "title": "Longest Win",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "longest_win",
+          "longest_loss",
+          "current"
+        ],
+        "title": "StreaksOut",
+        "type": "object"
+      },
+      "SummaryOut": {
+        "properties": {
+          "drawdown": {
+            "$ref": "#/components/schemas/DrawdownOut"
+          },
+          "expectation": {
+            "$ref": "#/components/schemas/ExpectationOut"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/FilterOut"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/MetricsOut"
+          },
+          "not_counted": {
+            "$ref": "#/components/schemas/NotCountedOut"
+          },
+          "sample_guide": {
+            "$ref": "#/components/schemas/SampleGuideOut"
+          },
+          "streaks": {
+            "$ref": "#/components/schemas/StreaksOut"
+          }
+        },
+        "required": [
+          "filter",
+          "metrics",
+          "not_counted",
+          "streaks",
+          "drawdown",
+          "expectation",
+          "first_day",
+          "last_day",
+          "sample_guide"
+        ],
+        "title": "SummaryOut",
+        "type": "object"
       },
       "TradeLatency": {
         "description": "Milliseconds between the steps of the hot path (docs/ARCHITECTURE.md section 4). A field is\nnull when the trade does not have both of its stamps (follow-ups have no Telegram message).",
@@ -4088,14 +4731,140 @@
         ]
       }
     },
-    "/api/v1/reports/summary": {
+    "/api/v1/reports/breakdown": {
       "get": {
-        "operationId": "reports_summary_api_v1_reports_summary_get",
+        "description": "The same figures split by group, asset, strategy, hour of day or weekday.",
+        "operationId": "get_breakdown_api_v1_reports_breakdown_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "by",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BreakdownKind"
+            }
+          },
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BreakdownOut"
+                }
               }
             },
             "description": "Successful Response"
@@ -4161,9 +4930,1013 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Reports Summary",
+        "summary": "Get Breakdown",
         "tags": [
-          "control",
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/depth": {
+      "get": {
+        "description": "How far chains go: how often each step is reached, and what it costs.",
+        "operationId": "get_depth_api_v1_reports_depth_get",
+        "parameters": [
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Depth",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/equity": {
+      "get": {
+        "description": "The result of each day with trades and the running total, for the profit curve.",
+        "operationId": "get_equity_api_v1_reports_equity_get",
+        "parameters": [
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EquityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Equity",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/export/breakdown.csv": {
+      "get": {
+        "description": "A breakdown as a CSV file.",
+        "operationId": "export_breakdown_csv_api_v1_reports_export_breakdown_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "by",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BreakdownKind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "delimiter",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Delimiter",
+              "default": "comma"
+            }
+          },
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "One row per group of trades."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Export Breakdown Csv",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/export/trades.csv": {
+      "get": {
+        "description": "Every trade in the range, whatever its status (the range here is when it was created), as a\nUTF-8 CSV with a byte-order mark. Streamed, so a long history does not sit in memory.",
+        "operationId": "export_trades_csv_api_v1_reports_export_trades_csv_get",
+        "parameters": [
+          {
+            "description": "`semicolon` for Excel in many locales.",
+            "in": "query",
+            "name": "delimiter",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Delimiter",
+              "default": "comma",
+              "description": "`semicolon` for Excel in many locales."
+            }
+          },
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "One row per trade."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Export Trades Csv",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/summary": {
+      "get": {
+        "description": "Profit, win rate, drawdown, streaks and how the win rate compares with break-even.",
+        "operationId": "get_summary_api_v1_reports_summary_get",
+        "parameters": [
+          {
+            "description": "Demo and real are never mixed.",
+            "in": "query",
+            "name": "account_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType",
+              "default": "demo",
+              "description": "Demo and real are never mixed."
+            }
+          },
+          {
+            "description": "Start of the range (inclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start of the range (inclusive), ISO time with a zone.",
+              "title": "From"
+            }
+          },
+          {
+            "description": "End of the range (exclusive), ISO time with a zone.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (exclusive), ISO time with a zone.",
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Strategy"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset"
+            }
+          },
+          {
+            "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+            "in": "query",
+            "name": "utc_offset_minutes",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed.",
+              "maximum": 840,
+              "minimum": -840,
+              "title": "Utc Offset Minutes",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Summary",
+        "tags": [
           "reports"
         ]
       }

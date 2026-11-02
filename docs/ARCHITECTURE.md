@@ -116,7 +116,7 @@ Rules:
 - REST under `/api/v1`, JSON, typed with Pydantic models, versioned. Examples:
   `GET /health`, `GET/PUT /groups`, `POST /groups/{id}/pause`, `GET /chains?status=open`,
   `POST /chains/{id}/stop-after-current`, `POST /chains/{id}/end` (the dashboard's "skip to base"),
-  `POST /kill-switch`, `GET /trades`, `GET /signals`, `GET /reports/summary` (Phase 8) …
+  `POST /kill-switch`, `GET /trades`, `GET /signals`, `GET /reports/summary|breakdown|equity|depth` and the CSV exports (Phase 8) …
 - **WebSocket** `/ws` streams events to the dashboard. On connect the server sends a snapshot
   (open chains, balance, connection state), then incremental events with sequence numbers so the
   client can detect gaps and re-sync. Each client has its own bounded queue (decision D-40).
@@ -132,7 +132,7 @@ Rules:
 - Feature-based folders (built in Phase 7): `features/live` (chains, open trades, stats), `features/signals`,
   `features/groups` (list and form), `features/history`, `features/controls` (kill switch, account
   badge); shared `components/`, `lib/`, `live/` (the WebSocket-to-cache bridge) and `api/` (typed client
-  and types generated from the OpenAPI schema). `features/reports` arrives with Phase 8. See
+  and types generated from the OpenAPI schema). `features/reports` (summary, profit curve, splits, chain depth, CSV) came with Phase 8. See
   decisions D-43 to D-45.
 - Charts: one chart library, chosen in Phase 8 and recorded in DECISIONS.
 - In production the built frontend is served by FastAPI as static files (one process, one port).
@@ -181,7 +181,7 @@ quotex_trade_engine/
 │   │   ├── services/          # live.py (LiveState, rebuilt from events), groups.py, risk_settings.py
 │   │   ├── api/               # routers/, schemas/, hub.py + ws.py (/ws), errors.py, security.py,
 │   │   │                      #   snapshot.py, events.py, openapi.py, deps.py, views.py
-│   │   └── reports/           # queries.py
+│   │   └── reports/           # models.py (definitions), queries.py (SQL), sql.py (portable bits), csvout.py
 │   ├── data/                  # git-ignored: sqlite file, sessions, logs (owner decision, Phase 0)
 │   └── tests/                 # unit/, integration/, fixtures/
 ├── frontend/

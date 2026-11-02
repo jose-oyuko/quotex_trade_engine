@@ -13,7 +13,7 @@ from app.api import health, ws
 from app.api.errors import install_error_handlers
 from app.api.hub import Hub
 from app.api.openapi import build_openapi
-from app.api.routers import chains, control, groups, trades
+from app.api.routers import chains, control, groups, reports, trades
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
@@ -181,6 +181,7 @@ def create_app(
         trades.trades_router,
         trades.signals_router,
         control.router,
+        reports.router,
     ):
         app.include_router(router, prefix="/api/v1")
     app.include_router(ws.router)

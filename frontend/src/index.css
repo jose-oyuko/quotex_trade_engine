@@ -487,6 +487,105 @@ input[aria-invalid='true'] {
   gap: 0.5rem;
 }
 
+/* --- reports and charts --- */
+
+.chart {
+  width: 100%;
+  height: auto;
+  max-height: 20rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0.5rem 0;
+}
+
+.chart-axis {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.chart-bar {
+  fill: var(--accent);
+}
+
+.chart-good {
+  fill: var(--good);
+}
+
+.chart-bad {
+  fill: var(--bad);
+}
+
+.chart-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.chart-dot {
+  fill: var(--accent);
+}
+
+.chart-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0.5rem 0;
+}
+
+.tab {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tab-active {
+  background: var(--surface);
+  border-color: var(--border);
+  font-weight: 700;
+}
+
+.row-faint {
+  opacity: 0.55;
+}
+
+.reading {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 1rem 0.75rem;
+}
+
+.reading h3 {
+  margin: 0.4rem 0;
+}
+
+.actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+details {
+  margin: 0.5rem 0;
+}
+
+summary {
+  cursor: pointer;
+}
+
 /* --- dialogs --- */
 
 .modal-backdrop {

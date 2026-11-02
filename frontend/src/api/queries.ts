@@ -2,8 +2,15 @@
 // replaces it, events patch it), so it never refetches by itself. Everything else is a normal query
 // that the live feed marks stale when something relevant happens.
 import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { api } from './client'
-import type { AccountType, ChainStatus, SignalStatus, Snapshot, TradeStatus } from './types'
+import { api, type ReportFilters } from './client'
+import type {
+  AccountType,
+  BreakdownKind,
+  ChainStatus,
+  SignalStatus,
+  Snapshot,
+  TradeStatus,
+} from './types'
 
 export interface Paging {
   limit: number
@@ -19,6 +26,7 @@ export const keys = {
   trades: ['trades'] as const,
   signals: ['signals'] as const,
   riskEvents: ['risk-events'] as const,
+  reports: ['reports'] as const,
 }
 
 export function useStatus() {
@@ -82,4 +90,38 @@ export interface ChainFilters extends Paging {
 /** After a change the server confirmed, make the lists that show it fetch again. */
 export function invalidateGroups(client: QueryClient): Promise<void> {
   return client.invalidateQueries({ queryKey: keys.groups })
+}
+
+// --- reports: nothing refreshes them by itself, the owner asks ("Refresh") or changes a filter ---
+
+export function useReportSummary(filters: ReportFilters) {
+  return useQuery({
+    queryKey: [...keys.reports, 'summary', filters],
+    queryFn: ({ signal }) => api.reports.summary(filters, signal),
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useReportBreakdown(by: BreakdownKind, filters: ReportFilters) {
+  return useQuery({
+    queryKey: [...keys.reports, 'breakdown', by, filters],
+    queryFn: ({ signal }) => api.reports.breakdown(by, filters, signal),
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useReportEquity(filters: ReportFilters) {
+  return useQuery({
+    queryKey: [...keys.reports, 'equity', filters],
+    queryFn: ({ signal }) => api.reports.equity(filters, signal),
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useReportDepth(filters: ReportFilters) {
+  return useQuery({
+    queryKey: [...keys.reports, 'depth', filters],
+    queryFn: ({ signal }) => api.reports.depth(filters, signal),
+    placeholderData: (previous) => previous,
+  })
 }

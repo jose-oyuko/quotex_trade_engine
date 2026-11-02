@@ -135,6 +135,14 @@ switch, pauses and limits are remembered across restarts. The day for the daily 
 If the application stops while trades are open, the next start marks those trades and their chains
 `unknown` (it cannot see Quotex's history) and logs a `risk.tripped` event: check them on Quotex.
 
+## Reports (Phase 8)
+
+The **Reports** page answers "is this really working?": profit, win rate, drawdown, streaks, the result
+split by group, asset, strategy, hour of day and weekday, how deep chains go and what each step costs,
+and a plain-language comparison of the win rate with the break-even line, which refuses to conclude
+from too few trades. Demo and real are never mixed. Every table can be downloaded as a CSV that opens
+in Excel (use the semicolon version if Excel shows one column). Try it with `npm run demo`.
+
 ## The API (Phase 6)
 
 With the backend running, <http://127.0.0.1:8000/docs> is an interactive page for every endpoint, and

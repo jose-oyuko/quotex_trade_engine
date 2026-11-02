@@ -51,7 +51,11 @@ trust:
 | `GET /risk/events` | Every order a limit blocked, and other safety events. |
 | `POST /kill-switch`, `DELETE /kill-switch` | Engage (optionally `{"stop_chains": true}`) or release the kill switch. *Needs the engine.* |
 | `GET /account`, `PUT /account` | Which account is in use; switch between demo and real (refused while anything runs, and real needs `QUOTEX_ALLOW_REAL=true`). *Switching needs the engine.* |
-| `GET /reports/summary` | Placeholder: answers 501 until Phase 8. |
+| `GET /reports/summary` | Profit, win rate, return on stakes, drawdown, streaks, what is not counted, and how the win rate compares with break-even. |
+| `GET /reports/breakdown?by=group\|asset\|strategy\|hour\|weekday` | The same figures split five ways (hour and weekday always list every hour / day). |
+| `GET /reports/equity` | The result of each day and the running total (the profit curve). |
+| `GET /reports/depth` | How far chains go: per step, how many chains got there, what it staked and earned, and how chains that ended there did overall. |
+| `GET /reports/export/trades.csv`, `GET /reports/export/breakdown.csv?by=…` | Spreadsheet downloads (see below). |
 
 "*Needs the engine*" means the engine was started with the backend (`ENGINE_ENABLED=true`).
 Without it these answer HTTP 503 `engine_not_running`; everything else works, including creating
@@ -80,6 +84,24 @@ groups and setting limits.
 `multipliers` must have exactly `max_steps` entries (one per step) and each must be above 0;
 `base_stake` has at most 2 decimals; `max_steps` is at most 20. Editing a group applies to chains
 started from then on; a chain already running keeps the settings it started with.
+
+## Reports
+
+Every report takes the same filters as query parameters: `account_type` (`demo` by default; demo
+and real are never mixed), `from` (inclusive) and `to` (exclusive) as ISO times **with a zone**
+(`2026-11-02T00:00:00Z`), `group_id`, `strategy`, `asset`, and `utc_offset_minutes` (your clock for
+hour of day, weekday and days: UTC-3 is `-180`; fixed, daylight saving is not followed). The answer
+echoes the filters used. Rates are numbers from 0 to 1; money is text.
+
+Only **finished** trades (won, lost, draw) count; failed, unknown and open ones are listed as "not
+counted". Every figure comes with its sample size: `tiny` is under 10 trades, `small` under 30,
+`ok` beyond. The definitions are in decision D-47 (`docs/DECISIONS.md`).
+
+**CSV downloads** (`/reports/export/trades.csv`, `/reports/export/breakdown.csv?by=…`) open in Excel:
+UTF-8 with a byte-order mark, CRLF line ends, a dot for decimals, text that could be read as a
+formula defused. Add `delimiter=semicolon` if Excel shows everything in one column (many European
+locales). The trades file has one row per trade in the period, whatever its status (the period there
+is when the trade was created).
 
 ## The live feed: `/ws`
 

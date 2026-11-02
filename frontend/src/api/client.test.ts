@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, request } from './client'
+import { api, ApiError, reportCsvUrl, request } from './client'
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn<typeof fetch>(() =>
@@ -127,6 +127,36 @@ describe('api', () => {
     ['risk.events', () => api.risk.events({ offset: 50 }), 'GET', '/api/v1/risk/events?offset=50'],
     ['killSwitch.release', () => api.killSwitch.release(), 'DELETE', '/api/v1/kill-switch'],
     ['account.get', () => api.account.get(), 'GET', '/api/v1/account'],
+    [
+      'reports.summary',
+      () => api.reports.summary({ account_type: 'demo' }),
+      'GET',
+      '/api/v1/reports/summary?account_type=demo',
+    ],
+    [
+      'reports.breakdown',
+      () =>
+        api.reports.breakdown('hour', {
+          account_type: 'real',
+          from: '2026-11-01T00:00:00.000Z',
+          group_id: 2,
+          utc_offset_minutes: -180,
+        }),
+      'GET',
+      '/api/v1/reports/breakdown?account_type=real&from=2026-11-01T00%3A00%3A00.000Z&group_id=2&utc_offset_minutes=-180&by=hour',
+    ],
+    [
+      'reports.equity',
+      () => api.reports.equity({ account_type: 'demo' }),
+      'GET',
+      '/api/v1/reports/equity?account_type=demo',
+    ],
+    [
+      'reports.depth',
+      () => api.reports.depth({ account_type: 'demo', asset: 'EURUSD' }),
+      'GET',
+      '/api/v1/reports/depth?account_type=demo&asset=EURUSD',
+    ],
   ])('%s calls %s %s', async (_name, call, method, url) => {
     const fetchMock = mockFetch(Response.json({}))
     await call()
@@ -149,5 +179,25 @@ describe('api', () => {
     const { init } = lastCall(fetchMock)
     expect(init.method).toBe('PUT')
     expect(init.body).toBe('{"account_type":"real"}')
+  })
+})
+
+describe('reportCsvUrl', () => {
+  it('addresses the trades file, with the filters and the separator', () => {
+    expect(reportCsvUrl('trades', { account_type: 'demo', group_id: 3 }, 'semicolon')).toBe(
+      '/api/v1/reports/export/trades.csv?account_type=demo&group_id=3&delimiter=semicolon',
+    )
+  })
+
+  it('addresses a breakdown file, saying what to split by', () => {
+    expect(reportCsvUrl('weekday', { account_type: 'real', utc_offset_minutes: 60 })).toBe(
+      '/api/v1/reports/export/breakdown.csv?account_type=real&utc_offset_minutes=60&by=weekday&delimiter=comma',
+    )
+  })
+
+  it('leaves out filters that are not set', () => {
+    const url = reportCsvUrl('trades', { account_type: 'demo', asset: undefined })
+    expect(url).not.toContain('asset')
+    expect(url).not.toContain('from')
   })
 })

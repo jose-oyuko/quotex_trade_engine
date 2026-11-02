@@ -15,7 +15,6 @@ from app.api.deps import (
     SettingsDep,
     SnapshotsDep,
 )
-from app.api.errors import ApiError
 from app.api.schemas.common import DEFAULT_PAGE_SIZE, LimitParam, OffsetParam, Page
 from app.api.schemas.records import RiskEventOut, risk_event_out
 from app.api.schemas.risk import (
@@ -127,11 +126,3 @@ async def set_account(
     return AccountOut(
         account_type=engine.adapter.account_type, real_trading_allowed=settings.quotex_allow_real
     )
-
-
-# --- reports (arrive with Phase 8) ---
-
-
-@router.get("/reports/summary", tags=["reports"])
-async def reports_summary() -> None:
-    raise ApiError(501, "not_implemented", "Reports arrive with Phase 8.")

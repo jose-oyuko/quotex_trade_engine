@@ -1,4 +1,4 @@
-"""/api/v1 risk, kill switch, chain commands, account, status, health and reports placeholder."""
+"""/api/v1 risk, kill switch, chain commands, account, status and health."""
 
 from __future__ import annotations
 
@@ -402,13 +402,3 @@ async def test_health_reports_the_engine_and_the_connections(tmp_path: Path) -> 
         health = (await rig.client.get(f"{API}/health")).json()
         assert health["engine"] == {"enabled": True, "running": True}
         assert health["quotex"]["connected"] is True
-
-
-# --- reports (Phase 8) ---
-
-
-async def test_the_reports_placeholder_says_it_is_not_there_yet(tmp_path: Path) -> None:
-    async with running_api(tmp_path) as rig:
-        response = await rig.client.get(f"{API}/reports/summary")
-        assert response.status_code == 501
-        assert response.json()["error"]["code"] == "not_implemented"

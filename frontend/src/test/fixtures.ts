@@ -1,5 +1,17 @@
 // Builders for the shapes the API returns, with sensible defaults: override only what a test cares about.
-import type { Chain, Group, Page, Signal, Snapshot, Trade } from '../api/types'
+import type {
+  Chain,
+  Group,
+  Page,
+  ReportBreakdown,
+  ReportDepth,
+  ReportEquity,
+  ReportMetrics,
+  ReportSummary,
+  Signal,
+  Snapshot,
+  Trade,
+} from '../api/types'
 
 export const NOW = '2026-11-02T10:00:00Z'
 
@@ -130,5 +142,116 @@ export function makeGroup(overrides: Partial<Group> = {}): Group {
     paused: false,
     active_chains: 0,
     ...overrides,
+  }
+}
+
+export function makeMetrics(overrides: Partial<ReportMetrics> = {}): ReportMetrics {
+  return {
+    trades: 9,
+    wins: 4,
+    losses: 5,
+    draws: 0,
+    win_rate: 4 / 9,
+    profit: '-2.50',
+    staked: '19.00',
+    roi: -2.5 / 19,
+    avg_stake: '2.11',
+    avg_payout_pct: 81.7,
+    sample: 'tiny',
+    ...overrides,
+  }
+}
+
+const FILTER = {
+  account_type: 'demo',
+  since: null,
+  until: null,
+  group_id: null,
+  strategy: null,
+  asset: null,
+  utc_offset_minutes: 0,
+} as const
+
+export function makeSummary(overrides: Partial<ReportSummary> = {}): ReportSummary {
+  return {
+    filter: FILTER,
+    metrics: makeMetrics(),
+    not_counted: { failed: 1, unknown: 1, open: 1 },
+    streaks: { longest_win: 2, longest_loss: 4, current: 2 },
+    drawdown: {
+      max_amount: '9.00',
+      peak_day: '2026-11-02',
+      trough_day: '2026-11-03',
+      current_amount: '3.90',
+    },
+    expectation: {
+      breakeven_win_rate: 0.5505,
+      actual_win_rate: 0.4444,
+      edge: -0.106,
+      z_score: -0.64,
+      verdict: 'not_enough_data',
+    },
+    first_day: '2026-11-02',
+    last_day: '2026-11-04',
+    sample_guide: { tiny_below: 10, small_below: 30 },
+    ...overrides,
+  }
+}
+
+export function makeBreakdown(
+  by: ReportBreakdown['by'],
+  rows: [key: string, label: string, trades: number, profit: string][],
+): ReportBreakdown {
+  return {
+    filter: FILTER,
+    by,
+    rows: rows.map(([key, label, trades, profit]) => ({
+      key,
+      label,
+      metrics: makeMetrics({
+        trades,
+        wins: Math.round(trades / 2),
+        losses: trades - Math.round(trades / 2),
+        win_rate: trades ? Math.round(trades / 2) / trades : null,
+        profit,
+        sample: trades < 10 ? 'tiny' : trades < 30 ? 'small' : 'ok',
+      }),
+    })),
+  }
+}
+
+export function makeEquity(): ReportEquity {
+  return {
+    filter: FILTER,
+    points: [
+      { day: '2026-11-02', trades: 3, profit: '1.40', cumulative: '1.40' },
+      { day: '2026-11-03', trades: 4, profit: '-9.00', cumulative: '-7.60' },
+      { day: '2026-11-04', trades: 2, profit: '5.10', cumulative: '-2.50' },
+    ],
+  }
+}
+
+export function makeDepth(): ReportDepth {
+  const row = (step: number, reaching: number, share: number) => ({
+    step,
+    chains_reaching: reaching,
+    share_of_chains: share,
+    trades: reaching,
+    wins: 1,
+    losses: reaching - 1,
+    staked: '10.00',
+    profit: '-1.00',
+    chains_ending_here: 1,
+    chains_won_here: 1,
+    chain_profit_ending_here: '0.60',
+  })
+  return {
+    filter: FILTER,
+    chains: 5,
+    completed: 4,
+    exhausted: 1,
+    other: 0,
+    avg_chain_profit: '-0.50',
+    steps: [row(1, 5, 1), row(2, 3, 0.6), row(3, 1, 0.2)],
   }
 }

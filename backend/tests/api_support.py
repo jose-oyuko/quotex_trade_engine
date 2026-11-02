@@ -15,10 +15,12 @@ import httpx
 import uvicorn
 from alembic import command
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
+from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
 from app.engine.engine import Engine
 from app.events.bus import EventBus
@@ -127,11 +129,23 @@ def fake_builder(parts: list[FakeParts], *, hold_results: bool = False) -> Engin
 
 @asynccontextmanager
 async def running_api(
-    tmp_path: Path, *, with_engine: bool = False, hold_results: bool = False, **settings: Any
+    tmp_path: Path,
+    *,
+    with_engine: bool = False,
+    hold_results: bool = False,
+    seed: Callable[[async_sessionmaker[AsyncSession]], Awaitable[None]] | None = None,
+    **settings: Any,
 ) -> AsyncIterator[ApiRig]:
-    """The application inside its lifespan, with an HTTP client for it."""
+    """The application inside its lifespan, with an HTTP client for it. `seed` fills the database
+    before the application starts (reports need history to report on)."""
     config = settings_for(tmp_path, engine_enabled=with_engine, **settings)
     await migrate(config)
+    if seed is not None:
+        engine = create_engine(config.database_url)
+        try:
+            await seed(create_session_factory(engine))
+        finally:
+            await engine.dispose()
     parts: list[FakeParts] = []
     app = create_app(config, engine_builder=fake_builder(parts, hold_results=hold_results))
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)

@@ -6,7 +6,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { keys } from '../api/queries'
 import type { Snapshot } from '../api/types'
 import { LiveStatusContext } from '../live/liveStatus'
-import { makeGroup, makeSnapshot, page } from '../test/fixtures'
+import {
+  makeBreakdown,
+  makeDepth,
+  makeEquity,
+  makeGroup,
+  makeSnapshot,
+  makeSummary,
+  page,
+} from '../test/fixtures'
 import { json, mockApi } from '../test/utils'
 import { ErrorBoundary } from './ErrorBoundary'
 import { routes } from './router'
@@ -26,6 +34,10 @@ const ROUTES = [
   ['GET', '/risk', risk],
   ['GET', '/trades', json(page([]))],
   ['GET', '/signals', json(page([]))],
+  ['GET', '/reports/summary', json(makeSummary())],
+  ['GET', '/reports/equity', json(makeEquity())],
+  ['GET', '/reports/depth', json(makeDepth())],
+  ['GET', '/reports/breakdown', json(makeBreakdown('group', []))],
 ] as const
 
 async function renderApp(
@@ -54,7 +66,7 @@ describe('the app shell', () => {
   it('has a main navigation to every page', async () => {
     await renderApp('/')
     const nav = screen.getByRole('navigation', { name: 'Main' })
-    for (const name of ['Live', 'Signals', 'Groups', 'History']) {
+    for (const name of ['Live', 'Signals', 'Groups', 'History', 'Reports']) {
       expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
     }
     expect(await screen.findByRole('heading', { name: 'Live', level: 1 })).toBeInTheDocument()
@@ -78,6 +90,8 @@ describe('the app shell', () => {
     expect(await screen.findByRole('heading', { name: 'Trade history' })).toBeInTheDocument()
     await user.click(within(nav).getByRole('link', { name: 'Signals' }))
     expect(await screen.findByRole('heading', { name: 'Signal inbox' })).toBeInTheDocument()
+    await user.click(within(nav).getByRole('link', { name: 'Reports' }))
+    expect(await screen.findByRole('heading', { name: 'Reports' })).toBeInTheDocument()
   })
 
   it('opens the group forms by address', async () => {

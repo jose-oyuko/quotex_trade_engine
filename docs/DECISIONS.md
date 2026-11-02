@@ -337,11 +337,47 @@ they are bounded by the concurrency limits and by the number of groups.
 script imports nothing from the real adapters. It exists so the dashboard can be shown and walked
 through without any account.
 
+**D-47. What the reports measure (Phase 8).** Demo and real are never mixed: every report is for one
+account (default demo). Only **resolved** trades (won, lost, draw) count in any profit or rate;
+failed, unknown and open trades are listed separately as "not counted", so a missing result is
+visible instead of silently lowering or raising the figures. **Profit** is the figure stored on the
+trade; **win rate** = wins / resolved trades; **ROI** = profit / money staked. Trades are placed in a
+date range by the time they **settled**; chains (depth report) by the time they started; the CSV of
+all trades by the time each was **created** (a trade that never settled has no settle time). Hour of
+day, weekday and daily results use the owner's clock as a fixed offset from UTC (`utc_offset_minutes`;
+daylight saving is not followed, and the dashboard says so by sending the browser's current offset).
+The money is summed by the database as integer cents and converted once at the edge: no report ever
+adds floats. A figure always travels with its **sample size** and a plain label: fewer than 10
+trades is "too few", fewer than 30 "small sample". **Expected against actual**: a trade at payout *p*
+breaks even at a win rate of 1/(1+*p*), and no staking scheme changes that, so the report compares the
+actual win rate with break-even and says how many standard errors apart they are (beyond 2 is unlikely
+to be luck); below 30 trades the verdict is always "not enough data". That is the honest answer to
+"is this really working?". Draws are rare (the library cannot report them, D-29) and count as a
+result of zero. Streaks, the largest drawdown and the daily series come from one streamed pass in
+settle order.
+
+**D-48. Charts: no chart library, small SVG components.** The dashboard needs two shapes: bars
+(profit by group, asset, strategy, hour, weekday; share of chains by step) and one line (the running
+total). A library (Recharts, Chart.js, visx) would add 60-100 kB and, for the SVG ones, a size
+measurement that does not exist in the test environment, for something about 150 lines draw. The
+components (`BarChart`, `LineChart`) are tested for geometry, carry a one-sentence description for
+screen readers, and are always accompanied by a table of the same numbers, which is the accessible
+version. If charts later need zoom, brushing or many series, adopt a library then; the pages only
+pass plain `{label, value}` lists, so swapping is local.
+
+**D-49. CSV that opens correctly in Excel.** UTF-8 **with a byte-order mark** (without it Excel
+guesses a legacy code page and garbles accents), comma by default and **semicolon on request** (Excel
+in many locales shows a comma file as one column), CRLF line endings, a dot as the decimal
+separator, times as `YYYY-MM-DD HH:MM:SS` in UTC. Text cells starting with `=`, `+`, `-`, `@`, tab or
+carriage return get a leading apostrophe so a spreadsheet cannot run them as formulas; numbers are
+never touched. The trades file is streamed in batches from its own database session so a long
+history does not sit in memory.
+
 ---
 
 ## Decisions to be made later (record here when decided)
 
-- Chart library — Phase 8.
+- (Decided in Phase 8: charts — see D-48.)
 - (Decided in Phase 0: package manager = `uv`, pyquotex pin — see D-19 and D-5.)
 - (Decided in Phase 1: money representation — see D-22.)
 - Whether and how to support early close of single trades — after Phase 9.

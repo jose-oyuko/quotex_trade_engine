@@ -71,3 +71,8 @@ export function median(values: number[]): number | null {
 export function titleCase(value: string): string {
   return value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase())
 }
+
+/** `0.4444` -> `44.4%`. Rates arrive as plain numbers between 0 and 1. */
+export function formatPercent(value: number | null | undefined, digits = 1): string {
+  return value === null || value === undefined ? '—' : `${(value * 100).toFixed(digits)}%`
+}

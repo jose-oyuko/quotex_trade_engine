@@ -46,6 +46,11 @@ EXPECTED_OPERATIONS = {
     ("GET", "/api/v1/account"),
     ("PUT", "/api/v1/account"),
     ("GET", "/api/v1/reports/summary"),
+    ("GET", "/api/v1/reports/breakdown"),
+    ("GET", "/api/v1/reports/equity"),
+    ("GET", "/api/v1/reports/depth"),
+    ("GET", "/api/v1/reports/export/trades.csv"),
+    ("GET", "/api/v1/reports/export/breakdown.csv"),
 }
 
 

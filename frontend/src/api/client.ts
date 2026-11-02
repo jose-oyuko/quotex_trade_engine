@@ -15,12 +15,18 @@ import type {
   GroupUpdate,
   Health,
   Page,
+  ReportBreakdown,
+  ReportDepth,
+  ReportEquity,
+  ReportSummary,
+  BreakdownKind,
   Risk,
   RiskEvent,
   RiskLimits,
   RiskLimitsInput,
   Signal,
   SignalStatus,
+  Strategy,
   Snapshot,
   Trade,
   TradeStatus,
@@ -190,4 +196,44 @@ export const api = {
     set: (accountType: AccountType) =>
       request<Account>('PUT', '/account', { body: { account_type: accountType } }),
   },
+
+  reports: {
+    summary: (filters: ReportFilters, signal?: AbortSignal) =>
+      request<ReportSummary>('GET', '/reports/summary', { query: reportQuery(filters), signal }),
+    breakdown: (by: BreakdownKind, filters: ReportFilters, signal?: AbortSignal) =>
+      request<ReportBreakdown>('GET', '/reports/breakdown', {
+        query: { ...reportQuery(filters), by },
+        signal,
+      }),
+    equity: (filters: ReportFilters, signal?: AbortSignal) =>
+      request<ReportEquity>('GET', '/reports/equity', { query: reportQuery(filters), signal }),
+    depth: (filters: ReportFilters, signal?: AbortSignal) =>
+      request<ReportDepth>('GET', '/reports/depth', { query: reportQuery(filters), signal }),
+  },
+}
+
+/** What every report can be narrowed by. `from` is inclusive, `to` exclusive (ISO times). */
+export interface ReportFilters {
+  account_type: AccountType
+  from?: string
+  to?: string
+  group_id?: number
+  strategy?: Strategy
+  asset?: string
+  utc_offset_minutes?: number
+}
+
+function reportQuery(filters: ReportFilters): Query {
+  return { ...filters }
+}
+
+/** Address of a CSV download (a plain link: the browser saves the file). */
+export function reportCsvUrl(
+  kind: 'trades' | BreakdownKind,
+  filters: ReportFilters,
+  delimiter: 'comma' | 'semicolon' = 'comma',
+): string {
+  const query = kind === 'trades' ? reportQuery(filters) : { ...reportQuery(filters), by: kind }
+  const path = kind === 'trades' ? '/reports/export/trades.csv' : '/reports/export/breakdown.csv'
+  return url(path, { ...query, delimiter })
 }
