@@ -109,6 +109,17 @@ real explicitly. Keep it off while testing.
 To try the parser on any message without Telegram:
 `npm run signal:try -- "EURUSD PUT 1m"` or `npm run signal:try -- --file message.txt`.
 
+## Running the trading engine (Phase 4)
+
+By default `npm run backend` does **not** touch Quotex or Telegram. To let the application act on
+signals, set `ENGINE_ENABLED=true` in `backend/.env` (after the Quotex and Telegram logins work, see
+above). It trades on the **demo** account. A group's strategy and stakes come from its stored
+settings; groups cannot be created from the dashboard until Phase 6, so until then the engine has no
+groups to listen to. What it does is tested end to end with fakes (`npm run test:backend`).
+
+If the application stops while trades are open, the next start marks those trades and their chains
+`unknown` (it cannot see Quotex's history) and logs a `risk.tripped` event: check them on Quotex.
+
 ## Checks
 
 | Command | What it does |

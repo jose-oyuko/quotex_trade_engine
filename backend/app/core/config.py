@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Used by the dev proxy; production serves the frontend from the same origin.
     cors_origin: str = "http://127.0.0.1:5173"
 
+    # Starts the trading engine (Quotex + Telegram + chains) with the application. Off by default:
+    # starting the backend must never log in to Quotex or Telegram by surprise.
+    engine_enabled: bool = False
+
     # Quotex. Credentials are secrets: SecretStr never shows up in logs or repr().
     quotex_email: SecretStr | None = None
     quotex_password: SecretStr | None = None

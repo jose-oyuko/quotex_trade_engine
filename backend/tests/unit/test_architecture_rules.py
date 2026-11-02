@@ -78,6 +78,47 @@ def test_the_telegram_package_does_not_reach_into_the_database_or_quotex() -> No
     assert offenders == []
 
 
+def test_the_engine_never_sleeps_or_waits_a_fixed_time() -> None:
+    """Decision D-13: results are awaited as events. No `sleep(duration + N)` or any other sleep
+    anywhere in the engine."""
+    problems: list[str] = []
+    for path in (APP / "engine").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call):
+                name = ast.unparse(node.func)
+                if name.endswith("sleep"):
+                    problems.append(f"{path.name}:{node.lineno} {name}")
+    assert problems == []
+
+
+def test_the_engine_has_no_database_access_on_its_hot_path() -> None:
+    """Decision D-4: the executor, the chain and the strategies cannot reach the database at all;
+    the manager and engine only need the type of the start-up recovery result."""
+    forbidden = ("sqlalchemy", "app.db")
+    hot = [p for p in (APP / "engine").glob("*.py") if p.name not in {"manager.py", "engine.py"}]
+    offenders = [
+        f"{path.name}: {module}"
+        for path in hot
+        for module in imported_modules(path)
+        if module.startswith(forbidden)
+    ]
+    assert offenders == []
+    for name in ("manager.py", "engine.py"):
+        db_imports = {m for m in imported_modules(APP / "engine" / name) if m.startswith(forbidden)}
+        assert db_imports <= {"app.db.recovery"}, (name, db_imports)
+
+
+def test_the_engine_does_not_know_the_api_or_the_telethon_wrapper() -> None:
+    """`engine` is below `api` in the layering and reaches Telegram only through the listener."""
+    offenders = [
+        f"{path.name}: {module}"
+        for path in (APP / "engine").glob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(("app.api", "fastapi", "telethon", "app.telegram.telethon_source"))
+    ]
+    assert offenders == []
+
+
 def test_no_blocking_calls_in_the_application() -> None:
     """Decisions D-13/D-14: no time.sleep, no requests, no input() anywhere in app/."""
     problems: list[str] = []

@@ -209,6 +209,8 @@ class SignalPipeline:
             entry_at=entry_at,
             t_msg_received_ns=raw.received_ns,
             t_parsed_ns=t_parsed_ns,
+            raw_text=raw.text,
+            telegram_message_id=raw.message_id,
         )
         notes = self._notes(parsed)
         if entry_at is None:

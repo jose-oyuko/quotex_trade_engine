@@ -8,8 +8,8 @@ agent to start the next phase.
 | 0 | Foundation and tooling | Approved |
 | 1 | Database and domain models | Approved |
 | 2 | Quotex adapter | Done — owner moved on; live demo checks still pending |
-| 3 | Telegram listener and parser | Done — awaiting owner approval (live checks pending) |
-| 4 | Strategy and chain engine | Not started |
+| 3 | Telegram listener and parser | Done — committed (`607c145`); live checks pending |
+| 4 | Strategy and chain engine | Done — committed and pushed; awaiting owner approval (live checks pending) |
 | 5 | Safety and control | Not started |
 | 6 | API and realtime events | Not started |
 | 7 | Dashboard v1 | Not started |
@@ -18,13 +18,13 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 3 finished — waiting for the owner's review. All offline checks pass (457 backend
-tests, 3 frontend, lint, strict types, build). The **live checks (report section 12, steps 5-7) need the
-owner's Telegram API id and phone**. Then "go on" for Phase 4. Report: [reports/phase-3.md](reports/phase-3.md).
-Phase 2's live demo checks are also still open ([reports/phase-2.md](reports/phase-2.md) section 12).
+**Current phase:** Phase 4 finished and committed. The owner asked for Phase 5 to follow, then to stop.
+All offline checks pass (529 backend tests, 3 frontend, lint, strict types, build). Report:
+[reports/phase-4.md](reports/phase-4.md). Phases 2-4 are only verified on fakes; their live checks are
+listed in each report's last section.
 
-**Commits:** only the owner's (latest `1593fd4 quotex connection`, which contains Phase 2). The agent has
-made none and does not commit unless the owner says so. Phase 3 work is uncommitted in the working tree.
+**Commits:** the owner's up to `607c145 telegram listener`; Phase 4 was committed and pushed by the agent
+at the owner's explicit instruction for this session (not a standing permission).
 
 ## Open questions for the owner
 

@@ -171,7 +171,9 @@ quotex_trade_engine/
 │   │   │                      #   fake.py, listener.py (connection + subscriptions), login.py, factory.py
 │   │   ├── signals/           # models.py, parsers/ (base, registry, legacy_v1), assets.py,
 │   │   │                      #   scheduling.py (entry times), timezones.py, pipeline.py
-│   │   ├── engine/            # chain.py, strategies.py, executor.py, risk.py, manager.py
+│   │   ├── engine/            # strategies.py (pure rules), chain.py (state machine), executor.py (the
+│   │   │                      #   hot path), manager.py (chains, D-9, recovery), engine.py (wiring),
+│   │   │                      #   factory.py (real components); risk.py arrives in Phase 5
 │   │   ├── events/            # bus.py, event types
 │   │   ├── api/               # routers/, schemas/, ws.py, deps.py
 │   │   └── reports/           # queries.py

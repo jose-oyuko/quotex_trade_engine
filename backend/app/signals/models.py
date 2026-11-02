@@ -70,3 +70,7 @@ class Signal:
     entry_at: datetime | None  # UTC; None = place the order at once
     t_msg_received_ns: int
     t_parsed_ns: int
+    # Kept so a later stage can re-publish the inbox row with a new status (same id) without
+    # losing what the row says about the message.
+    raw_text: str = ""
+    telegram_message_id: int | None = None

@@ -214,6 +214,34 @@ app. `catch_up` (replaying messages missed while offline) is left off until it c
 against the live service. The session file lives in `data/` (git-ignored). The backoff helper moved
 from `app/quotex/` to `app/core/backoff.py` because both integrations use it.
 
+**D-34. How the engine runs a chain.** Each chain is its own supervised task holding its own state
+(step, loss counter, direction), so chains never share anything (D-10). Independence is by chain id;
+the `(group, asset)` pair identifies what a chain trades, and non-flip groups may have several chains
+on the same pair at once. A follow-up is placed the moment the loss is known: the only work between
+is in-memory bookkeeping. A trade is published as `pending` just *before* its order is sent and as
+`open` once confirmed, so a crash between the two leaves a trace for recovery. A **draw** ends the
+chain as `completed` (Quotex refunds it, so nothing needs recovering; pyquotex cannot report draws
+anyway, D-29). A refused order ends the chain `failed`; an order sent without confirmation, a missing
+result, an unexpected error, or a changed account ends it `unknown` / `failed` and is **never
+retried**. Waiting for a result is by the adapter's event with a timeout of expiry + 60 s. Because
+the pipeline hands a signal over *before* it publishes the signal's inbox row (so orders never wait
+for bookkeeping), anything that points at or replaces that row (`chain.started`, an "ignored: chain
+active" update) is published one event-loop turn later; otherwise the chain insert would break its
+foreign key and the "ignored" status would be overwritten by "parsed".
+
+**D-35. Restart recovery marks everything in flight `unknown`; it never continues.** We cannot see
+Quotex's history, and a follow-up placed minutes late is not the trade the strategy asked for. At
+start-up every unsettled trade and every active chain is marked `unknown` (reason stored on the row),
+a `risk.tripped` event of kind `restart_unknown` is published per affected group, and the groups are
+free for new signals at once. Known results (a trade already `lost`) are left as they are. Consequence:
+the owner must look at those trades on Quotex; the dashboard (Phase 7) will list them.
+
+**D-36. The engine starts with the application only if `ENGINE_ENABLED=true`.** Default off, so
+`npm run backend` never logs in to Quotex or Telegram by surprise (a login can trigger an e-mail PIN).
+Start-up order: load groups and recover, start the Quotex connection (in the background, with
+backoff), start the Telegram listener. Shutdown order: listener, chains, Quotex, then the DB writer
+drains what they published. A missing login with the flag on stops start-up with a clear message.
+
 ---
 
 ## Decisions to be made later (record here when decided)

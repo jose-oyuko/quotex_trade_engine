@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import structlog
@@ -17,18 +17,25 @@ from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import schema_is_current
 from app.db.recovery import load_recovery_state
 from app.db.writer import DBWriter
+from app.engine.engine import Engine
+from app.engine.factory import build_engine
 from app.events.bus import EventBus
 
 VERSION = "0.1.0"
 log = structlog.get_logger()
 
 
+type EngineBuilder = Callable[[Settings, EventBus, TaskSupervisor], Engine]
+
+
 class DatabaseNotMigratedError(RuntimeError):
     """The database file is missing tables or is behind the code."""
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
-    """Build the application. Tests pass their own settings."""
+def create_app(
+    settings: Settings | None = None, *, engine_builder: EngineBuilder = build_engine
+) -> FastAPI:
+    """Build the application. Tests pass their own settings (and a fake-backed engine builder)."""
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -59,10 +66,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             unsettled_trades=len(recovery.unsettled_trades),
         )
 
+        if settings.engine_enabled:
+            try:
+                trading = engine_builder(settings, app.state.bus, app.state.tasks)
+                summary = await trading.start(recovery)
+            except Exception:
+                # e.g. a missing login: leave nothing half-started behind, then say what is wrong
+                await writer.stop()
+                await app.state.tasks.shutdown()
+                await engine.dispose()
+                raise
+            app.state.trading = trading
+            log.info(
+                "engine_started",
+                chains_marked_unknown=summary.chains_marked_unknown,
+                trades_marked_unknown=summary.trades_marked_unknown,
+            )
+        else:
+            log.info("engine_disabled", hint="set ENGINE_ENABLED=true in backend/.env to start it")
+
         yield
 
-        # Shutdown runs in reverse order of startup: the writer drains its queue first, so events
-        # published just before shutdown still reach the database.
+        # Shutdown runs in reverse order of startup: the engine stops first (it publishes the last
+        # events), then the writer drains its queue, so those events still reach the database.
+        if app.state.trading is not None:
+            await app.state.trading.stop()
         await writer.stop()
         await app.state.tasks.shutdown()
         await engine.dispose()
@@ -74,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.bus = EventBus()
     app.state.engine = None
     app.state.writer = None
+    app.state.trading = None
 
     if settings.environment == "development":
         app.add_middleware(
