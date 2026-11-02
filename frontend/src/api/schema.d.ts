@@ -1120,12 +1120,17 @@ export interface components {
             events_published: number;
             /** Last Event At */
             last_event_at?: string | null;
+            /**
+             * Problems
+             * @default []
+             */
+            problems: string[];
             quotex?: components["schemas"]["ConnectionOut"] | null;
             /**
              * Status
-             * @constant
+             * @enum {string}
              */
-            status: "ok";
+            status: "ok" | "degraded";
             telegram?: components["schemas"]["ConnectionOut"] | null;
             /** Version */
             version: string;
@@ -1649,6 +1654,11 @@ export interface components {
             failed: number;
             /** Queue Depth */
             queue_depth: number;
+            /**
+             * Retrying
+             * @default false
+             */
+            retrying: boolean;
             /** Written */
             written: number;
         };

@@ -10,20 +10,32 @@ dropped, counted in `stats.dropped`, and logged as errors. Dropping the *newest*
 history in order (a trade is never stored without the chain row before it) and never blocks a
 trade. The default capacity (100,000 events) is many minutes of heavy trading.
 
-Failure policy: if a batch fails, it is rolled back and its events are retried one by one so a
-single bad record cannot take the others with it; the bad one is logged and counted in
-`stats.failed`.
+Failure policy:
+- A **transient** failure (the database is locked, unavailable, the disk is full, the connection
+  dropped: `OperationalError` / `InterfaceError`) is retried with backoff for up to `max_outage_s`
+  (ten minutes by default) while the queue keeps filling; nothing is lost unless the outage outlasts
+  that or the queue overflows (both counted and logged loudly). `retrying` tells the health check.
+- Any other failure (a record the database refuses) rolls the batch back and retries its events one
+  by one so a single bad record cannot take the others with it; the bad one is logged and counted
+  in `stats.failed`.
 
-Shutdown: `stop()` stops accepting events, writes everything still queued, then returns.
+Shutdown: `stop()` stops accepting events, writes everything still queued, then returns. If the
+database is down at that moment it gives up after a few attempts instead of holding the process.
 """
 
 from __future__ import annotations
 
+import asyncio
+import random
+import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import structlog
+from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core.backoff import BackoffPolicy, backoff_delay
 from app.core.tasks import TaskSupervisor
 from app.db.repositories import (
     AppSettingsRepository,
@@ -52,6 +64,11 @@ log = structlog.get_logger()
 
 DEFAULT_QUEUE_SIZE = 100_000
 DEFAULT_BATCH_SIZE = 500
+DEFAULT_MAX_OUTAGE_S = 600.0  # how long a down database is waited for before a batch is given up
+SHUTDOWN_ATTEMPTS = 3  # attempts at the very end, when waiting would only hold up the process
+TRANSIENT_ERRORS = (OperationalError, InterfaceError)
+
+type Sleeper = Callable[[float], Awaitable[None]]
 
 
 @dataclass(slots=True)
@@ -70,6 +87,11 @@ class DBWriter:
         *,
         queue_size: int = DEFAULT_QUEUE_SIZE,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        backoff: BackoffPolicy | None = None,
+        max_outage_s: float = DEFAULT_MAX_OUTAGE_S,
+        sleep: Sleeper = asyncio.sleep,
+        rng: Callable[[], float] = random.random,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._bus = bus
         self._session_factory = session_factory
@@ -77,6 +99,13 @@ class DBWriter:
         self._queue_size = queue_size
         self._batch_size = batch_size
         self._subscription: Subscription | None = None
+        self._backoff = backoff or BackoffPolicy(base_s=0.2, cap_s=5.0)
+        self._max_outage_s = max_outage_s
+        self._sleep = sleep
+        self._rng = rng
+        self._monotonic = monotonic
+        self._stopping = False
+        self.retrying = False  # True while waiting for a database that is down
         self.stats = WriterStats()
 
     @property
@@ -102,6 +131,7 @@ class DBWriter:
         """Stop accepting events and write everything already queued."""
         if self._subscription is None:
             return
+        self._stopping = True
         self._bus.unsubscribe(self._subscription)
         await self._task
 
@@ -124,27 +154,61 @@ class DBWriter:
                 log.error("db_writer_unexpected_error", size=len(batch), exc_info=True)
 
     async def _write(self, batch: list[Event]) -> None:
-        try:
-            async with self._session_factory.begin() as session:
-                for event in batch:
-                    await _apply(session, event)
-        except Exception:
-            log.warning("db_batch_failed_retrying_individually", size=len(batch), exc_info=True)
-            await self._write_individually(batch)
-        else:
+        error = await self._commit_with_retry(batch)
+        if error is None:
             self.stats.written += len(batch)
             self.stats.batches += 1
+        elif isinstance(error, TRANSIENT_ERRORS):
+            self.stats.failed += len(batch)  # the outage outlasted the patience: counted, logged
+        else:
+            log.warning("db_batch_failed_retrying_individually", size=len(batch), exc_info=error)
+            await self._write_individually(batch)
 
     async def _write_individually(self, batch: list[Event]) -> None:
         for event in batch:
+            error = await self._commit_with_retry([event])
+            if error is None:
+                self.stats.written += 1
+            else:
+                self.stats.failed += 1
+                log.error("db_event_failed", event_name=event.name, exc_info=error)
+
+    async def _commit_with_retry(self, batch: list[Event]) -> Exception | None:
+        """Commit the batch. A transient error is waited out (see the module docstring); returns
+        None on success, or the error that was not transient / that outlasted the patience."""
+        started = self._monotonic()
+        attempt = 0
+        while True:
             try:
                 async with self._session_factory.begin() as session:
-                    await _apply(session, event)
-            except Exception:
-                self.stats.failed += 1
-                log.error("db_event_failed", event_name=event.name, exc_info=True)
+                    for event in batch:
+                        await _apply(session, event)
+            except TRANSIENT_ERRORS as exc:
+                waited = self._monotonic() - started
+                if waited >= self._max_outage_s or (
+                    self._stopping and attempt >= SHUTDOWN_ATTEMPTS
+                ):
+                    self.retrying = False
+                    log.error(
+                        "db_outage_batch_dropped",
+                        size=len(batch),
+                        waited_s=round(waited, 1),
+                        exc_info=exc,
+                    )
+                    return exc
+                if attempt == 0:
+                    log.warning("db_unavailable_retrying", size=len(batch), error=str(exc)[:200])
+                self.retrying = True
+                await self._sleep(backoff_delay(attempt, self._backoff, self._rng))
+                attempt += 1
+            except Exception as exc:
+                self.retrying = False
+                return exc
             else:
-                self.stats.written += 1
+                if attempt:
+                    log.info("db_recovered", attempts=attempt)
+                self.retrying = False
+                return None
 
 
 async def _apply(session: AsyncSession, event: Event) -> None:

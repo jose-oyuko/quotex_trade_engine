@@ -14,20 +14,21 @@ agent to start the next phase.
 | 6 | API and realtime events | Done — committed; live checks pending |
 | 7 | Dashboard v1 | Done — committed; live checks pending |
 | 8 | Reports | Done — committed; live checks pending |
-| 9 | Hardening and packaging | Not started |
+| 9 | Hardening and packaging | Done — committed; live checks pending |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 8 committed. The owner has asked the agent to carry on through the remaining
-phase (9) in order, committing after each finished and tested phase and documenting each in
-`docs/reports/`. Phases 2-8 are only verified on fakes (Phase 8 also on a generated 100,000-trade
-database); their live checks are in each report's last section. Report:
-[reports/phase-8.md](reports/phase-8.md). To see the dashboard and reports without accounts:
-`npm run build` then `npm run demo`.
+**Current phase:** none: all nine phases are built. Phase 9 is committed. The owner asked the agent to
+carry on through the remaining phases in order, committing after each finished and tested phase; that is
+complete. Phases 2-9 are only verified on fakes; their live checks are in each report's "could not be
+verified" section (for Phase 9: the real signal-to-order latency with `npm run latency`, real reconnects,
+a real VPS). Report: [reports/phase-9.md](reports/phase-9.md), which also lists the known limitations and
+the "Later" backlog. To run it: `npm run setup`, then `npm start` (guides: README, `OPERATIONS.md`,
+`TROUBLESHOOTING.md`, `FAILURE_MODES.md`, `DEPLOYMENT.md`).
 
-**Commits:** the owner's up to `607c145`; Phases 4, 5, 6, 7 and 8 committed by the agent. The owner gave
-explicit permission (this session) to commit after every finished phase; it is not a standing permission
-for later sessions.
+**Commits:** the owner's up to `607c145`; Phases 4-9 committed by the agent. The owner gave explicit
+permission (this session) to commit after every finished phase; it is not a standing permission for later
+sessions. Nothing has been pushed by the agent in this session.
 
 ## Open questions for the owner
 
@@ -39,3 +40,7 @@ for later sessions.
 - Phase 2 §7/§12: run the live demo checks and send back the timing lines and one losing-trade result
   (to confirm a loss shows a negative profit).
 - Phase 2 §10: `TIME` (clock-aligned expiry, library default) or `TIMER` (countdown) expiry mode?
+- Phase 9: Docker or systemd-and-SSH-tunnel only for a server (D-53)? And should a signal missed during a
+  Telegram outage ever be fetched and traded (D-55)?
+- Phase 9 §7: do the live checks on demo (latency, reconnect, crash, Ctrl+C) and send back the
+  `npm run latency` table.

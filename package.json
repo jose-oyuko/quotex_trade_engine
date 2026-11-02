@@ -5,6 +5,7 @@
   "description": "Developer scripts only. Run with `npm run <name>` from the repository root.",
   "scripts": {
     "setup": "uv sync --directory backend && npm --prefix frontend install && npm run db:upgrade",
+    "start": "uv run --directory backend python -m scripts.start",
     "backend": "uv run --directory backend python -m app",
     "frontend": "npm --prefix frontend run dev",
     "test": "npm run test:backend && npm run test:frontend",
@@ -22,6 +23,8 @@
     "api:types": "npm --prefix frontend run api:types",
     "api:generate": "npm run api:export && npm run api:types",
     "api:check": "uv run --directory backend python -m scripts.export_openapi --check && npm --prefix frontend run api:types:check",
+    "backup": "uv run --directory backend python -m scripts.backup",
+    "latency": "uv run --directory backend python -m scripts.latency_report",
     "demo": "uv run --directory backend python -m scripts.demo_server",
     "api:watch": "uv run --directory backend python -m scripts.ws_watch",
     "db:upgrade": "uv run --directory backend alembic upgrade head",

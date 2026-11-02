@@ -143,13 +143,19 @@ Rules:
 - Secrets: Telegram API id/hash and session, Quotex email/password. Stored in a local data directory
   (`data/`, git-ignored). Encrypted storage is a "later" item; until then file permissions + git-ignore
   and a loud note in the README.
-- Never log secrets; redact in error reports.
+- Never log secrets; they are masked in every log line (D-51). Backups include the session files unless
+  asked not to (D-56).
 
 ## 10. Observability
 
 - Structured logging (JSON in production, readable in development) with correlation ids:
   `signal_id`, `chain_id`, `trade_id`.
-- `/health` reports: Telegram connected, Quotex connected, DB writable, queue depth, last event time.
+- `/health` reports `ok` or `degraded` with a list of plain-language problems: database unreachable,
+  writer retrying / events dropped / records failed, and (engine on) Quotex or Telegram disconnected.
+  The dashboard shows them in a banner (D-52).
+- Logs also go to `data/logs/engine.log` (rotating JSON lines), with passwords and the Telegram hash
+  masked (D-51).
+- Failure behaviour of every part is in `docs/FAILURE_MODES.md`; each row has a test.
 - Latency timestamps per trade (section 4) are first-class data, not log lines.
 
 ## 11. Repository layout (target; created progressively by the phases)

@@ -6,6 +6,7 @@ import { AccountBadge } from '../features/controls/AccountBadge'
 import { KillSwitch } from '../features/controls/KillSwitch'
 import { useLiveStatus } from '../live/liveStatus'
 import { ErrorBoundary } from './ErrorBoundary'
+import { HealthBanner } from './HealthBanner'
 
 const NAV = [
   { to: '/', label: 'Live', end: true },
@@ -55,6 +56,7 @@ export function Layout() {
           You are connected to your REAL MONEY account. Trades placed now use real funds.
         </div>
       )}
+      <HealthBanner />
       <header className="topbar">
         <div className="brand">Quotex Trade Engine</div>
         <nav aria-label="Main">

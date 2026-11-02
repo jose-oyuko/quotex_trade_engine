@@ -79,6 +79,8 @@ class ChainManager:
         self._chains: dict[UUID, Chain] = {}
         self._by_group: defaultdict[int, set[UUID]] = defaultdict(set)
         self._drivers: dict[UUID, asyncio.Task[None]] = {}
+        # `chain.started` events waiting for the signal's inbox row to be published first
+        self._unannounced: dict[UUID, ChainStarted] = {}
 
     # --- group settings (in memory; updated when a group is edited) ---
 
@@ -157,9 +159,13 @@ class ChainManager:
             return
         self._register(chain)
         # Not published here: the chain row points at the signal's inbox row, which the pipeline
-        # publishes only after handing the signal over (see `_publish_after_inbox_row`). The
-        # driver task is created after this call, so it still starts after the event.
-        self._publish_after_inbox_row(ChainStarted(occurred_at=now, chain=chain.to_record()))
+        # publishes only after handing the signal over (see `_publish_after_inbox_row`). If
+        # anything else is about to be said about the chain first (the owner ends it in the same
+        # moment), `_announce` publishes the start just before it, so events never arrive out of
+        # order.
+        started = ChainStarted(occurred_at=now, chain=chain.to_record())
+        self._unannounced[chain.id] = started
+        self._publish_after_inbox_row(started)
         stamps = Stamps(signal.t_msg_received_ns, signal.t_parsed_ns, decided_ns)
         self._drivers[chain.id] = self._tasks.spawn(
             self._drive(chain, plan, stamps), name=f"chain-{chain.id}"
@@ -188,11 +194,23 @@ class ChainManager:
         it, must reach the database after it: a chain row has a foreign key to it, and an "ignored"
         update would otherwise be overwritten by "parsed". The next turn of the event loop is
         after the pipeline's synchronous publish and before any task created from here on."""
-        asyncio.get_running_loop().call_soon(self._bus.publish, event)
+        if isinstance(event, ChainStarted):
+            asyncio.get_running_loop().call_soon(self._announce, event.chain.id)
+        else:
+            asyncio.get_running_loop().call_soon(self._bus.publish, event)
+
+    def _announce(self, chain_id: UUID) -> None:
+        """Publish the chain's `chain.started` if it has not gone out yet. Always called before
+        any later event about the chain, so the database sees them in the order they happened:
+        a `stopped` row must never be overwritten by an older `pending` one."""
+        started = self._unannounced.pop(chain_id, None)
+        if started is not None:
+            self._bus.publish(started)
 
     # --- driving a chain ---
 
     async def _drive(self, chain: Chain, plan: StepPlan, stamps: Stamps) -> None:
+        self._announce(chain.id)
         try:
             while chain.active:
                 placed = await self._executor.place(chain, plan, stamps)
@@ -286,6 +304,7 @@ class ChainManager:
     def _stop_now(self, chain: Chain, reason: str) -> None:
         if not chain.active:
             return
+        self._announce(chain.id)
         chain.stop(reason, self._clock.now())
         self._bus.publish(ChainEnded(occurred_at=self._clock.now(), chain=chain.to_record()))
         self._unregister(chain)

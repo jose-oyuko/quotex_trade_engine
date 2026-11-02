@@ -27,6 +27,7 @@ export const keys = {
   signals: ['signals'] as const,
   riskEvents: ['risk-events'] as const,
   reports: ['reports'] as const,
+  health: ['health'] as const,
 }
 
 export function useStatus() {
@@ -123,5 +124,18 @@ export function useReportDepth(filters: ReportFilters) {
     queryKey: [...keys.reports, 'depth', filters],
     queryFn: ({ signal }) => api.reports.depth(filters, signal),
     placeholderData: (previous) => previous,
+  })
+}
+
+/** How often the page asks "is anything wrong?". Short enough to notice a drop within moments. */
+export const HEALTH_POLL_MS = 15_000
+
+export function useHealth() {
+  return useQuery({
+    queryKey: keys.health,
+    queryFn: ({ signal }) => api.health(signal),
+    refetchInterval: HEALTH_POLL_MS,
+    retry: false, // a failed check is itself the answer: "cannot reach the backend"
+    staleTime: 0,
   })
 }

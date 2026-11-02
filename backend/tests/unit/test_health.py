@@ -4,14 +4,15 @@ from app.core.config import Settings
 from app.main import create_app
 
 
-async def test_health_ok() -> None:
+async def test_health_before_startup_is_degraded_with_a_reason() -> None:
     app = create_app(Settings(_env_file=None))  # type: ignore[call-arg]
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
         response = await client.get("/api/v1/health")
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "ok"
+    assert body["status"] == "degraded"  # no lifespan yet, so no database: it says so
+    assert body["problems"] == ["The database cannot be reached: nothing is being stored."]
     assert body["environment"] == "development"
     assert body["background_tasks"] == 0
 

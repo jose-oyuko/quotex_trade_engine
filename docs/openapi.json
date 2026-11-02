@@ -1507,6 +1507,14 @@
             ],
             "title": "Last Event At"
           },
+          "problems": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
           "quotex": {
             "anyOf": [
               {
@@ -1518,7 +1526,10 @@
             ]
           },
           "status": {
-            "const": "ok",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -2983,6 +2994,11 @@
           "queue_depth": {
             "title": "Queue Depth",
             "type": "integer"
+          },
+          "retrying": {
+            "default": false,
+            "title": "Retrying",
+            "type": "boolean"
           },
           "written": {
             "title": "Written",

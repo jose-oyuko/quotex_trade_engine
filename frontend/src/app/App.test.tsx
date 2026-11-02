@@ -29,7 +29,20 @@ const risk = json({
   open_trades: 0,
   open_exposure: '0',
 })
+const HEALTHY = {
+  status: 'ok',
+  problems: [],
+  version: '0.1.0',
+  environment: 'development',
+  background_tasks: 0,
+  database: 'ok',
+  events_published: 0,
+  writer: null,
+  engine: { enabled: true, running: true },
+}
+
 const ROUTES = [
+  ['GET', '/health', json(HEALTHY)],
   ['GET', '/groups', json(page([makeGroup()]))],
   ['GET', '/risk', risk],
   ['GET', '/trades', json(page([]))],

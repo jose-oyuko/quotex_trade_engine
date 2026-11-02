@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     environment: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     data_dir: Path = Path("data")
+    # Logs also go to a rotating JSON file (decision D-50); the console shows them as before.
+    log_to_file: bool = True
+    log_max_mb: int = 10
+    log_backups: int = 5
 
     # Used by the dev proxy; production serves the frontend from the same origin.
     cors_origin: str = "http://127.0.0.1:5173"
@@ -92,6 +96,15 @@ class Settings(BaseSettings):
     def telegram_session_path(self) -> Path:
         """Telethon appends `.session`; the file holds a login, so it lives in git-ignored data/."""
         return self.data_dir.resolve() / "telegram"
+
+    @property
+    def log_path(self) -> Path:
+        return self.data_dir.resolve() / "logs" / "engine.log"
+
+    def secret_values(self) -> list[str]:
+        """The values that must never appear in a log line."""
+        secrets = (self.quotex_password, self.telegram_api_hash)
+        return [s.get_secret_value() for s in secrets if s is not None]
 
     @property
     def database_path(self) -> Path:

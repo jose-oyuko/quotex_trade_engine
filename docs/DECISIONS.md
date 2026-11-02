@@ -373,6 +373,57 @@ carriage return get a leading apostrophe so a spreadsheet cannot run them as for
 never touched. The trades file is streamed in batches from its own database session so a long
 history does not sit in memory.
 
+**D-50. The database writer waits out an outage; it does not give up at the first error.** A locked
+or unreachable database (`OperationalError`, `InterfaceError`: another program holding the file, a
+full disk, a dropped connection) is retried with backoff (0.2 s growing to 5 s) for up to ten minutes
+while the queue keeps filling, so a short outage loses nothing. After ten minutes that batch is
+dropped, counted and reported. Any other error (a record the database refuses) is not waited out: the
+batch is retried record by record so one bad record cannot take the rest with it. At shutdown the
+writer gives up after three attempts so a dead database cannot hold the process. Why: the execution
+path must never wait for the database (D-4), so the writer is the only place to absorb outages.
+
+**D-51. Logs: a rotating JSON file, secrets masked.** Besides the console, logs go to
+`DATA_DIR/logs/engine.log` as JSON lines, rotated at 10 MB with 5 files kept (`LOG_TO_FILE`,
+`LOG_MAX_MB`, `LOG_BACKUPS`). A processor replaces the Quotex password and the Telegram API hash with
+`***` anywhere they occur in a log line, including inside tracebacks (values shorter than 4 characters
+are not masked: they would mangle ordinary words). Why: the owner needs history when something went
+wrong overnight, and a log that is pasted into a chat for help must be safe.
+
+**D-52. `/health` says `degraded`, in sentences.** `status` is `ok` or `degraded`, with a `problems`
+list the owner can act on: database unreachable, writer retrying, events dropped, records that could
+not be stored, and (when the engine runs) Quotex or Telegram disconnected. The dashboard polls it
+every 15 s and shows the sentences in a banner. A disconnected service while the engine is off is not a
+problem (it is not supposed to be connected). Why: every failure in `docs/FAILURE_MODES.md` must be
+visible without reading a log.
+
+**D-53. VPS deployment: systemd and an SSH tunnel; no Docker, no login.** The application keeps its
+loopback bind and the owner reaches the dashboard through an SSH tunnel, so nothing but SSH is exposed.
+A systemd unit runs it with an orderly stop. Docker is not provided: the application needs interactive
+logins and a persistent data folder, and on a single-user setup a container adds volumes and terminal
+handling for nothing. A reverse proxy is documented only with authentication in front of every path.
+Adding a dashboard login stays in the "Later" backlog. Not verified on a real server.
+
+**D-54. Chain events reach the bus in order.** The chain manager used to be able to publish `chain.ended`
+before `chain.started` when a chain was stopped in the very moment it was created (kill switch or "skip
+to base" while its first step was being set up). Found by the chaos test. The start event is now held
+until the chain is driven, and whoever ends a chain first publishes any start that is still waiting.
+Why: the database stores events in the order they arrive, and an end without a start is a wrong
+history.
+
+**D-55. A signal posted while Telegram was down is not fetched afterwards.** On reconnect the listener
+only hears what is posted from then on. Acting minutes late on a time-critical signal would enter at a
+worse price than the group intended, and fetching history would add a second path into the engine. The
+gap is visible (banner, connection events) and the owner can trade it by hand. Revisit if the owner
+wants late signals handled.
+
+**D-56. Backups use SQLite's online-backup call and never overwrite.** `npm run backup` copies the
+database with `Connection.backup`, which is consistent while the application writes (copying the file
+is not, in WAL mode), checks the copy's integrity and refuses to back up a damaged database. A restore
+keeps the replaced database as `quotex.db.before-restore-<time>`. Session files are included unless
+`--no-secrets`, and the command says so. Only folders it made (with a manifest) are ever pruned.
+`npm start` and `npm run latency` follow the same rule: they only read or create, never delete the
+owner's data.
+
 ---
 
 ## Decisions to be made later (record here when decided)

@@ -4,9 +4,9 @@ A local web app that listens to several Telegram signal groups, turns the signal
 binary-option trades, runs a martingale / flip strategy per group, stores everything in a database
 and shows it on a live dashboard with reports.
 
-> **Status:** under construction, built phase by phase. See [docs/STATUS.md](docs/STATUS.md).
-> Right now only the empty, wired-up foundation exists (Phase 0): a backend with a health check and a
-> frontend page that shows it.
+> **Status:** all nine phases are built and tested on fakes (a simulated Quotex and Telegram). **Nothing
+> has been run against the real Quotex or Telegram by the builder.** Run it on the **demo** account
+> first and do the live checks listed in the phase reports ([docs/STATUS.md](docs/STATUS.md)).
 
 ## Security note (read this)
 
@@ -15,10 +15,12 @@ and shows it on a live dashboard with reports.
   get an account restricted. Keep real balances small. The app defaults to the **demo** account.
 - **There is no login.** Whoever can reach the server can control trading. The server therefore listens
   on `127.0.0.1` only and **refuses to start on any other address** unless you set
-  `ALLOW_PUBLIC_BIND=true`. Do not do that on an open network.
+  `ALLOW_PUBLIC_BIND=true`. Do not do that on an open network. For a server, use an SSH tunnel
+  ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 - **Credentials stay on your machine.** Telegram keys, Quotex password and session files live in
-  `.env` and `data/`, both git-ignored. They are stored unencrypted for now, so protect the folder
-  with normal file permissions. Never paste them into issues, logs or chat.
+  `backend/.env` and `backend/data/`, both git-ignored. They are stored unencrypted for now, so protect
+  the folder with normal file permissions. Never paste them into issues, logs or chat. Log files mask
+  them, and backups that include the session files are as sensitive as the passwords.
 
 ## Requirements
 
@@ -30,131 +32,101 @@ and shows it on a live dashboard with reports.
 
 You do not need Python installed yourself: `uv` downloads Python 3.12 when needed.
 
-## Setup
+## Quick start (a new machine)
 
-From the repository root:
+1. Install the three tools above.
+2. Get the code (`git clone <repository URL>`) and open a terminal in its folder.
+3. Install everything (a few minutes the first time, `pyquotex` is fetched from GitHub):
 
-```
-npm run setup
-```
+   ```
+   npm run setup
+   ```
 
-This runs `uv sync` for the backend (creates `backend/.venv`, installs everything including the pinned
-`pyquotex`), `npm install` for the frontend, and `npm run db:upgrade`, which creates the database
-(`backend/data/quotex.db`, git-ignored). The first run takes a few minutes because `pyquotex` is
-fetched from GitHub.
+4. Start:
 
-The backend refuses to start if the database has not been created or is behind the code. After
-pulling new code, run `npm run db:upgrade` again; it only applies what is missing.
+   ```
+   npm start            # on Windows you can also double-click start.bat
+   ```
 
-| Command | What it does |
+That is all: `npm start` builds the dashboard if needed, creates the database, checks the port, prints
+how the app is configured (never your passwords) and opens <http://127.0.0.1:8000>. Stop it with
+Ctrl+C.
+
+With no settings file it runs safely: demo only, **trading off**. You can look around, create groups and
+set limits. To trade, follow the first-time logins in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+**To see everything working with no accounts at all:** `npm run build`, then `npm run demo`, and open
+<http://127.0.0.1:8000>. The demo runs on a simulated Quotex and simulated Telegram groups, posts a
+made-up signal every few seconds, and uses its own database (`backend/data/demo`). It cannot touch your
+real accounts or data.
+
+`npm start -- --prepare-only` does the preparation and stops, which is a quick way to check a new
+installation; `npm start -- --no-browser` does not open a browser window.
+
+## The guides
+
+| Guide | Read it when |
 |---|---|
-| `npm run db:upgrade` | Create or update the database to the newest schema |
-| `npm run db:downgrade` | Remove every table (back to an empty database). **Deletes all data.** |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Setting up logins, running day to day, backups, a Quotex domain change, upgrades |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | You see an error: phone number format, `getaddrinfo failed`, session reset, port in use ... |
+| [docs/FAILURE_MODES.md](docs/FAILURE_MODES.md) | You want to know what happens when Telegram, Quotex or the database fails |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Moving it to a VPS |
+| [docs/API.md](docs/API.md) | Using the API or the live feed directly |
+| [docs/STATUS.md](docs/STATUS.md) | Where the project is and what is still unverified |
 
-Optional: copy `.env.example` to `backend/.env` to change settings (port, log level, ...). The
-defaults are safe and need no file.
+## Configuration
 
-## Run (development)
+Optional: copy `.env.example` to `backend/.env` and edit. Every setting is listed there with its
+meaning. The defaults are safe and need no file. The main ones:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ENGINE_ENABLED` | `false` | `true` logs in to Quotex and Telegram and acts on signals |
+| `QUOTEX_EMAIL`, `QUOTEX_PASSWORD` | unset | Quotex login (secrets) |
+| `QUOTEX_HOST` | `quotex.com` | The broker's domain; changes now and then |
+| `QUOTEX_ALLOW_REAL` | `false` | Real-money trading stays impossible unless `true` *and* switched on in the dashboard |
+| `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | unset | From <https://my.telegram.org> (secrets) |
+| `PORT` | `8000` | Port on `127.0.0.1` |
+| `LOG_LEVEL`, `LOG_TO_FILE`, `LOG_MAX_MB`, `LOG_BACKUPS` | `INFO`, `true`, `10`, `5` | Logs, also in `backend/data/logs/engine.log` |
+
+## What it does
+
+- **Telegram and signals.** Reads the groups you add, understands the signal formats of the old bot
+  (`npm run signal:try -- "EURUSD PUT 1m"` tests a message). Test a group without trading:
+  `npm run telegram:listen -- --chat -1001234567890 --suffix auto --tz UTC-3`.
+- **Quotex.** One adapter, demo by default. `npm run quotex:diagnose` connects and shows the balance
+  and payout; with `-- --order` it places one demo order.
+- **Strategies.** Per group: no martingale, martingale, flip every loss, two-step flip, as chains of steps. Orders
+  go out on a short path with no database wait (the result is stored in the background).
+- **Safety.** Limits before every order (max stake, exposure, concurrent trades, chain length, minimum
+  payout, daily stop-loss and profit target, globally and per group), a kill switch, group pausing, "stop
+  after current trade" and "end chain". Kill switch, pauses and limits survive restarts. If the app
+  stops with trades open, the next start marks them `unknown`: check them on Quotex.
+- **Dashboard.** Live, Signals, Groups, History and Reports pages, fed over a WebSocket. A banner
+  appears when something is wrong.
+- **Reports.** Profit, win rate, drawdown, streaks, results by group, asset, strategy, hour and weekday,
+  how deep chains go, and a plain verdict comparing the win rate with the break-even line (it refuses
+  to conclude from too few trades). Demo and real are never mixed. Every table downloads as an
+  Excel-friendly CSV.
+- **Backups and speed.** `npm run backup` (consistent while running) and `npm run latency` (your own
+  signal-to-order timings); see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Development
 
 Two terminals, both from the repository root:
 
 ```
 npm run backend      # API on http://127.0.0.1:8000
-npm run frontend     # dashboard on http://127.0.0.1:5173
+npm run frontend     # dashboard with hot reload on http://127.0.0.1:5173
 ```
 
-Open <http://127.0.0.1:5173>: this is the dashboard (Live, Signals, Groups, History). The dev server
-forwards `/api` and `/ws` to the backend, so the browser only ever talks to one address.
-
-**One process instead of two:** `npm run build` once, then `npm run backend` serves the dashboard
-itself at <http://127.0.0.1:8000> (no Vite needed).
-
-**Try it with no accounts at all:** `npm run build`, then `npm run demo`, and open
-<http://127.0.0.1:8000>. The demo runs everything on a simulated Quotex and simulated Telegram groups,
-with its own database (`backend/data/demo`), and posts a made-up signal every few seconds. It cannot
-touch your real accounts or data.
-
-Always start the backend with `npm run backend` (or `python -m app`), not with a bare `uvicorn`
-command: that is what enforces the loopback-only rule.
-
-## Quotex connection (Phase 2)
-
-Put your Quotex login in `backend/.env` (see `.env.example`): `QUOTEX_EMAIL`, `QUOTEX_PASSWORD`, and
-`QUOTEX_HOST` if the domain changes. These are secrets; the file is git-ignored.
-
-Check the connection **on the demo account** with the diagnostic:
-
-```
-npm run quotex:diagnose                  # connect, show balance and payout
-npm run quotex:diagnose -- --order       # also place ONE demo order and wait for its result
-```
-
-It can only use the demo account. If Quotex emails you a PIN, type it into that terminal once; the
-session is then stored in `backend/data/session.json` (a secret: it can act as you, keep that folder
-private) and the application never has to ask again.
-
-**When the domain stops working** (`getaddrinfo failed` = the name no longer resolves): set
-`QUOTEX_HOST` in `backend/.env` to the new bare domain (for example `quotex.io`), delete
-`backend/data/session.json`, and run the diagnostic again.
-
-Real-money trading is impossible unless `QUOTEX_ALLOW_REAL=true` *and* the account is switched to
-real explicitly. Keep it off while testing.
-
-## Telegram and signals (Phase 3)
-
-1. Go to https://my.telegram.org, log in, open **API development tools** and create an app. Put the
-   `api_id` and `api_hash` in `backend/.env` (`TELEGRAM_API_ID`, `TELEGRAM_API_HASH`). They are
-   secrets; the file is git-ignored.
-2. Log in once: `npm run telegram:login`. Type your phone number in international format
-   (`+254712345678`, no leading 0), then the code Telegram sends to your Telegram app, and your
-   two-step password if you have one. The session is stored in `backend/data/telegram.session`
-   (a secret: it can read your chats, keep that folder private).
-3. List your chats and their ids: `npm run telegram:dialogs`.
-4. Watch what the system makes of a group's messages, trading nothing:
-   `npm run telegram:listen -- --chat -1001234567890 --suffix auto --tz UTC-3`
-   (`--suffix` is `otc`, `none` or `auto`; `--tz` is the zone entry times are written in).
-
-To try the parser on any message without Telegram:
-`npm run signal:try -- "EURUSD PUT 1m"` or `npm run signal:try -- --file message.txt`.
-
-## Running the trading engine (Phase 4)
-
-By default `npm run backend` does **not** touch Quotex or Telegram. To let the application act on
-signals, set `ENGINE_ENABLED=true` in `backend/.env` (after the Quotex and Telegram logins work, see
-above). It trades on the **demo** account. A group's strategy and stakes come from its stored
-settings; groups cannot be created from the dashboard until Phase 6, so until then the engine has no
-groups to listen to. What it does is tested end to end with fakes (`npm run test:backend`).
-
-**Safety.** The engine enforces limits before every order (max stake, max exposure, max concurrent
-trades, max chain length, minimum payout, daily stop-loss and profit target, globally and per group)
-and has a kill switch, group pausing, "stop after current trade" and "end chain". They are controlled
-from code today (`engine.guard`, `engine.manager`); the dashboard buttons arrive with Phase 6/7. The kill
-switch, pauses and limits are remembered across restarts. The day for the daily limits starts at
-00:00 UTC unless configured otherwise. See `docs/DECISIONS.md` D-37 and D-38.
-
-If the application stops while trades are open, the next start marks those trades and their chains
-`unknown` (it cannot see Quotex's history) and logs a `risk.tripped` event: check them on Quotex.
-
-## Reports (Phase 8)
-
-The **Reports** page answers "is this really working?": profit, win rate, drawdown, streaks, the result
-split by group, asset, strategy, hour of day and weekday, how deep chains go and what each step costs,
-and a plain-language comparison of the win rate with the break-even line, which refuses to conclude
-from too few trades. Demo and real are never mixed. Every table can be downloaded as a CSV that opens
-in Excel (use the semicolon version if Excel shows one column). Try it with `npm run demo`.
-
-## The API (Phase 6)
-
-With the backend running, <http://127.0.0.1:8000/docs> is an interactive page for every endpoint, and
-`npm run api:watch` prints the live feed (what the dashboard receives over the WebSocket). The full
-guide is [docs/API.md](docs/API.md). Groups can be created, and risk limits set, even with
-`ENGINE_ENABLED=false`: **set your limits before you enable the engine.** The API refuses requests that
-come from other web pages or other host names (it can place trades and has no login).
+The dev server forwards `/api` and `/ws` to the backend. Start the backend with `npm run backend`
+(or `python -m app`), never a bare `uvicorn`: that is what enforces the loopback-only rule.
 
 After changing the backend API run `npm run api:generate`: it rewrites `docs/openapi.json` and the
-frontend's types, and `npm run check` fails if you forget.
-
-## Checks
+frontend's types, and `npm run check` fails if you forget. With the backend running,
+<http://127.0.0.1:8000/docs> is an interactive page for every endpoint, and `npm run api:watch` prints
+the live feed.
 
 | Command | What it does |
 |---|---|
@@ -164,14 +136,17 @@ frontend's types, and `npm run check` fails if you forget.
 | `npm run build` | production build of the frontend |
 | `npm run api:check` | the committed API description and frontend types match the code |
 | `npm run check` | all of the above |
+| `npm run db:upgrade` | Create or update the database to the newest schema |
+| `npm run db:downgrade` | Remove every table. **Deletes all data.** |
 
 ## Layout
 
 ```
-backend/    FastAPI app (app/), tests (tests/), pyproject.toml, uv.lock
+backend/    FastAPI app (app/), tests (tests/), scripts (scripts/), pyproject.toml, uv.lock
 frontend/   React + Vite + TypeScript dashboard
-docs/       architecture, decisions, phases, status, phase reports
-data/       created at runtime (git-ignored): database, sessions, logs
+docs/       architecture, decisions, phases, status, guides, phase reports
+backups/    created by `npm run backup` (git-ignored)
+backend/data/   created at runtime (git-ignored): database, sessions, logs
 ```
 
 Start with [CLAUDE.md](CLAUDE.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) to see how the

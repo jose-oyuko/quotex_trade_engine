@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
@@ -40,6 +41,7 @@ class Engine:
         sleep: Sleeper = asyncio.sleep,
         result_margin_s: float = RESULT_MARGIN_S,
         risk_limits: RiskLimits | None = None,
+        telegram_backoff: BackoffPolicy | None = None,
     ) -> None:
         self.adapter = adapter
         self._tasks = tasks
@@ -62,7 +64,12 @@ class Engine:
             sleep=sleep,
         )
         self.listener = TelegramListener(
-            source, handler=self.pipeline.handle, bus=bus, clock=clock, tasks=tasks
+            source,
+            handler=self.pipeline.handle,
+            bus=bus,
+            clock=clock,
+            tasks=tasks,
+            backoff=telegram_backoff,
         )
 
     # --- groups (the API of Phase 6 will call these when a group is created or edited) ---

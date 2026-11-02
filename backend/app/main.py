@@ -53,7 +53,14 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        configure_logging(settings.log_level, json_output=settings.environment == "production")
+        configure_logging(
+            settings.log_level,
+            json_output=settings.environment == "production",
+            log_file=settings.log_path if settings.log_to_file else None,
+            max_bytes=settings.log_max_mb * 1024 * 1024,
+            backups=settings.log_backups,
+            secrets=settings.secret_values(),
+        )
         log.info("startup", environment=settings.environment, host=settings.host)
 
         settings.data_dir.mkdir(parents=True, exist_ok=True)

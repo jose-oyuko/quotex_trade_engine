@@ -56,7 +56,14 @@ async def test_health_reports_database_and_writer(migrated_settings: Settings) -
     async with app.router.lifespan_context(app):
         health = await get_health(app)
     assert health["database"] == "ok"
-    assert health["writer"] == {"queue_depth": 0, "written": 0, "failed": 0, "dropped": 0}
+    assert health["writer"] == {
+        "queue_depth": 0,
+        "written": 0,
+        "failed": 0,
+        "dropped": 0,
+        "retrying": False,
+    }
+    assert health["status"] == "ok" and health["problems"] == []
     assert health["events_published"] == 0
 
 

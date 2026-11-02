@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
+from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock, SystemClock
 from app.core.tasks import TaskSupervisor
 from app.db.writer import DBWriter
@@ -158,6 +159,7 @@ def make_rig(
     hold_results: bool = False,
     result_margin_s: float = 60.0,
     limits: RiskLimits | None = None,
+    telegram_backoff: BackoffPolicy | None = None,
 ) -> EngineRig:
     clock = clock or ManualClock()
     bus, tasks = EventBus(), TaskSupervisor()
@@ -173,6 +175,7 @@ def make_rig(
         tasks=tasks,
         result_margin_s=result_margin_s,
         risk_limits=limits,
+        telegram_backoff=telegram_backoff,
     )
     feed = bus.subscribe(name="test-feed", maxsize=1_000_000)
     return EngineRig(clock, bus, tasks, adapter, source, engine, feed)

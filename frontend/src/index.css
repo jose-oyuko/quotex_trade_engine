@@ -97,6 +97,18 @@ code {
 
 /* --- shell --- */
 
+.health-banner {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-bottom: 2px solid var(--warn);
+  padding: 0.5rem 1rem;
+}
+
+.health-banner ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
 .real-banner {
   background: var(--real);
   color: #fff;
