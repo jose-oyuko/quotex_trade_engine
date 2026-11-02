@@ -111,15 +111,15 @@ Rules:
 - Demo and real data are separated by an `account_type` column on trades and chains, and every
   report filters on it.
 
-## 7. API surface (shape, finalised in Phase 6)
+## 7. API surface (built in Phase 6; the complete guide is `docs/API.md`)
 
 - REST under `/api/v1`, JSON, typed with Pydantic models, versioned. Examples:
   `GET /health`, `GET/PUT /groups`, `POST /groups/{id}/pause`, `GET /chains?status=open`,
-  `POST /chains/{id}/stop-after-current`, `POST /chains/{id}/skip-to-base`, `POST /kill-switch`,
-  `GET /trades`, `GET /signals`, `GET /reports/summary`, `GET /reports/by-group` …
+  `POST /chains/{id}/stop-after-current`, `POST /chains/{id}/end` (the dashboard's "skip to base"),
+  `POST /kill-switch`, `GET /trades`, `GET /signals`, `GET /reports/summary` (Phase 8) …
 - **WebSocket** `/ws` streams events to the dashboard. On connect the server sends a snapshot
   (open chains, balance, connection state), then incremental events with sequence numbers so the
-  client can detect gaps and re-sync.
+  client can detect gaps and re-sync. Each client has its own bounded queue (decision D-40).
 - All commands are idempotent where possible and return the new state.
 - No authentication in v1 (single user, bound to `127.0.0.1` by default). The server must **refuse
   to bind to a public interface without an explicit setting**, because the API can place trades.
@@ -176,7 +176,9 @@ quotex_trade_engine/
 │   │   │                      #   risk.py (RiskGuard, limits, kill switch), errors.py,
 │   │   │                      #   factory.py (real components)
 │   │   ├── events/            # bus.py, event types
-│   │   ├── api/               # routers/, schemas/, ws.py, deps.py
+│   │   ├── services/          # live.py (LiveState, rebuilt from events), groups.py, risk_settings.py
+│   │   ├── api/               # routers/, schemas/, hub.py + ws.py (/ws), errors.py, security.py,
+│   │   │                      #   snapshot.py, events.py, openapi.py, deps.py, views.py
 │   │   └── reports/           # queries.py
 │   ├── data/                  # git-ignored: sqlite file, sessions, logs (owner decision, Phase 0)
 │   └── tests/                 # unit/, integration/, fixtures/

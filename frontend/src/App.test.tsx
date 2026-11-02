@@ -22,6 +22,10 @@ describe('App', () => {
         version: '0.1.0',
         environment: 'development',
         background_tasks: 0,
+        database: 'ok',
+        events_published: 0,
+        writer: null,
+        engine: { enabled: false, running: false },
       }),
     )
     render(<App />)

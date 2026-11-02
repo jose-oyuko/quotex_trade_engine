@@ -38,7 +38,7 @@ async def migrated_settings(tmp_path: Path) -> AsyncIterator[Settings]:
 
 async def get_health(app) -> dict:  # type: ignore[no-untyped-def, type-arg]
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
         return (await client.get("/api/v1/health")).json()  # type: ignore[no-any-return]
 
 

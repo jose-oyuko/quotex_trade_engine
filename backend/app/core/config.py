@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # Used by the dev proxy; production serves the frontend from the same origin.
     cors_origin: str = "http://127.0.0.1:5173"
 
+    # The API: commands (anything that changes something) are rate limited, and every dashboard on
+    # the WebSocket gets its own bounded queue (a slow one loses its queue, never slows the engine).
+    api_command_rate_per_s: float = 10.0
+    api_command_burst: int = 40
+    ws_client_queue: int = 1000
+    ws_heartbeat_s: float = 15.0
+
     # Starts the trading engine (Quotex + Telegram + chains) with the application. Off by default:
     # starting the backend must never log in to Quotex or Telegram by surprise.
     engine_enabled: bool = False

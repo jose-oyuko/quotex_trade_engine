@@ -273,6 +273,10 @@ class ChainManager:
         and is recorded, but nothing follows it."""
         self._stop_now(self._running(chain_id), reason)
 
+    def running_chain(self, chain_id: UUID) -> Chain:
+        """The running chain, or `UnknownChainError` if there is none with that id."""
+        return self._running(chain_id)
+
     def _running(self, chain_id: UUID) -> Chain:
         chain = self._chains.get(chain_id)
         if chain is None:

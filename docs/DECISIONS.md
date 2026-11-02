@@ -271,6 +271,43 @@ or trade is running; real also needs `QUOTEX_ALLOW_REAL`. Known limit: an order 
 (a few milliseconds between the guard's check and the adapter's send) cannot be recalled by a kill
 switch engaged in that instant.
 
+**D-39. The shape of the API.** REST under `/api/v1` plus one WebSocket at `/ws`. Every error has the
+body `{"error": {"code", "message", "details"}}` (stable code, readable message, field problems for
+validation errors, never the rejected values, never a trace). Lists are always paged with a total.
+Money is a string in every response, never a float. Reads come from the database (a moment behind the
+engine); `/status` and the WebSocket snapshot are the live picture, rebuilt from events by `LiveState`.
+Commands that need the running engine (pause, kill switch, chain commands, account switch) answer 503
+`engine_not_running` without it; **creating groups and setting risk limits work without it**, because
+limits must be settable *before* the engine is first enabled. The description of the API
+(`docs/openapi.json`, including the WebSocket messages) is generated from the code and committed; the
+frontend's types are generated from it, and `npm run check` fails if either is stale. "Skip to base"
+is `POST /chains/{id}/end`: ending the chain frees the group, so the next signal starts at base stake.
+
+**D-40. The WebSocket protocol.** First a `snapshot` (the whole picture), then events numbered 1 apart,
+plus heartbeats that carry the latest number. Only events that produce a message use up a number, so
+the numbers a client sees are consecutive and any jump is a real gap. A client that sees a gap sends
+`resync` and gets a new snapshot. Each connection has its own bounded queue; when it overflows, that
+client's queue is dropped and it is sent a fresh snapshot (`slow_consumer`): a slow dashboard loses
+its own events and never delays the engine (which only ever calls the non-blocking `bus.publish`) or
+other dashboards. One hub task turns bus events into messages and updates `LiveState` in the same
+synchronous step, which is what makes "snapshot at N, then N+1, N+2..." exact. The day's profit and loss
+is not pushed event by event: it is in every snapshot and in `GET /risk`, and a dashboard refetches it
+when a trade settles.
+
+**D-41. The API protects itself from the owner's own browser.** Binding to loopback keeps other
+computers out, but any web page the owner opens can make their browser send requests to `127.0.0.1`.
+So: only loopback host names are served (against DNS rebinding; off only with `ALLOW_PUBLIC_BIND`);
+any request that changes something, and every WebSocket, is refused if its `Origin` is another site
+(allowed: the same host, and the dev server's origin in development); bodies over 64 KiB are refused;
+commands are rate limited (burst 40, 10/s). Programs without an `Origin` header (curl, scripts) are
+unaffected, since a web page cannot make them send one.
+
+**D-42. Today's result survives editing the limits (a correction to D-37).** `RiskGuard.set_limits`
+used to start the day's totals from zero, so saving the limits again after a stop-loss had been
+reached would have lifted it. The guard now keeps a 48-hour in-memory ledger of settled results and
+rebuilds the day's totals from it, so editing limits, or even moving the reset time or zone, never
+loses results that belong to the day. Found while building the API that exposes this.
+
 ---
 
 ## Decisions to be made later (record here when decided)

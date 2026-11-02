@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AppSetting, BalanceSnapshot, RiskEvent
@@ -25,6 +25,9 @@ class RiskEventRepository:
     async def add(self, event: RiskEventRecord) -> None:
         await self._session.merge(RiskEvent(**to_values(event)))
         await self._session.flush()
+
+    async def count(self) -> int:
+        return await self._session.scalar(select(func.count()).select_from(RiskEvent)) or 0
 
     async def list_recent(self, *, limit: int = 100, offset: int = 0) -> list[RiskEventRecord]:
         limit, offset = page(limit, offset)

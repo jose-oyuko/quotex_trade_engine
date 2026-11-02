@@ -18,6 +18,7 @@ from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
 from app.engine.risk import RiskGuard, RiskLimits
 from app.events.bus import EventBus
+from app.events.types import AccountChanged
 from app.quotex.base import QuotexAdapter
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, PipelineConfig, SignalPipeline, Sleeper
@@ -42,6 +43,8 @@ class Engine:
     ) -> None:
         self.adapter = adapter
         self._tasks = tasks
+        self._bus = bus
+        self._clock = clock
         self.guard = RiskGuard(clock=clock, bus=bus, limits=risk_limits)
         self.executor = Executor(
             adapter, guard=self.guard, clock=clock, bus=bus, result_margin_s=result_margin_s
@@ -88,6 +91,7 @@ class Engine:
                 "trade(s) are still running: wait for them or end them first"
             )
         await self.adapter.set_account_type(account_type)
+        self._bus.publish(AccountChanged(occurred_at=self._clock.now(), account_type=account_type))
 
     # --- life cycle ---
 

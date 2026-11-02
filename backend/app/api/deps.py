@@ -1,0 +1,79 @@
+"""FastAPI dependencies: how a request handler gets at the application's parts."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from typing import Annotated
+
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.errors import ApiError
+from app.api.snapshot import SnapshotBuilder
+from app.core.config import Settings
+from app.engine.engine import Engine
+from app.services.groups import GroupService
+from app.services.live import LiveState
+from app.services.risk_settings import RiskSettingsService
+
+
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """One short read session per request."""
+    factory = request.app.state.session_factory
+    if factory is None:
+        raise ApiError(503, "unavailable", "The application is still starting.")
+    async with factory() as session:
+        yield session
+
+
+def get_engine(request: Request) -> Engine | None:
+    """The trading engine, or None when it was not started (ENGINE_ENABLED=false)."""
+    engine: Engine | None = request.app.state.trading
+    return engine
+
+
+def require_engine(request: Request) -> Engine:
+    engine = get_engine(request)
+    if engine is None:
+        raise ApiError(
+            503,
+            "engine_not_running",
+            "The trading engine is not running. Set ENGINE_ENABLED=true in backend/.env and "
+            "restart the application.",
+        )
+    return engine
+
+
+def get_settings_dep(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+def get_live(request: Request) -> LiveState:
+    live: LiveState = request.app.state.live
+    return live
+
+
+def get_groups(request: Request) -> GroupService:
+    groups: GroupService = request.app.state.groups
+    return groups
+
+
+def get_risk_settings(request: Request) -> RiskSettingsService:
+    service: RiskSettingsService = request.app.state.risk_settings
+    return service
+
+
+def get_snapshots(request: Request) -> SnapshotBuilder:
+    snapshots: SnapshotBuilder = request.app.state.snapshots
+    return snapshots
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+EngineDep = Annotated[Engine | None, Depends(get_engine)]
+RunningEngineDep = Annotated[Engine, Depends(require_engine)]
+SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
+LiveDep = Annotated[LiveState, Depends(get_live)]
+GroupsDep = Annotated[GroupService, Depends(get_groups)]
+RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
+SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Signal
@@ -35,10 +36,20 @@ class SignalRepository:
     ) -> list[SignalRecord]:
         """Newest first."""
         limit, offset = page(limit, offset)
-        stmt = select(Signal).order_by(Signal.received_at.desc(), Signal.id)
-        if group_id is not None:
-            stmt = stmt.where(Signal.group_id == group_id)
-        if status is not None:
-            stmt = stmt.where(Signal.status == status)
-        rows = await self._session.scalars(stmt.limit(limit).offset(offset))
-        return [to_record(SignalRecord, row) for row in rows]
+        stmt = _filtered(select(Signal), group_id, status)
+        stmt = stmt.order_by(Signal.received_at.desc(), Signal.id).limit(limit).offset(offset)
+        return [to_record(SignalRecord, row) for row in await self._session.scalars(stmt)]
+
+    async def count(
+        self, *, group_id: int | None = None, status: SignalStatus | None = None
+    ) -> int:
+        stmt = _filtered(select(func.count()).select_from(Signal), group_id, status)
+        return await self._session.scalar(stmt) or 0
+
+
+def _filtered[S: Select[Any]](stmt: S, group_id: int | None, status: SignalStatus | None) -> S:
+    if group_id is not None:
+        stmt = stmt.where(Signal.group_id == group_id)
+    if status is not None:
+        stmt = stmt.where(Signal.status == status)
+    return stmt

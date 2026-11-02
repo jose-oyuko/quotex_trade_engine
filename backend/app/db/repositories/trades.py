@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Trade
@@ -64,12 +65,28 @@ class TradeRepository:
     ) -> list[TradeRecord]:
         """Newest first."""
         limit, offset = page(limit, offset)
-        stmt = select(Trade).order_by(Trade.created_at.desc(), Trade.id)
-        if group_id is not None:
-            stmt = stmt.where(Trade.group_id == group_id)
-        if account_type is not None:
-            stmt = stmt.where(Trade.account_type == account_type)
-        if status is not None:
-            stmt = stmt.where(Trade.status == status)
-        rows = await self._session.scalars(stmt.limit(limit).offset(offset))
-        return [to_record(TradeRecord, row) for row in rows]
+        stmt = _filtered(select(Trade), group_id, account_type, status)
+        stmt = stmt.order_by(Trade.created_at.desc(), Trade.id).limit(limit).offset(offset)
+        return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
+
+    async def count(
+        self,
+        *,
+        group_id: int | None = None,
+        account_type: AccountType | None = None,
+        status: TradeStatus | None = None,
+    ) -> int:
+        stmt = _filtered(select(func.count()).select_from(Trade), group_id, account_type, status)
+        return await self._session.scalar(stmt) or 0
+
+
+def _filtered[S: Select[Any]](
+    stmt: S, group_id: int | None, account_type: AccountType | None, status: TradeStatus | None
+) -> S:
+    if group_id is not None:
+        stmt = stmt.where(Trade.group_id == group_id)
+    if account_type is not None:
+        stmt = stmt.where(Trade.account_type == account_type)
+    if status is not None:
+        stmt = stmt.where(Trade.status == status)
+    return stmt

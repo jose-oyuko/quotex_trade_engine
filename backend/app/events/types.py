@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import ClassVar
 
+from app.domain.enums import AccountType
 from app.domain.records import (
     AppSettingRecord,
     BalanceSnapshotRecord,
@@ -77,6 +78,15 @@ class SettingChanged(Event):
 
     name: ClassVar[str] = "setting.changed"
     setting: AppSettingRecord
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class AccountChanged(Event):
+    """The engine moved between demo and real. Shown live; not stored (the adapter starts on demo
+    at every launch, decision D-15)."""
+
+    name: ClassVar[str] = "account.changed"
+    account_type: AccountType
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import text
+
+from app.api.schemas.status import ConnectionOut, EngineStatus
 
 router = APIRouter(tags=["health"])
 log = structlog.get_logger()
@@ -28,6 +31,11 @@ class HealthResponse(BaseModel):
     database: Literal["ok", "unavailable"]
     events_published: int
     writer: WriterHealth | None
+    engine: EngineStatus
+    telegram: ConnectionOut | None = None  # null until the engine has reported
+    quotex: ConnectionOut | None = None
+    last_event_at: datetime | None = None
+    ws_clients: int = 0
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -35,6 +43,17 @@ async def health(request: Request) -> HealthResponse:
     """Liveness check. Contains no secrets."""
     state = request.app.state
     writer = state.writer
+    live, hub = state.live, state.hub
+    connections = live.connections if live is not None else {}
+
+    def component(name: str) -> ConnectionOut | None:
+        status = connections.get(name)
+        return (
+            None
+            if status is None
+            else ConnectionOut(connected=status.connected, detail=status.detail, since=status.since)
+        )
+
     return HealthResponse(
         status="ok",
         version=request.app.version,
@@ -50,6 +69,13 @@ async def health(request: Request) -> HealthResponse:
             failed=writer.stats.failed,
             dropped=writer.dropped,
         ),
+        engine=EngineStatus(
+            enabled=state.settings.engine_enabled, running=state.trading is not None
+        ),
+        telegram=component("telegram"),
+        quotex=component("quotex"),
+        last_event_at=live.last_event_at if live is not None else None,
+        ws_clients=hub.clients if hub is not None else 0,
     )
 
 

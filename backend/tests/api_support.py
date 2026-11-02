@@ -1,0 +1,180 @@
+"""A running application for the API tests: real FastAPI app and lifespan, real (temporary) SQLite
+database, and - when asked for - a real engine built on the fake Telegram source and fake Quotex
+adapter. Requests go through `httpx` straight into the ASGI app; WebSocket tests use `serve()`."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+import uvicorn
+from alembic import command
+from fastapi import FastAPI
+
+from app.core.clock import SystemClock
+from app.core.config import Settings
+from app.core.tasks import TaskSupervisor
+from app.db.migrations import alembic_config
+from app.engine.engine import Engine
+from app.events.bus import EventBus
+from app.main import EngineBuilder, create_app
+from app.quotex.base import ConnectionState
+from app.quotex.fake import FakeQuotexAdapter
+from app.telegram import FakeTelegramSource
+
+BASE_URL = "http://127.0.0.1"
+ASSETS = ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD")
+
+GROUP_BODY: dict[str, Any] = {
+    "telegram_chat_id": -1001,
+    "title": "Signals A",
+    "enabled": True,
+    "settings": {
+        "parser": "legacy_v1",
+        "asset_suffix_mode": "none",
+        "timezone": "UTC-3",
+        "strategy": "martingale",
+        "base_stake": "1.00",
+        "max_steps": 2,
+        "multipliers": ["2.0", "2.5"],
+        "min_payout_pct": 0,
+    },
+}
+
+
+def group_body(**overrides: Any) -> dict[str, Any]:
+    """A valid request body to create a group; `settings` overrides are merged into the settings."""
+    body = {**GROUP_BODY, "settings": dict(GROUP_BODY["settings"])}
+    settings = overrides.pop("settings", {})
+    body.update(overrides)
+    body["settings"].update(settings)
+    return body
+
+
+@dataclass
+class FakeParts:
+    """The fakes behind the engine, so a test can emit Telegram messages and settle trades."""
+
+    engine: Engine
+    adapter: FakeQuotexAdapter
+    source: FakeTelegramSource
+    _message_id: int = 0
+
+    def signal(self, chat_id: int, text: str) -> None:
+        self._message_id += 1
+        assert self.source.emit(chat_id, text, message_id=self._message_id)
+
+
+@dataclass
+class ApiRig:
+    app: FastAPI
+    client: httpx.AsyncClient
+    settings: Settings
+    parts: list[FakeParts] = field(default_factory=list)
+
+    @property
+    def fakes(self) -> FakeParts:
+        return self.parts[0]
+
+    async def create_group(self, **overrides: Any) -> dict[str, Any]:
+        response = await self.client.post("/api/v1/groups", json=group_body(**overrides))
+        assert response.status_code == 201, response.text
+        body: dict[str, Any] = response.json()
+        return body
+
+    async def eventually(
+        self, check: Callable[[], Awaitable[bool]], *, tries: int = 400, delay: float = 0.01
+    ) -> None:
+        for _ in range(tries):
+            if await check():
+                return
+            await asyncio.sleep(delay)
+        raise AssertionError("condition not reached in time")
+
+
+def settings_for(tmp_path: Path, **overrides: Any) -> Settings:
+    return Settings(_env_file=None, data_dir=tmp_path / "data", **overrides)  # type: ignore[call-arg]
+
+
+async def migrate(settings: Settings) -> None:
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(command.upgrade, alembic_config(settings.database_url), "head")
+
+
+def fake_builder(parts: list[FakeParts], *, hold_results: bool = False) -> EngineBuilder:
+    def build(settings: Settings, bus: EventBus, tasks: TaskSupervisor) -> Engine:
+        clock = SystemClock()
+        adapter = FakeQuotexAdapter(
+            clock=clock, bus=bus, hold_results=hold_results, allow_real=settings.quotex_allow_real
+        )
+        for asset in ASSETS:
+            adapter.add_asset(asset, payout=80)
+        source = FakeTelegramSource(clock)
+        engine = Engine(adapter=adapter, source=source, bus=bus, clock=clock, tasks=tasks)
+        parts.append(FakeParts(engine, adapter, source))
+        return engine
+
+    return build
+
+
+@asynccontextmanager
+async def running_api(
+    tmp_path: Path, *, with_engine: bool = False, hold_results: bool = False, **settings: Any
+) -> AsyncIterator[ApiRig]:
+    """The application inside its lifespan, with an HTTP client for it."""
+    config = settings_for(tmp_path, engine_enabled=with_engine, **settings)
+    await migrate(config)
+    parts: list[FakeParts] = []
+    app = create_app(config, engine_builder=fake_builder(parts, hold_results=hold_results))
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client,
+    ):
+        rig = ApiRig(app, client, config, parts)
+        if with_engine:
+            engine = rig.fakes.engine
+            assert await engine.listener.wait_until_connected(2)
+            await rig.eventually(_connected(engine))
+        yield rig
+
+
+def _connected(engine: Engine) -> Callable[[], Awaitable[bool]]:
+    async def check() -> bool:
+        return engine.adapter.state is ConnectionState.CONNECTED
+
+    return check
+
+
+class QuietServer(uvicorn.Server):
+    """uvicorn without its signal handlers, so it can run inside a test's event loop."""
+
+    def install_signal_handlers(self) -> None:  # pragma: no cover - uvicorn < 0.29 hook
+        return
+
+
+@asynccontextmanager
+async def serve(app: FastAPI) -> AsyncIterator[str]:
+    """Run the app on a real socket (port chosen by the OS); yields its `ws://` base address."""
+    config = uvicorn.Config(
+        app, host="127.0.0.1", port=0, log_config=None, lifespan="off", ws_ping_interval=None
+    )
+    server = QuietServer(config)
+    task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(500):
+            if server.started:
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("the test server did not start")
+        port = server.servers[0].sockets[0].getsockname()[1]
+        yield f"127.0.0.1:{port}"
+    finally:
+        server.should_exit = True
+        await task

@@ -392,6 +392,28 @@ def test_the_reset_follows_the_configured_zone_and_time() -> None:
     assert guard.admit(request()).allowed
 
 
+def test_editing_the_limits_does_not_reset_the_days_result() -> None:
+    guard = make_guard(RiskLimits(daily_stop_loss=D("10.00")))
+    book(guard, "-10")
+    assert not guard.admit(request()).allowed
+    guard.set_limits(RiskLimits(daily_stop_loss=D("10.00"), max_stake=D("5.00")))
+    assert guard.day_pnl(AccountType.DEMO) == D("-10")
+    assert blocked_kind(guard, request()) is BlockKind.DAILY_STOP_LOSS  # re-saving is no way out
+
+
+def test_moving_the_reset_time_rebuilds_the_day_from_the_results_since() -> None:
+    clock = ManualClock(datetime(2026, 11, 1, 12, 0, tzinfo=UTC))
+    guard = make_guard(RiskLimits(), clock)
+    book(guard, "-4")  # settled at 12:00
+    clock.set(datetime(2026, 11, 1, 13, 0, tzinfo=UTC))
+    book(guard, "-3")  # settled at 13:00
+    assert guard.day_pnl(AccountType.DEMO) == D("-7")
+    guard.set_limits(RiskLimits(reset_time=time(12, 30)))  # the day now began at 12:30
+    assert guard.day_pnl(AccountType.DEMO) == D("-3")
+    guard.set_limits(RiskLimits())  # and back to midnight: both results belong to the day again
+    assert guard.day_pnl(AccountType.DEMO) == D("-7")
+
+
 def test_group_totals_reset_with_the_day_too() -> None:
     clock = ManualClock(datetime(2026, 11, 1, 23, 0, tzinfo=UTC))
     guard = make_guard(None, clock)

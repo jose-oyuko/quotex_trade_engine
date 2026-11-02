@@ -127,6 +127,17 @@ switch, pauses and limits are remembered across restarts. The day for the daily 
 If the application stops while trades are open, the next start marks those trades and their chains
 `unknown` (it cannot see Quotex's history) and logs a `risk.tripped` event: check them on Quotex.
 
+## The API (Phase 6)
+
+With the backend running, <http://127.0.0.1:8000/docs> is an interactive page for every endpoint, and
+`npm run api:watch` prints the live feed (what the dashboard receives over the WebSocket). The full
+guide is [docs/API.md](docs/API.md). Groups can be created, and risk limits set, even with
+`ENGINE_ENABLED=false`: **set your limits before you enable the engine.** The API refuses requests that
+come from other web pages or other host names (it can place trades and has no login).
+
+After changing the backend API run `npm run api:generate`: it rewrites `docs/openapi.json` and the
+frontend's types, and `npm run check` fails if you forget.
+
 ## Checks
 
 | Command | What it does |
@@ -135,6 +146,7 @@ If the application stops while trades are open, the next start marks those trade
 | `npm run typecheck` | mypy (strict) and `tsc --noEmit` |
 | `npm run test` | pytest and Vitest |
 | `npm run build` | production build of the frontend |
+| `npm run api:check` | the committed API description and frontend types match the code |
 | `npm run check` | all of the above |
 
 ## Layout

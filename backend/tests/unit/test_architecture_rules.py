@@ -135,3 +135,48 @@ def test_no_blocking_calls_in_the_application() -> None:
                 if isinstance(func, ast.Name) and func.id == "input":
                     problems.append(f"{path.name}:{node.lineno} input()")
     assert problems == []
+
+
+def test_only_the_api_layer_knows_the_web_framework() -> None:
+    """Everything below the API (engine, services, database, domain) is plain Python, so it can be
+    tested and reused without FastAPI."""
+    importers = sorted(
+        str(path.relative_to(APP))
+        for path in APP.rglob("*.py")
+        if any(m.split(".")[0] in {"fastapi", "starlette"} for m in imported_modules(path))
+    )
+    allowed = ("api", "main.py")
+    assert [p for p in importers if Path(p).parts[0] not in allowed] == []
+    assert importers, "the check must see the API's own imports"
+
+
+def test_lower_layers_never_import_the_layers_above_them() -> None:
+    """docs/CONVENTIONS.md: `api` -> `engine/services` -> repositories / quotex / telegram."""
+    above = {
+        "domain": ("app.api", "app.services", "app.engine", "app.db", "app.quotex", "app.telegram"),
+        "events": ("app.api", "app.services", "app.engine", "app.db"),
+        "db": ("app.api", "app.services", "app.engine"),
+        "quotex": ("app.api", "app.services", "app.engine"),
+        "engine": ("app.api", "app.services"),
+        "services": ("app.api",),
+    }
+    offenders = [
+        f"{path.relative_to(APP)}: {module}"
+        for layer, forbidden in above.items()
+        for path in (APP / layer).rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(forbidden)
+    ]
+    assert offenders == []
+
+
+def test_the_api_reaches_the_outside_world_only_through_the_engine_and_services() -> None:
+    """The API never talks to Quotex or Telegram directly (decision D-6): only their error types."""
+    offenders = [
+        f"{path.relative_to(APP)}: {module}"
+        for path in (APP / "api").rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(("pyquotex", "telethon", "app.telegram"))
+        or (module.startswith("app.quotex") and module != "app.quotex.errors")
+    ]
+    assert offenders == []

@@ -21,6 +21,7 @@ new signals but its running chains finish. Both survive a restart (stored as app
 from __future__ import annotations
 
 import json
+from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta, tzinfo
@@ -143,11 +144,26 @@ class _Open:
     stake: Decimal
 
 
+@dataclass(slots=True, frozen=True)
+class _Result:
+    """One settled trade's profit, kept for LEDGER_WINDOW so the day's totals can be rebuilt when
+    the reset time or zone is edited."""
+
+    at: datetime
+    account_type: AccountType
+    group_id: int
+    profit: Decimal
+
+
 @dataclass(slots=True)
 class _DayTotals:
     start: datetime
     by_group: dict[tuple[AccountType, int], Decimal] = field(default_factory=dict)
     by_account: dict[AccountType, Decimal] = field(default_factory=dict)
+
+
+# How long settled results are remembered in memory (the same window the start-up reads back).
+LEDGER_WINDOW = timedelta(hours=48)
 
 
 def day_start(now: datetime, tz: tzinfo, reset_time: time) -> datetime:
@@ -177,6 +193,7 @@ class RiskGuard:
         self._paused: set[int] = set()
         self._open: dict[UUID, _Open] = {}
         self._open_stake = Decimal(0)
+        self._ledger: deque[_Result] = deque()
         self._day = _DayTotals(day_start(clock.now(), self._tz, self._limits.reset_time))
 
     # --- configuration ---
@@ -186,10 +203,11 @@ class RiskGuard:
         return self._limits
 
     def set_limits(self, limits: RiskLimits) -> None:
-        """Replace the global limits (takes effect for the next order) and remember them."""
+        """Replace the global limits (takes effect for the next order) and remember them. Today's
+        result is kept: editing the limits must never reset a stop-loss that has been reached."""
         self._limits = limits
         self._tz = parse_timezone(limits.reset_timezone)
-        self._day = _DayTotals(day_start(self._clock.now(), self._tz, limits.reset_time))
+        self._day = self._totals_since(day_start(self._clock.now(), self._tz, limits.reset_time))
         self._save(KEY_LIMITS, _limits_to_json(limits))
 
     def group_limits(self, group_id: int) -> GroupRiskLimits:
@@ -298,39 +316,49 @@ class RiskGuard:
         now = self._clock.now()
         self._roll(now)
         for trade in recent_settled_trades:
-            if (
-                trade.settled_at is not None
-                and trade.settled_at >= self._day.start
-                and trade.profit is not None
-            ):
-                self._book(trade.account_type, trade.group_id, trade.profit, now)
+            if trade.settled_at is not None and trade.profit is not None:
+                self._book(trade.account_type, trade.group_id, trade.profit, trade.settled_at)
 
     def _restore(self, setting: AppSettingRecord) -> None:
         key, value = setting.key, setting.value
         if key == KEY_LIMITS and isinstance(value, str):
             self._limits = _limits_from_json(value)
             self._tz = parse_timezone(self._limits.reset_timezone)
-            self._day = _DayTotals(day_start(self._clock.now(), self._tz, self._limits.reset_time))
+            self._day = self._totals_since(
+                day_start(self._clock.now(), self._tz, self._limits.reset_time)
+            )
         elif key.startswith(KEY_GROUP_LIMITS_PREFIX) and isinstance(value, str):
-            group_id = int(key.removeprefix(KEY_GROUP_LIMITS_PREFIX))
-            self._group_limits[group_id] = _group_limits_from_json(value)
+            self._group_limits[group_id_of(key)] = _group_limits_from_json(value)
         elif key == KEY_KILL_SWITCH:
             self._kill_switch = value is True
         elif key == KEY_PAUSED_GROUPS and isinstance(value, str):
-            self._paused = {int(part) for part in json.loads(value)}
+            self._paused = set(parse_paused_groups(value))
 
     # --- internals ---
 
     def _roll(self, now: datetime) -> None:
         start = day_start(now, self._tz, self._limits.reset_time)
         if start != self._day.start:
-            self._day = _DayTotals(start)
+            self._day = self._totals_since(start)
 
-    def _book(self, account: AccountType, group_id: int, profit: Decimal, now: datetime) -> None:
-        self._roll(now)
-        by_group, by_account = self._day.by_group, self._day.by_account
-        by_group[(account, group_id)] = by_group.get((account, group_id), Decimal(0)) + profit
-        by_account[account] = by_account.get(account, Decimal(0)) + profit
+    def _totals_since(self, start: datetime) -> _DayTotals:
+        """The day that began at `start`, rebuilt from the remembered results."""
+        totals = _DayTotals(start)
+        for result in self._ledger:
+            if result.at >= start:
+                _add(totals, result)
+        return totals
+
+    def _book(self, account: AccountType, group_id: int, profit: Decimal, at: datetime) -> None:
+        """Remember a settled result (made at `at`); it joins today's totals if it is today's."""
+        self._roll(self._clock.now())
+        result = _Result(at, account, group_id, profit)
+        self._ledger.append(result)
+        cutoff = self._clock.now() - LEDGER_WINDOW
+        while self._ledger and self._ledger[0].at < cutoff:
+            self._ledger.popleft()
+        if at >= self._day.start:
+            _add(self._day, result)
 
     def _check(self, r: OrderRequest) -> RiskDecision | None:
         limits, group = self._limits, self.group_limits(r.group_id)
@@ -435,11 +463,57 @@ class RiskGuard:
         self._save(KEY_PAUSED_GROUPS, json.dumps(sorted(self._paused)))
 
 
+def _add(totals: _DayTotals, result: _Result) -> None:
+    key = (result.account_type, result.group_id)
+    totals.by_group[key] = totals.by_group.get(key, Decimal(0)) + result.profit
+    totals.by_account[result.account_type] = (
+        totals.by_account.get(result.account_type, Decimal(0)) + result.profit
+    )
+
+
 def _block(kind: BlockKind, message: str) -> RiskDecision:
     return RiskDecision(False, kind, message)
 
 
 # --- (de)serialisation of the limits for the app_settings table ---
+# The public helpers below let the API store and read limits without the engine running (limits
+# must be settable *before* the engine is first enabled), using the very same format.
+
+
+def limits_setting(limits: RiskLimits, now: datetime) -> AppSettingRecord:
+    return AppSettingRecord(key=KEY_LIMITS, value=_limits_to_json(limits), updated_at=now)
+
+
+def group_limits_setting(group_id: int, limits: GroupRiskLimits, now: datetime) -> AppSettingRecord:
+    return AppSettingRecord(
+        key=f"{KEY_GROUP_LIMITS_PREFIX}{group_id}",
+        value=_group_limits_to_json(limits),
+        updated_at=now,
+    )
+
+
+def parse_limits(value: JsonScalar) -> RiskLimits:
+    """Raises `RiskConfigError`, `ValueError`, `KeyError` or `TypeError` if the text is damaged."""
+    if not isinstance(value, str):
+        raise TypeError("the stored limits are not text")
+    return _limits_from_json(value)
+
+
+def parse_group_limits(value: JsonScalar) -> GroupRiskLimits:
+    if not isinstance(value, str):
+        raise TypeError("the stored group limits are not text")
+    return _group_limits_from_json(value)
+
+
+def parse_paused_groups(value: JsonScalar) -> frozenset[int]:
+    if not isinstance(value, str):
+        raise TypeError("the stored list of paused groups is not text")
+    return frozenset(int(part) for part in json.loads(value))
+
+
+def group_id_of(key: str) -> int:
+    """The group id in a `risk.group.<id>` setting key."""
+    return int(key.removeprefix(KEY_GROUP_LIMITS_PREFIX))
 
 
 def _decimal_or_none(value: object) -> Decimal | None:

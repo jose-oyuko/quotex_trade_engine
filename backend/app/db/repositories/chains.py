@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chain
@@ -41,12 +42,28 @@ class ChainRepository:
     ) -> list[ChainRecord]:
         """Newest first."""
         limit, offset = page(limit, offset)
-        stmt = select(Chain).order_by(Chain.created_at.desc(), Chain.id)
-        if group_id is not None:
-            stmt = stmt.where(Chain.group_id == group_id)
-        if status is not None:
-            stmt = stmt.where(Chain.status == status)
-        if account_type is not None:
-            stmt = stmt.where(Chain.account_type == account_type)
-        rows = await self._session.scalars(stmt.limit(limit).offset(offset))
-        return [to_record(ChainRecord, row) for row in rows]
+        stmt = _filtered(select(Chain), group_id, status, account_type)
+        stmt = stmt.order_by(Chain.created_at.desc(), Chain.id).limit(limit).offset(offset)
+        return [to_record(ChainRecord, row) for row in await self._session.scalars(stmt)]
+
+    async def count(
+        self,
+        *,
+        group_id: int | None = None,
+        status: ChainStatus | None = None,
+        account_type: AccountType | None = None,
+    ) -> int:
+        stmt = _filtered(select(func.count()).select_from(Chain), group_id, status, account_type)
+        return await self._session.scalar(stmt) or 0
+
+
+def _filtered[S: Select[Any]](
+    stmt: S, group_id: int | None, status: ChainStatus | None, account_type: AccountType | None
+) -> S:
+    if group_id is not None:
+        stmt = stmt.where(Chain.group_id == group_id)
+    if status is not None:
+        stmt = stmt.where(Chain.status == status)
+    if account_type is not None:
+        stmt = stmt.where(Chain.account_type == account_type)
+    return stmt

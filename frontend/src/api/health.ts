@@ -1,9 +1,6 @@
-export interface Health {
-  status: 'ok'
-  version: string
-  environment: string
-  background_tasks: number
-}
+import type { Health } from './types'
+
+export type { Health }
 
 function isHealth(value: unknown): value is Health {
   if (typeof value !== 'object' || value === null) return false
@@ -12,7 +9,9 @@ function isHealth(value: unknown): value is Health {
     v.status === 'ok' &&
     typeof v.version === 'string' &&
     typeof v.environment === 'string' &&
-    typeof v.background_tasks === 'number'
+    typeof v.background_tasks === 'number' &&
+    typeof v.engine === 'object' &&
+    v.engine !== null
   )
 }
 
