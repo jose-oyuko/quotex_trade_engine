@@ -145,6 +145,15 @@ No new dependencies (alembic, sqlalchemy, aiosqlite were added in Phase 0).
 - **Health endpoint calls the database** (`SELECT 1`) on every request. Fine for a local dashboard;
   if it is polled very often later, cache the result.
 
+## 10a. Follow-up after owner review (2026-11-02)
+The owner accepted the app wiring and asked for the frontend toolchain upgrade. Done: Vite 8.3.5,
+plugin-react 6, Vitest 5, jest-dom 7, jsdom 30, react-hooks plugin 7, react-refresh plugin 0.5,
+globals 17, @types/node 26. Kept on purpose: React 18, TypeScript 5.9, ESLint 9. Results: eslint,
+prettier, `tsc`, Vitest (3 tests) and `vite build` pass; no more `EBADENGINE` warnings; dev server and
+`/api` proxy verified against the live backend (health through port 5173 returned the same JSON as
+port 8000). The stricter new Vite found one real mistake from Phase 0: `strict` was listed twice in
+`frontend/tsconfig.node.json`; removed. README now says Node 22 LTS or newer.
+
 ## 11. Git state
 **No commits were made and nothing was staged.** Your Phase 0 commit `3463839` is the latest.
 `git status --short` shows modified: `README.md`, `backend/app/api/health.py`,

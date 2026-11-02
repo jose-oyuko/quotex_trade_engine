@@ -28,6 +28,5 @@ uncommitted in the working tree.
 ## Open questions for the owner
 
 - Decided earlier: `data/` stays in `backend/` (`backend/data`, git-ignored).
-- The owner is on Node 26 now: shall I upgrade the frontend toolchain (D-21) as a small separate chore?
-- Phase 1 report §6: the app wiring and `/health` additions went slightly beyond the listed scope;
-  say if you want it handled differently.
+- Resolved 2026-11-02: frontend toolchain upgraded (D-21 update); app wiring and `/health` additions
+  from Phase 1 accepted by the owner.

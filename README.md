@@ -25,7 +25,7 @@ and shows it on a live dashboard with reports.
 | Tool | Version | Notes |
 |---|---|---|
 | [uv](https://docs.astral.sh/uv/) | recent | Installs Python 3.12 and the backend dependencies |
-| Node.js | 20.15 or newer (tested on 20.15.1 and 26.13) | The frontend tools are pinned to versions that also work on Node 20.15 |
+| Node.js | 22 LTS or newer (tested on 26.13) | Vite 8 needs Node 20.19+ or 22.12+ |
 | Git | any | `pyquotex` is installed from GitHub |
 
 You do not need Python installed yourself: `uv` downloads Python 3.12 when needed.

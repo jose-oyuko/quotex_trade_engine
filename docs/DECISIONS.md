@@ -101,8 +101,11 @@ development Vite's dev server proxies `/api` and `/ws` to FastAPI.
 20.15.1 (Vite 8's bundler could not load its native binding). Chosen instead: React 18.3, Vite 6,
 plugin-react 4, Vitest 3, jest-dom 6.6, TypeScript 5.9, ESLint 9. Why: works on the machine as it is,
 no system change needed. Consequence: when the owner upgrades Node to 22 LTS, these can be raised.
-*Update 2026-11-01: the owner upgraded to Node 26.13. The newer toolchain is now possible as a
-separate chore; nothing requires it.*
+*Update 2026-11-02: the owner upgraded to Node 26.13 and approved the toolchain upgrade. Now:
+Vite 8.3, @vitejs/plugin-react 6, Vitest 5, jest-dom 7, jsdom 30, eslint-plugin-react-hooks 7,
+eslint-plugin-react-refresh 0.5, globals 17. Deliberately kept: React 18 (as in ARCHITECTURE.md),
+TypeScript 5.9 and ESLint 9 (their newest majors are not yet safe with the lint plugins). The
+dev server, proxy, tests and build were re-verified against the live backend.*
 
 **D-22. Money is stored as integer cents and handled as `Decimal`.** Why: SQLite has no decimal
 type, so `Numeric` would silently become a float there; integers are exact on every database.
