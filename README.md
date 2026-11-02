@@ -92,6 +92,23 @@ private) and the application never has to ask again.
 Real-money trading is impossible unless `QUOTEX_ALLOW_REAL=true` *and* the account is switched to
 real explicitly. Keep it off while testing.
 
+## Telegram and signals (Phase 3)
+
+1. Go to https://my.telegram.org, log in, open **API development tools** and create an app. Put the
+   `api_id` and `api_hash` in `backend/.env` (`TELEGRAM_API_ID`, `TELEGRAM_API_HASH`). They are
+   secrets; the file is git-ignored.
+2. Log in once: `npm run telegram:login`. Type your phone number in international format
+   (`+254712345678`, no leading 0), then the code Telegram sends to your Telegram app, and your
+   two-step password if you have one. The session is stored in `backend/data/telegram.session`
+   (a secret: it can read your chats, keep that folder private).
+3. List your chats and their ids: `npm run telegram:dialogs`.
+4. Watch what the system makes of a group's messages, trading nothing:
+   `npm run telegram:listen -- --chat -1001234567890 --suffix auto --tz UTC-3`
+   (`--suffix` is `otc`, `none` or `auto`; `--tz` is the zone entry times are written in).
+
+To try the parser on any message without Telegram:
+`npm run signal:try -- "EURUSD PUT 1m"` or `npm run signal:try -- --file message.txt`.
+
 ## Checks
 
 | Command | What it does |

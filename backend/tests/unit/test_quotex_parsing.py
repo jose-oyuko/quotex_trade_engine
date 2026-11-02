@@ -3,8 +3,8 @@ from typing import ClassVar
 
 import pytest
 
+from app.core.backoff import BackoffPolicy, backoff_delay
 from app.domain.enums import AccountType
-from app.quotex.backoff import BackoffPolicy, backoff_delay
 from app.quotex.errors import PayoutSanityError
 from app.quotex.parsing import (
     balance_from_payload,

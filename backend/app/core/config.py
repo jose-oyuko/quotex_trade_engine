@@ -54,6 +54,18 @@ class Settings(BaseSettings):
     # TIME = expire at the next clock-aligned expiry, TIMER = a countdown of the given length.
     quotex_time_mode: Literal["TIME", "TIMER"] = "TIME"
 
+    # Telegram. api_id/api_hash come from https://my.telegram.org (API development tools); the login
+    # code and any 2FA password are typed into `npm run telegram:login` and never stored here.
+    telegram_api_id: int | None = None
+    telegram_api_hash: SecretStr | None = None
+    telegram_phone: str | None = None  # international format, +<country code><number>
+
+    @field_validator("telegram_api_id", "telegram_phone", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """A copied `.env` line like `TELEGRAM_API_ID=` means "not set", not an invalid number."""
+        return None if isinstance(value, str) and not value.strip() else value
+
     @field_validator("quotex_host")
     @classmethod
     def _bare_hostname(cls, value: str) -> str:
@@ -61,6 +73,11 @@ class Settings(BaseSettings):
         if not host or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for c in host):
             raise ValueError("QUOTEX_HOST must be a bare domain name such as quotex.com")
         return host
+
+    @property
+    def telegram_session_path(self) -> Path:
+        """Telethon appends `.session`; the file holds a login, so it lives in git-ignored data/."""
+        return self.data_dir.resolve() / "telegram"
 
     @property
     def database_path(self) -> Path:

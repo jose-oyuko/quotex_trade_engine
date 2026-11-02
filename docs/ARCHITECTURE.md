@@ -167,8 +167,10 @@ quotex_trade_engine/
 │   │   │                      #   recovery query, migration helpers
 │   │   ├── quotex/            # base.py (interface), pyquotex_adapter.py (logic), pyquotex_client.py (the only
 │   │   │                      #   pyquotex importer), client.py (seam), fake.py, parsing.py, errors.py
-│   │   ├── telegram/          # listener.py
-│   │   ├── signals/           # parsers/, pipeline.py
+│   │   ├── telegram/          # source.py (interface), telethon_source.py (the only Telethon importer),
+│   │   │                      #   fake.py, listener.py (connection + subscriptions), login.py, factory.py
+│   │   ├── signals/           # models.py, parsers/ (base, registry, legacy_v1), assets.py,
+│   │   │                      #   scheduling.py (entry times), timezones.py, pipeline.py
 │   │   ├── engine/            # chain.py, strategies.py, executor.py, risk.py, manager.py
 │   │   ├── events/            # bus.py, event types
 │   │   ├── api/               # routers/, schemas/, ws.py, deps.py

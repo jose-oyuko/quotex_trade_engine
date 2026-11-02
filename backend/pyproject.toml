@@ -15,6 +15,7 @@ dependencies = [
     # Unofficial Quotex client. Pinned to one commit (see docs/DECISIONS.md D-5); only
     # app/quotex/ may import it.
     "pyquotex @ git+https://github.com/cleitonleonel/pyquotex@a50a030b425937fec4595b1ff1c226e160c52943",
+    "tzdata>=2026.6",
 ]
 
 [dependency-groups]

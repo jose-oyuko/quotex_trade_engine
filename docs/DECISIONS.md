@@ -166,6 +166,54 @@ wrong for long expiries); the adapter waits on the library's per-order result sl
 `ResultTimeoutError` instead. Default expiry mode is `TIME` (library default; clock-aligned expiry);
 `TIMER` (countdown) is a setting. Both are to be confirmed with the live diagnostic.
 
+**D-30. The parser never guesses, and the OTC suffix is the group's choice.** `legacy_v1` is the old
+parser's formats, tightened: no direction means "not a signal" (the old code defaulted to CALL),
+words match whole (`PUT` inside `INPUT` no longer counts), a pair without a slash must be two known
+currency codes (so `SIGNAL` after "expiry" is not an asset), and channel "gale" lines are dropped.
+The parser only reports that the message said OTC; `asset_suffix_mode` (otc / none / auto) decides
+the Quotex name (`EURUSD` vs `EURUSD_otc`). A message listing several signals uses the first and the
+inbox row says how many were left out. A missing expiry is assumed to be 60 s (the old default) and
+the inbox row says so. Why: a wrong guess is a wrong trade with money behind it. Consequence: some
+messages the old bot half-understood are now `not_parsed`; each has a reason in the inbox, and new
+formats are added as new parsers or patterns with tests from real messages.
+
+**D-31. Entry times are wall-clock times in a known zone, resolved to the nearest occurrence.** The
+zone is the one the message states ("Time Zone: UTC -3"), otherwise the group's. The pipeline picks
+the occurrence of that time closest to now among yesterday, today and tomorrow, so midnight, month
+ends and daylight-saving changes need no special cases. Up to 30 s late: trade at once; later:
+ignored as "already passed", never moved to tomorrow. Up to 1 h ahead: scheduled for that exact
+moment on a supervised timer; further: ignored as "too far". A time that does not exist (the hour
+skipped by a clock change) is ignored. The limits are `PipelineConfig` values, not group settings.
+Why: a stale signal must not trade 23 hours later, and a list of the whole day's signals must not
+be mistaken for one instruction. Consequence: scheduled signals live only in memory; a restart
+before their entry time loses them (Phase 5 may want to recover them).
+
+**D-32. The pipeline's guards and the hand-over order.** Before parsing, a message that reached us
+more than 120 s after Telegram stamped it is ignored as stale (after a reconnect Telegram may
+replay old messages, and a signal without an entry time would otherwise trade late). The same
+Telegram message seen again (an edit, a replay) is processed at most once: an edit can turn a
+non-signal into a signal, but once a message was a signal no edit trades again. The same signal
+(group, asset, direction, expiry, entry) within 5 minutes is a duplicate. The engine gets the
+signal first (`on_signal`), then the inbox event is published, so the order never waits for
+bookkeeping. `Signal.id` equals the inbox row's id, so a later stage can re-publish that id with a
+new status ("ignored: chain active", D-9). Every message of a routed group is recorded exactly once
+as `SignalReceived`; messages from chats without a route are dropped and counted. A clock that runs
+more than 2 minutes ahead of Telegram's would make every message look stale: that is visible in the
+inbox, and the fix is the PC's clock.
+
+**D-33. Telegram: one thin seam, our own chat filter, and a login that never blocks.** `TelegramSource`
+is the interface; `TelethonSource` is the only Telethon importer (checked by a test); `FakeTelegramSource`
+drives the tests. Messages are filtered by chat id in our code, so chats are added and removed while
+running without touching Telethon's handlers. Chat ids are Telethon's "marked" ids (`-100…` for
+channels and supergroups), the same value `get_dialogs` shows and `GroupRecord.telegram_chat_id`
+stores. Telethon reconnects by itself after a drop; if it gives up, the listener reconnects with the
+same backoff as Quotex (1 s doubling to 30 s) and publishes `connection.changed`. A saved session
+that is not logged in stops the listener with the instruction to run `npm run telegram:login`:
+retrying cannot fix it. The login runs from a terminal script and never uses `input()` inside the
+app. `catch_up` (replaying messages missed while offline) is left off until it can be checked
+against the live service. The session file lives in `data/` (git-ignored). The backoff helper moved
+from `app/quotex/` to `app/core/backoff.py` because both integrations use it.
+
 ---
 
 ## Decisions to be made later (record here when decided)

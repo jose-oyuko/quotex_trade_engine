@@ -45,6 +45,39 @@ def test_the_guard_actually_sees_imports() -> None:
     assert "pyquotex.stable_api" in imported_modules(APP / "quotex" / "pyquotex_client.py")
 
 
+def test_only_the_telethon_wrapper_imports_telethon() -> None:
+    """Same idea as pyquotex: the Telegram library sits behind one small module."""
+    importers = sorted(
+        str(path.relative_to(APP))
+        for path in APP.rglob("*.py")
+        if any(m == "telethon" or m.startswith("telethon.") for m in imported_modules(path))
+    )
+    assert importers == [str(Path("telegram") / "telethon_source.py")]
+
+
+def test_the_signals_package_knows_nothing_about_telegram_the_database_or_quotex() -> None:
+    """Parsing and the pipeline are pure: they take messages and events, whoever sends them."""
+    forbidden = ("app.telegram", "app.db", "app.quotex", "app.api", "telethon", "sqlalchemy")
+    offenders = [
+        f"{path.name}: {module}"
+        for path in (APP / "signals").rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(forbidden)
+    ]
+    assert offenders == []
+
+
+def test_the_telegram_package_does_not_reach_into_the_database_or_quotex() -> None:
+    forbidden = ("app.db", "app.quotex", "app.api", "pyquotex", "sqlalchemy")
+    offenders = [
+        f"{path.name}: {module}"
+        for path in (APP / "telegram").rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(forbidden)
+    ]
+    assert offenders == []
+
+
 def test_no_blocking_calls_in_the_application() -> None:
     """Decisions D-13/D-14: no time.sleep, no requests, no input() anywhere in app/."""
     problems: list[str] = []

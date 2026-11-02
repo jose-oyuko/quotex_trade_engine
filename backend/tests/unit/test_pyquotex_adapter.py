@@ -8,13 +8,13 @@ from decimal import Decimal
 
 import pytest
 
+from app.core.backoff import BackoffPolicy
 from app.core.clock import SystemClock
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AccountType, Direction
 from app.events.bus import EventBus
 from app.events.types import BalanceUpdated, ConnectionChanged
 from app.quotex import PyQuotexAdapter
-from app.quotex.backoff import BackoffPolicy
 from app.quotex.base import ConnectionState
 from app.quotex.errors import (
     OrderRejectedError,

@@ -21,6 +21,7 @@ from decimal import Decimal
 
 import structlog
 
+from app.core.backoff import BackoffPolicy, backoff_delay
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AccountType, Direction
@@ -28,7 +29,6 @@ from app.domain.ids import new_id
 from app.domain.records import BalanceSnapshotRecord
 from app.events.bus import EventBus
 from app.events.types import BalanceUpdated, ConnectionChanged
-from app.quotex.backoff import BackoffPolicy, backoff_delay
 from app.quotex.base import (
     BalanceSnapshot,
     ConnectionState,

@@ -20,6 +20,10 @@
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "db:upgrade": "uv run --directory backend alembic upgrade head",
     "db:downgrade": "uv run --directory backend alembic downgrade base",
-    "quotex:diagnose": "uv run --directory backend python -m scripts.quotex_diagnose"
+    "quotex:diagnose": "uv run --directory backend python -m scripts.quotex_diagnose",
+    "telegram:login": "uv run --directory backend python -m scripts.telegram_cli login",
+    "telegram:dialogs": "uv run --directory backend python -m scripts.telegram_cli dialogs",
+    "telegram:listen": "uv run --directory backend python -m scripts.telegram_cli listen",
+    "signal:try": "uv run --directory backend python -m scripts.parse_message"
   }
 }

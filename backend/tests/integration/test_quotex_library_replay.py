@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
+from app.core.backoff import BackoffPolicy
 from app.core.clock import SystemClock
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AccountType, Direction
 from app.quotex import PyQuotexAdapter
-from app.quotex.backoff import BackoffPolicy
 from app.quotex.base import ConnectionState, TradeOutcome
 from app.quotex.errors import (
     OrderAckTimeoutError,

@@ -7,8 +7,8 @@ agent to start the next phase.
 |---|---|---|
 | 0 | Foundation and tooling | Approved |
 | 1 | Database and domain models | Approved |
-| 2 | Quotex adapter | Done — awaiting owner approval (live checks pending) |
-| 3 | Telegram listener and parser | Not started |
+| 2 | Quotex adapter | Done — owner moved on; live demo checks still pending |
+| 3 | Telegram listener and parser | Done — awaiting owner approval (live checks pending) |
 | 4 | Strategy and chain engine | Not started |
 | 5 | Safety and control | Not started |
 | 6 | API and realtime events | Not started |
@@ -18,16 +18,21 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 2 finished — waiting for the owner's review. All offline checks pass; the
-**live demo checks (report section 12, steps 5-7) still need the owner's Quotex account**. Then "go on"
-for Phase 3. Report: [reports/phase-2.md](reports/phase-2.md).
+**Current phase:** Phase 3 finished — waiting for the owner's review. All offline checks pass (457 backend
+tests, 3 frontend, lint, strict types, build). The **live checks (report section 12, steps 5-7) need the
+owner's Telegram API id and phone**. Then "go on" for Phase 4. Report: [reports/phase-3.md](reports/phase-3.md).
+Phase 2's live demo checks are also still open ([reports/phase-2.md](reports/phase-2.md) section 12).
 
-**Commits:** only the owner's (latest `310c3f5 upgrade front end toolchain to march node v22+`). The
-agent has made none and does not commit unless the owner says so. Phase 2 work is uncommitted in the
-working tree.
+**Commits:** only the owner's (latest `1593fd4 quotex connection`, which contains Phase 2). The agent has
+made none and does not commit unless the owner says so. Phase 3 work is uncommitted in the working tree.
 
 ## Open questions for the owner
 
+- Phase 3 §10: please send real messages from your groups (signals and non-signals) to add to the parser
+  tests; and say whether a message without a stated expiry should be traded (as 60 s, the old behaviour)
+  or ignored.
+- Phase 3 §12: run the live Telegram steps (create the API id, log in, listen to a group) and send back one
+  `[parsed]` line and any `not_parsed` message that should have been a signal.
 - Phase 2 §7/§12: run the live demo checks and send back the timing lines and one losing-trade result
   (to confirm a loss shows a negative profit).
 - Phase 2 §10: `TIME` (clock-aligned expiry, library default) or `TIMER` (countdown) expiry mode?
