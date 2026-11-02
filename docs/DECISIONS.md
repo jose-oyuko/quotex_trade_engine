@@ -101,12 +101,38 @@ development Vite's dev server proxies `/api` and `/ws` to FastAPI.
 20.15.1 (Vite 8's bundler could not load its native binding). Chosen instead: React 18.3, Vite 6,
 plugin-react 4, Vitest 3, jest-dom 6.6, TypeScript 5.9, ESLint 9. Why: works on the machine as it is,
 no system change needed. Consequence: when the owner upgrades Node to 22 LTS, these can be raised.
+*Update 2026-11-01: the owner upgraded to Node 26.13. The newer toolchain is now possible as a
+separate chore; nothing requires it.*
+
+**D-22. Money is stored as integer cents and handled as `Decimal`.** Why: SQLite has no decimal
+type, so `Numeric` would silently become a float there; integers are exact on every database.
+Python code never sees the cents: the `Money` column type converts to and from `Decimal`.
+Consequences: two decimal places only (Quotex stakes and balances are in cents); floats are refused
+and so is a value with more than two decimals, so the strategy must round stakes explicitly
+(Phase 4) instead of the storage layer rounding silently. Payout is a whole-number percentage.
+
+**D-23. Chains, trades, signals and other event-created rows use UUIDs generated in memory;
+only `groups` uses an auto-increment integer.** Why: an auto-increment id needs a round-trip to
+the database, which D-4 forbids on the hot path. Groups are created from the dashboard, where that
+round-trip is fine, and a short integer is friendlier there. Consequence: ids are unordered, so
+lists sort by timestamp, never by id.
+
+**D-24. Event bus and DBWriter overflow policy.** `publish` never waits. Each subscriber has a
+bounded queue and chooses what to drop when it is full: the DBWriter drops the *newest* events
+(keeps the stored history in order, counts every drop, logs an error, and shows it in `/health`);
+live views may drop the oldest and re-sync. DBWriter queue: 100,000 events. A failed batch is
+rolled back and retried event by event, so one bad record cannot lose its neighbours.
+
+**D-25. Log exceptions as plain text, never with locals.** structlog's default "rich" traceback
+took about 10 seconds to format one database error, which would freeze the event loop (and
+trading) while logging, and it cannot be printed on Windows consoles using cp1252. `core/logging.py`
+uses plain tracebacks (text) in development and `format_exc_info` in production.
 
 ---
 
 ## Decisions to be made later (record here when decided)
 
-- Money representation (integer minor units vs `Numeric`) — Phase 1.
 - Chart library — Phase 8.
 - (Decided in Phase 0: package manager = `uv`, pyquotex pin — see D-19 and D-5.)
+- (Decided in Phase 1: money representation — see D-22.)
 - Whether and how to support early close of single trades — after Phase 9.

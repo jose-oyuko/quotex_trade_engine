@@ -15,10 +15,18 @@ def configure_logging(level: str, *, json_output: bool) -> None:
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
     ]
+    # Plain tracebacks on purpose: structlog's default "rich" traceback prints local variables and
+    # took ~10 s for one database error, which would freeze the event loop (and trading) while
+    # logging. It also emits box-drawing characters that Windows consoles cannot encode.
     renderer: structlog.typing.Processor = (
         structlog.processors.JSONRenderer()
         if json_output
-        else structlog.dev.ConsoleRenderer(colors=sys.stderr.isatty())
+        else structlog.dev.ConsoleRenderer(
+            colors=sys.stderr.isatty(), exception_formatter=structlog.dev.plain_traceback
+        )
+    )
+    exception_processors: list[structlog.typing.Processor] = (
+        [structlog.processors.format_exc_info] if json_output else []
     )
 
     structlog.configure(
@@ -32,7 +40,11 @@ def configure_logging(level: str, *, json_output: bool) -> None:
     handler.setFormatter(
         structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=shared,
-            processors=[structlog.stdlib.ProcessorFormatter.remove_processors_meta, renderer],
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                *exception_processors,
+                renderer,
+            ],
         )
     )
     root = logging.getLogger()

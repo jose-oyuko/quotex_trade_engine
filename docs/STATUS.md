@@ -5,8 +5,8 @@ agent to start the next phase.
 
 | Phase | Name | State |
 |---|---|---|
-| 0 | Foundation and tooling | Done — awaiting owner approval |
-| 1 | Database and domain models | Not started |
+| 0 | Foundation and tooling | Approved |
+| 1 | Database and domain models | Done — awaiting owner approval |
 | 2 | Quotex adapter | Not started |
 | 3 | Telegram listener and parser | Not started |
 | 4 | Strategy and chain engine | Not started |
@@ -18,14 +18,16 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 0 finished — waiting for the owner's review and "go on" for Phase 1.
-Report: [reports/phase-0.md](reports/phase-0.md).
+**Current phase:** Phase 1 finished — waiting for the owner's review and "go on" for Phase 2.
+Report: [reports/phase-1.md](reports/phase-1.md) (includes "How to test it yourself").
 
-**Commits:** only the owner's `77a5ded agent guide files`. The agent has made none and does not
-commit unless the owner says so. Phase 0 work is uncommitted in the working tree.
+**Commits:** only the owner's (`77a5ded agent guide files`, `3463839 front end and backend project
+setup`). The agent has made none and does not commit unless the owner says so. Phase 1 work is
+uncommitted in the working tree.
 
 ## Open questions for the owner
 
-- Phase 0 report §7: two checks only the owner can do (clean-clone setup, page in a browser).
-- Decided: `data/` stays in `backend/` (`backend/data`, git-ignored).
-- Node upgrade (see D-21): owner is considering it; not required for any phase.
+- Decided earlier: `data/` stays in `backend/` (`backend/data`, git-ignored).
+- The owner is on Node 26 now: shall I upgrade the frontend toolchain (D-21) as a small separate chore?
+- Phase 1 report §6: the app wiring and `/health` additions went slightly beyond the listed scope;
+  say if you want it handled differently.

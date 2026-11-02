@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     # Used by the dev proxy; production serves the frontend from the same origin.
     cors_origin: str = "http://127.0.0.1:5173"
 
+    @property
+    def database_path(self) -> Path:
+        return self.data_dir.resolve() / "quotex.db"
+
+    @property
+    def database_url(self) -> str:
+        return f"sqlite+aiosqlite:///{self.database_path.as_posix()}"
+
     @model_validator(mode="after")
     def _refuse_public_bind(self) -> Settings:
         if not self.allow_public_bind and not is_loopback_host(self.host):

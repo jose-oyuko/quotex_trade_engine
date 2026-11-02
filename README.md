@@ -25,7 +25,7 @@ and shows it on a live dashboard with reports.
 | Tool | Version | Notes |
 |---|---|---|
 | [uv](https://docs.astral.sh/uv/) | recent | Installs Python 3.12 and the backend dependencies |
-| Node.js | 20.15 or newer (tested on 20.15.1) | Newer is fine. The frontend tools are pinned to versions that work on Node 20.15 |
+| Node.js | 20.15 or newer (tested on 20.15.1 and 26.13) | The frontend tools are pinned to versions that also work on Node 20.15 |
 | Git | any | `pyquotex` is installed from GitHub |
 
 You do not need Python installed yourself: `uv` downloads Python 3.12 when needed.
@@ -39,8 +39,17 @@ npm run setup
 ```
 
 This runs `uv sync` for the backend (creates `backend/.venv`, installs everything including the pinned
-`pyquotex`) and `npm install` for the frontend. The first run takes a few minutes because `pyquotex`
-is fetched from GitHub.
+`pyquotex`), `npm install` for the frontend, and `npm run db:upgrade`, which creates the database
+(`backend/data/quotex.db`, git-ignored). The first run takes a few minutes because `pyquotex` is
+fetched from GitHub.
+
+The backend refuses to start if the database has not been created or is behind the code. After
+pulling new code, run `npm run db:upgrade` again; it only applies what is missing.
+
+| Command | What it does |
+|---|---|
+| `npm run db:upgrade` | Create or update the database to the newest schema |
+| `npm run db:downgrade` | Remove every table (back to an empty database). **Deletes all data.** |
 
 Optional: copy `.env.example` to `backend/.env` to change settings (port, log level, ...). The
 defaults are safe and need no file.

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Developer scripts only. Run with `npm run <name>` from the repository root.",
   "scripts": {
-    "setup": "uv sync --directory backend && npm --prefix frontend install",
+    "setup": "uv sync --directory backend && npm --prefix frontend install && npm run db:upgrade",
     "backend": "uv run --directory backend python -m app",
     "frontend": "npm --prefix frontend run dev",
     "test": "npm run test:backend && npm run test:frontend",
@@ -17,6 +17,8 @@
     "typecheck:backend": "uv run --directory backend mypy",
     "typecheck:frontend": "npm --prefix frontend run typecheck",
     "build": "npm --prefix frontend run build",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:upgrade": "uv run --directory backend alembic upgrade head",
+    "db:downgrade": "uv run --directory backend alembic downgrade base"
   }
 }

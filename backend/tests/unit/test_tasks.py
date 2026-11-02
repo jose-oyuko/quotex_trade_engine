@@ -1,5 +1,7 @@
 import asyncio
 
+from structlog.testing import capture_logs
+
 from app.core.tasks import TaskSupervisor
 
 
@@ -16,17 +18,20 @@ async def test_spawned_task_runs_and_is_released() -> None:
     assert supervisor.running == 0
 
 
-async def test_unhandled_exception_is_logged_not_lost(capsys) -> None:  # type: ignore[no-untyped-def]
+async def test_unhandled_exception_is_logged_not_lost() -> None:
     supervisor = TaskSupervisor()
 
     async def boom() -> None:
         raise RuntimeError("kaboom")
 
-    task = supervisor.spawn(boom(), name="boom")
-    await asyncio.wait({task})
-    await asyncio.sleep(0)
+    with capture_logs() as logs:
+        task = supervisor.spawn(boom(), name="boom")
+        await asyncio.wait({task})
+        await asyncio.sleep(0)
     assert supervisor.running == 0
-    assert "background_task_failed" in capsys.readouterr().out
+    failures = [entry for entry in logs if entry["event"] == "background_task_failed"]
+    assert len(failures) == 1
+    assert failures[0]["task"] == "boom"
 
 
 async def test_shutdown_cancels_running_tasks() -> None:

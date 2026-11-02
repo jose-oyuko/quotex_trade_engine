@@ -162,7 +162,9 @@ quotex_trade_engine/
 │   ├── app/
 │   │   ├── main.py            # FastAPI app + lifespan
 │   │   ├── core/              # config, logging, background-task helper, clock
-│   │   ├── db/                # engine, session, models, repositories, writer
+│   │   ├── domain/            # enums, ids, plain records (what the DB stores); no framework imports
+│   │   ├── db/                # engine, session, models, column types, repositories, writer,
+│   │   │                      #   recovery query, migration helpers
 │   │   ├── quotex/            # base.py (interface), pyquotex_adapter.py, fake.py
 │   │   ├── telegram/          # listener.py
 │   │   ├── signals/           # parsers/, pipeline.py
