@@ -25,7 +25,9 @@ from tests.factories import NOW, make_group, make_signal
 
 
 def settings_for(tmp_path: Path) -> Settings:
-    return Settings(_env_file=None, data_dir=tmp_path / "data")  # type: ignore[call-arg]
+    return Settings(  # type: ignore[call-arg]
+        _env_file=None, data_dir=tmp_path / "data", frontend_dir=tmp_path / "no-built-dashboard"
+    )
 
 
 @pytest.fixture

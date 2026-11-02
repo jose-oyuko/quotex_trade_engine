@@ -17,6 +17,7 @@ from app.api.routers import chains, control, groups, trades
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
+from app.api.static import mount_frontend
 from app.core.clock import SystemClock
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -183,6 +184,7 @@ def create_app(
     ):
         app.include_router(router, prefix="/api/v1")
     app.include_router(ws.router)
+    mount_frontend(app, settings.frontend_dir)  # last: it answers every other path
     app.openapi = lambda: build_openapi(app)  # type: ignore[method-assign]
     return app
 

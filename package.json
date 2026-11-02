@@ -22,6 +22,7 @@
     "api:types": "npm --prefix frontend run api:types",
     "api:generate": "npm run api:export && npm run api:types",
     "api:check": "uv run --directory backend python -m scripts.export_openapi --check && npm --prefix frontend run api:types:check",
+    "demo": "uv run --directory backend python -m scripts.demo_server",
     "api:watch": "uv run --directory backend python -m scripts.ws_watch",
     "db:upgrade": "uv run --directory backend alembic upgrade head",
     "db:downgrade": "uv run --directory backend alembic downgrade base",

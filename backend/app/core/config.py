@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     ws_client_queue: int = 1000
     ws_heartbeat_s: float = 15.0
 
+    # The built dashboard (`npm run build`), served by the backend when it exists.
+    frontend_dir: Path = Path("../frontend/dist")
+
     # Starts the trading engine (Quotex + Telegram + chains) with the application. Off by default:
     # starting the backend must never log in to Quotex or Telegram by surprise.
     engine_enabled: bool = False

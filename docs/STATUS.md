@@ -12,18 +12,19 @@ agent to start the next phase.
 | 4 | Strategy and chain engine | Done — committed and pushed (`b3d9631`); live checks pending |
 | 5 | Safety and control | Done — committed; live checks pending |
 | 6 | API and realtime events | Done — committed; live checks pending |
-| 7 | Dashboard v1 | Not started |
+| 7 | Dashboard v1 | Done — committed; live checks pending |
 | 8 | Reports | Not started |
 | 9 | Hardening and packaging | Not started |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 6 committed. The owner has asked the agent to carry on through the remaining
-phases (7-9) in order, committing after each finished and tested phase and documenting each in
-`docs/reports/`. Phases 2-6 are only verified on fakes; their live checks are in each report's last
-section. Report: [reports/phase-6.md](reports/phase-6.md); API guide: [API.md](API.md).
+**Current phase:** Phase 7 committed. The owner has asked the agent to carry on through the remaining
+phases (8-9) in order, committing after each finished and tested phase and documenting each in
+`docs/reports/`. Phases 2-7 are only verified on fakes; their live checks are in each report's last
+section. Report: [reports/phase-7.md](reports/phase-7.md); API guide: [API.md](API.md). To see the
+dashboard without accounts: `npm run build` then `npm run demo`.
 
-**Commits:** the owner's up to `607c145`; Phases 4, 5 and 6 committed by the agent. The owner gave
+**Commits:** the owner's up to `607c145`; Phases 4, 5, 6 and 7 committed by the agent. The owner gave
 explicit permission (this session) to commit after every finished phase; it is not a standing permission
 for later sessions.
 

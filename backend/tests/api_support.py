@@ -98,6 +98,9 @@ class ApiRig:
 
 
 def settings_for(tmp_path: Path, **overrides: Any) -> Settings:
+    """Test settings. The dashboard folder defaults to one that does not exist, so a test never
+    depends on whether the developer has run `npm run build`."""
+    overrides.setdefault("frontend_dir", tmp_path / "no-built-dashboard")
     return Settings(_env_file=None, data_dir=tmp_path / "data", **overrides)  # type: ignore[call-arg]
 
 

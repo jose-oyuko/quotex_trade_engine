@@ -129,9 +129,11 @@ Rules:
 - React 18 + Vite + TypeScript (strict). Server state via **TanStack Query**; live events via one
   WebSocket client that updates the Query cache (no duplicated state). Local UI state in components or
   a small store (Zustand) only when needed.
-- Feature-based folders: `features/trades`, `features/chains`, `features/groups`, `features/signals`,
-  `features/reports`, `features/risk`; shared `components/`, `lib/`, `api/` (typed client generated or
-  hand-written from the OpenAPI schema).
+- Feature-based folders (built in Phase 7): `features/live` (chains, open trades, stats), `features/signals`,
+  `features/groups` (list and form), `features/history`, `features/controls` (kill switch, account
+  badge); shared `components/`, `lib/`, `live/` (the WebSocket-to-cache bridge) and `api/` (typed client
+  and types generated from the OpenAPI schema). `features/reports` arrives with Phase 8. See
+  decisions D-43 to D-45.
 - Charts: one chart library, chosen in Phase 8 and recorded in DECISIONS.
 - In production the built frontend is served by FastAPI as static files (one process, one port).
 

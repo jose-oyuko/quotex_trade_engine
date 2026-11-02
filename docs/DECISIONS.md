@@ -308,6 +308,35 @@ reached would have lifted it. The guard now keeps a 48-hour in-memory ledger of 
 rebuilds the day's totals from it, so editing limits, or even moving the reset time or zone, never
 loses results that belong to the day. Found while building the API that exposes this.
 
+**D-43. How the dashboard keeps its data (Phase 7).** TanStack Query holds everything from the server.
+The `status` query (the same shape as the WebSocket snapshot) is special: it never refetches by itself;
+the live feed replaces it with each snapshot and patches it with events through one pure, tested
+function (`applyEvent`). Events are collected and applied once per animation frame, so a burst costs
+one render. Lists (signals, trades, groups, risk) are ordinary queries that the relevant events and
+every new snapshot mark stale, so they refetch only what is on screen. No separate client store
+(Zustand) was needed. Pages are separate chunks (React Router lazy routes); the form libraries
+(React Hook Form, Zod) load only with the group form. Styling is plain CSS with design tokens and
+automatic dark mode; no UI framework.
+
+**D-44. Safety in the interface.** The account in use is in the header of every page and is never
+guessed: DEMO is a blue outlined badge, REAL is a solid red badge **and** a red banner across every page;
+until the status is known the header says "loading", not "DEMO". The kill switch is always in the
+header. Engaging it, releasing it, and "skip to base" (ending a chain) each open a confirmation that
+says what will happen and on which account; **Cancel has the focus**, so Enter alone never confirms; a
+failed request keeps the dialog open and shows the server's reason. A state is always written in words
+as well as colour ("Quotex: disconnected"). Telegram message text is shown as plain text only.
+
+**D-45. Long lists are paginated by the server, not virtualised.** History and the signal inbox ask
+for one page at a time (25/50/100/200 rows) with the total, so what is drawn is bounded however much
+history exists (tested with 600 trades). The live panels (running chains, open trades) are not paged:
+they are bounded by the concurrency limits and by the number of groups.
+
+**D-46. A demo mode that cannot touch anything real.** `npm run demo` runs the whole application
+(API, WebSocket, engine, database) on the fake Quotex and fake Telegram, with its own database in
+`backend/data/demo/`, and posts made-up signals. It never reads `.env`, and a test checks that the
+script imports nothing from the real adapters. It exists so the dashboard can be shown and walked
+through without any account.
+
 ---
 
 ## Decisions to be made later (record here when decided)

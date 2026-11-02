@@ -63,8 +63,16 @@ npm run backend      # API on http://127.0.0.1:8000
 npm run frontend     # dashboard on http://127.0.0.1:5173
 ```
 
-Open <http://127.0.0.1:5173>. The page should say **Health OK**. The dev server forwards `/api` and
-`/ws` to the backend, so the browser only ever talks to one address.
+Open <http://127.0.0.1:5173>: this is the dashboard (Live, Signals, Groups, History). The dev server
+forwards `/api` and `/ws` to the backend, so the browser only ever talks to one address.
+
+**One process instead of two:** `npm run build` once, then `npm run backend` serves the dashboard
+itself at <http://127.0.0.1:8000> (no Vite needed).
+
+**Try it with no accounts at all:** `npm run build`, then `npm run demo`, and open
+<http://127.0.0.1:8000>. The demo runs everything on a simulated Quotex and simulated Telegram groups,
+with its own database (`backend/data/demo`), and posts a made-up signal every few seconds. It cannot
+touch your real accounts or data.
 
 Always start the backend with `npm run backend` (or `python -m app`), not with a bare `uvicorn`
 command: that is what enforces the loopback-only rule.
