@@ -57,3 +57,5 @@ class TradeStatus(StrEnum):
 # A chain/trade in one of these states still needs the engine's attention after a restart.
 ACTIVE_CHAIN_STATUSES = frozenset({ChainStatus.PENDING, ChainStatus.OPEN})
 UNSETTLED_TRADE_STATUSES = frozenset({TradeStatus.PENDING, TradeStatus.OPEN})
+# A trade in one of these states has a known profit figure (win, loss or refunded draw).
+RESULT_TRADE_STATUSES = frozenset({TradeStatus.WON, TradeStatus.LOST, TradeStatus.DRAW})

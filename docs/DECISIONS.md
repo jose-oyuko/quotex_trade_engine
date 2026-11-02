@@ -242,6 +242,35 @@ Start-up order: load groups and recover, start the Quotex connection (in the bac
 backoff), start the Telegram listener. Shutdown order: listener, chains, Quotex, then the DB writer
 drains what they published. A missing login with the flag on stops start-up with a clear message.
 
+**D-37. RiskGuard: what each limit means.** The guard is consulted synchronously, from memory, just
+before every order (`admit`); an allowed order is reserved at once so two chains cannot both take the
+last free slot. **Reaching** max stake, max exposure, max concurrent trades, max chain length or the
+minimum payout is allowed; **exceeding** it is blocked. **Reaching** the daily stop-loss or the daily
+profit target blocks (a day that has lost exactly the stop-loss, or won exactly the target, is over).
+The daily limits exist globally and per group; the max stake also per group. Everything except the
+minimum payout applies to follow-ups too (a stop-loss that let a chain keep doubling would be no
+stop-loss); the minimum payout filters only the signal's own first trade (D-12). The "day" starts at
+`reset_time` in `reset_timezone` (default 00:00 UTC) and totals are kept per account type, so demo
+results never count against real limits (D-15). Only trades with a known result count: `unknown`
+trades do not move the total. An unknown payout figure never blocks (the adapter refuses an unknown
+asset itself). A trade whose result will never be known is released from the open count, since it
+cannot be tracked forever. Limits, per-group limits, the kill switch and paused groups are stored as
+app settings through the event bus and restored at start-up; today's totals are rebuilt from the
+last 48 hours of settled trades. **A stored setting that cannot be read engages the kill switch**
+instead of silently becoming "no limit". A blocked order ends its chain (`failed`, or `stopped` for
+the kill switch), is recorded as a `failed` trade whose error says why, and publishes a `risk.tripped`
+event naming the group, asset, step and stake.
+
+**D-38. The owner's controls.** *Kill switch*: no order leaves, follow-ups included; running chains
+end as `stopped` when their next order is refused, or immediately with `stop_chains`; new signals are
+ignored with a reason. *Pause group*: new signals of that group are ignored; its running chains
+finish. *Stop after current trade*: the chain ends when the open trade settles, without a further step
+(a win ends it anyway). *End chain*: the chain ends at once and the group is free for new signals; an
+open trade still settles and is recorded. Switching between demo and real is refused while any chain
+or trade is running; real also needs `QUOTEX_ALLOW_REAL`. Known limit: an order already being sent
+(a few milliseconds between the guard's check and the adapter's send) cannot be recalled by a kill
+switch engaged in that instant.
+
 ---
 
 ## Decisions to be made later (record here when decided)

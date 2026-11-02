@@ -9,8 +9,8 @@ agent to start the next phase.
 | 1 | Database and domain models | Approved |
 | 2 | Quotex adapter | Done — owner moved on; live demo checks still pending |
 | 3 | Telegram listener and parser | Done — committed (`607c145`); live checks pending |
-| 4 | Strategy and chain engine | Done — committed and pushed; awaiting owner approval (live checks pending) |
-| 5 | Safety and control | Not started |
+| 4 | Strategy and chain engine | Done — committed and pushed (`b3d9631`); live checks pending |
+| 5 | Safety and control | Done — committed; live checks pending |
 | 6 | API and realtime events | Not started |
 | 7 | Dashboard v1 | Not started |
 | 8 | Reports | Not started |
@@ -18,13 +18,13 @@ agent to start the next phase.
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phase 4 finished and committed. The owner asked for Phase 5 to follow, then to stop.
-All offline checks pass (529 backend tests, 3 frontend, lint, strict types, build). Report:
-[reports/phase-4.md](reports/phase-4.md). Phases 2-4 are only verified on fakes; their live checks are
-listed in each report's last section.
+**Current phase:** Phase 5 committed. The owner has asked the agent to carry on through the remaining
+phases (6-9) in order, committing after each finished and tested phase and documenting each in
+`docs/reports/`. Phases 2-5 are only verified on fakes; their live checks are in each report's last section.
 
-**Commits:** the owner's up to `607c145 telegram listener`; Phase 4 was committed and pushed by the agent
-at the owner's explicit instruction for this session (not a standing permission).
+**Commits:** the owner's up to `607c145`; Phase 4 `b3d9631`; Phase 5 committed by the agent. The owner gave
+explicit permission (this session) to commit after every finished phase; it is not a standing permission
+for later sessions.
 
 ## Open questions for the owner
 

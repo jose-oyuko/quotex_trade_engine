@@ -23,6 +23,7 @@ from app.domain.enums import AccountType, TradeStatus
 from app.domain.ids import new_id
 from app.domain.records import TradeRecord
 from app.engine.chain import Chain
+from app.engine.risk import BlockKind, OrderRequest, RiskGuard
 from app.engine.strategies import StepPlan
 from app.events.bus import EventBus
 from app.events.types import TradeOpened, TradeSettled
@@ -39,6 +40,7 @@ class StepKind(StrEnum):
     LOST = "lost"
     DRAW = "draw"
     FAILED = "failed"  # the order certainly did not reach Quotex
+    BLOCKED = "blocked"  # the risk guard refused it; nothing was sent
     UNKNOWN = "unknown"  # the order may exist, or its result is missing
 
 
@@ -61,6 +63,7 @@ class StepOutcome:
     kind: StepKind
     trade: TradeRecord  # the final record of this step's trade
     detail: str | None = None
+    stop: bool = False  # BLOCKED by the kill switch: the chain is stopped, not failed
 
 
 _OUTCOME_KIND = {
@@ -80,11 +83,13 @@ class Executor:
         self,
         adapter: QuotexAdapter,
         *,
+        guard: RiskGuard,
         clock: Clock,
         bus: EventBus,
         result_margin_s: float = RESULT_MARGIN_S,
     ) -> None:
         self._adapter = adapter
+        self._guard = guard
         self._clock = clock
         self._bus = bus
         self._margin = result_margin_s
@@ -121,6 +126,27 @@ class Executor:
                 StepKind.FAILED,
                 f"the account changed from {spec.account_type.value} to "
                 f"{self._adapter.account_type.value} after this chain started; order not sent",
+            )
+        decision = self._guard.admit(
+            OrderRequest(
+                trade_id=pending.id,
+                chain_id=spec.id,
+                group_id=spec.group_id,
+                asset=spec.asset,
+                step=plan.step,
+                stake=plan.stake,
+                account_type=spec.account_type,
+                payout_pct=pending.payout_pct,
+                min_payout_pct=spec.min_payout_pct,
+            )
+        )
+        if not decision.allowed:
+            return self._end(
+                pending,
+                StepKind.BLOCKED,
+                f"blocked by the risk guard ({decision.kind.value if decision.kind else '?'}): "
+                f"{decision.message}",
+                stop=decision.kind is BlockKind.KILL_SWITCH,
             )
         self._bus.publish(TradeOpened(occurred_at=pending.created_at, trade=pending))
         try:
@@ -170,6 +196,7 @@ class Executor:
             profit=result.profit,
             settled_at=now,
         )
+        self._guard.settled(settled)  # frees the reservation and books the profit for the day
         self._bus.publish(TradeSettled(occurred_at=now, trade=settled))
         return StepOutcome(_OUTCOME_KIND[result.outcome], settled)
 
@@ -181,9 +208,13 @@ class Executor:
         except QuotexError:
             return None  # a doubtful payout figure must not stop a trade the group asked for
 
-    def _end(self, trade: TradeRecord, kind: StepKind, detail: str) -> StepOutcome:
-        status = TradeStatus.FAILED if kind is StepKind.FAILED else TradeStatus.UNKNOWN
+    def _end(
+        self, trade: TradeRecord, kind: StepKind, detail: str, *, stop: bool = False
+    ) -> StepOutcome:
+        refused = kind in (StepKind.FAILED, StepKind.BLOCKED)
+        status = TradeStatus.FAILED if refused else TradeStatus.UNKNOWN
         now = self._clock.now()
         ended = replace(trade, status=status, error=detail, settled_at=now)
+        self._guard.release(trade.id)  # not open any more, whatever happened to it
         self._bus.publish(TradeSettled(occurred_at=now, trade=ended))
-        return StepOutcome(kind, ended, detail)
+        return StepOutcome(kind, ended, detail, stop)

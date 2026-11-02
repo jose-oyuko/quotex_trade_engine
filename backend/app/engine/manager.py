@@ -25,7 +25,9 @@ from app.domain.enums import ChainStatus, SignalStatus, TradeStatus
 from app.domain.ids import new_id
 from app.domain.records import GroupSettingsRecord, RiskEventRecord, SignalRecord
 from app.engine.chain import Chain, ChainSpec
+from app.engine.errors import UnknownChainError
 from app.engine.executor import Executor, PlacedTrade, Stamps, StepKind, StepOutcome
+from app.engine.risk import RiskGuard
 from app.engine.strategies import FLIP_STRATEGIES, StepPlan
 from app.events.bus import EventBus
 from app.events.types import (
@@ -60,9 +62,16 @@ _KIND_OUTCOME = {
 
 class ChainManager:
     def __init__(
-        self, *, executor: Executor, bus: EventBus, clock: Clock, tasks: TaskSupervisor
+        self,
+        *,
+        executor: Executor,
+        guard: RiskGuard,
+        bus: EventBus,
+        clock: Clock,
+        tasks: TaskSupervisor,
     ) -> None:
         self._executor = executor
+        self._guard = guard
         self._bus = bus
         self._clock = clock
         self._tasks = tasks
@@ -106,6 +115,9 @@ class ChainManager:
     # --- signals in ---
 
     def on_signal(self, signal: Signal) -> None:
+        if (blocked := self._guard.signal_block_reason(signal.group_id)) is not None:
+            self._ignore(signal, blocked)
+            return
         settings = self._settings.get(signal.group_id)
         if settings is None:
             self._ignore(signal, "group has no strategy settings")
@@ -134,6 +146,7 @@ class ChainManager:
                 base_stake=settings.base_stake,
                 multipliers=settings.multipliers,
                 max_steps=settings.max_steps,
+                min_payout_pct=settings.min_payout_pct,
             ),
             now,
         )
@@ -181,7 +194,7 @@ class ChainManager:
 
     async def _drive(self, chain: Chain, plan: StepPlan, stamps: Stamps) -> None:
         try:
-            while True:
+            while chain.active:
                 placed = await self._executor.place(chain, plan, stamps)
                 if isinstance(placed, PlacedTrade):
                     if chain.status is ChainStatus.PENDING:
@@ -192,6 +205,8 @@ class ChainManager:
                     outcome = await self._executor.settle(placed)
                 else:
                     outcome = placed
+                if not chain.active:
+                    return  # the owner ended the chain while this trade was open; it is recorded
                 next_plan = self._apply(chain, outcome)
                 if next_plan is None:
                     return
@@ -216,7 +231,9 @@ class ChainManager:
     def _apply(self, chain: Chain, outcome: StepOutcome) -> StepPlan | None:
         now = self._clock.now()
         next_plan: StepPlan | None = None
-        if outcome.kind is StepKind.FAILED:
+        if outcome.kind is StepKind.BLOCKED and outcome.stop:
+            chain.stop(outcome.detail or "kill switch engaged", now)
+        elif outcome.kind in (StepKind.FAILED, StepKind.BLOCKED):
             chain.fail(outcome.detail or "order refused", now)
         elif outcome.kind is StepKind.UNKNOWN:
             chain.mark_unknown(outcome.detail or "outcome unknown", now)
@@ -226,13 +243,59 @@ class ChainManager:
         self._bus.publish(event_type(occurred_at=now, chain=chain.to_record()))
         return next_plan
 
+    # --- the owner's controls (the API of Phase 6 calls these) ---
+
+    def pause_group(self, group_id: int) -> None:
+        """New signals of the group are ignored (and say so); its running chains finish."""
+        self._guard.pause_group(group_id)
+
+    def resume_group(self, group_id: int) -> None:
+        self._guard.resume_group(group_id)
+
+    def engage_kill_switch(self, *, stop_chains: bool = False) -> None:
+        """No order goes out from now on, follow-ups included. Running chains end as `stopped`
+        when their next order is refused; with `stop_chains` they end right now, and their open
+        trades are still recorded when they settle."""
+        self._guard.engage_kill_switch()
+        if stop_chains:
+            for chain in list(self._chains.values()):
+                self._stop_now(chain, "kill switch engaged: chain stopped")
+
+    def release_kill_switch(self) -> None:
+        self._guard.release_kill_switch()
+
+    def stop_after_current(self, chain_id: UUID) -> None:
+        """Let the trade that is open settle, then end the chain without a further step."""
+        self._running(chain_id).request_stop()
+
+    def end_chain(self, chain_id: UUID, reason: str = "ended by the owner") -> None:
+        """End the chain at once (the group is free for new signals); an open trade still settles
+        and is recorded, but nothing follows it."""
+        self._stop_now(self._running(chain_id), reason)
+
+    def _running(self, chain_id: UUID) -> Chain:
+        chain = self._chains.get(chain_id)
+        if chain is None:
+            raise UnknownChainError(f"no running chain {chain_id}")
+        return chain
+
+    def _stop_now(self, chain: Chain, reason: str) -> None:
+        if not chain.active:
+            return
+        chain.stop(reason, self._clock.now())
+        self._bus.publish(ChainEnded(occurred_at=self._clock.now(), chain=chain.to_record()))
+        self._unregister(chain)
+
     def _register(self, chain: Chain) -> None:
         self._chains[chain.id] = chain
         self._by_group[chain.group_id].add(chain.id)
 
-    def _release(self, chain: Chain) -> None:
+    def _unregister(self, chain: Chain) -> None:
         self._chains.pop(chain.id, None)
         self._by_group[chain.group_id].discard(chain.id)
+
+    def _release(self, chain: Chain) -> None:
+        self._unregister(chain)
         self._drivers.pop(chain.id, None)
 
     # --- startup recovery ---

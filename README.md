@@ -117,6 +117,13 @@ above). It trades on the **demo** account. A group's strategy and stakes come fr
 settings; groups cannot be created from the dashboard until Phase 6, so until then the engine has no
 groups to listen to. What it does is tested end to end with fakes (`npm run test:backend`).
 
+**Safety.** The engine enforces limits before every order (max stake, max exposure, max concurrent
+trades, max chain length, minimum payout, daily stop-loss and profit target, globally and per group)
+and has a kill switch, group pausing, "stop after current trade" and "end chain". They are controlled
+from code today (`engine.guard`, `engine.manager`); the dashboard buttons arrive with Phase 6/7. The kill
+switch, pauses and limits are remembered across restarts. The day for the daily limits starts at
+00:00 UTC unless configured otherwise. See `docs/DECISIONS.md` D-37 and D-38.
+
 If the application stops while trades are open, the next start marks those trades and their chains
 `unknown` (it cannot see Quotex's history) and logs a `risk.tripped` event: check them on Quotex.
 

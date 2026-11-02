@@ -11,9 +11,12 @@ import asyncio
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
+from app.domain.enums import AccountType
 from app.domain.records import GroupRecord, GroupSettingsRecord
+from app.engine.errors import AccountSwitchRefusedError
 from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
+from app.engine.risk import RiskGuard, RiskLimits
 from app.events.bus import EventBus
 from app.quotex.base import QuotexAdapter
 from app.signals.parsers.registry import ParserRegistry
@@ -35,11 +38,17 @@ class Engine:
         pipeline_config: PipelineConfig | None = None,
         sleep: Sleeper = asyncio.sleep,
         result_margin_s: float = RESULT_MARGIN_S,
+        risk_limits: RiskLimits | None = None,
     ) -> None:
         self.adapter = adapter
         self._tasks = tasks
-        self.executor = Executor(adapter, clock=clock, bus=bus, result_margin_s=result_margin_s)
-        self.manager = ChainManager(executor=self.executor, bus=bus, clock=clock, tasks=tasks)
+        self.guard = RiskGuard(clock=clock, bus=bus, limits=risk_limits)
+        self.executor = Executor(
+            adapter, guard=self.guard, clock=clock, bus=bus, result_margin_s=result_margin_s
+        )
+        self.manager = ChainManager(
+            executor=self.executor, guard=self.guard, bus=bus, clock=clock, tasks=tasks
+        )
         self.pipeline = SignalPipeline(
             bus=bus,
             clock=clock,
@@ -70,11 +79,22 @@ class Engine:
         if group.id is not None:
             self.manager.remove_group(group.id)
 
+    async def switch_account(self, account_type: AccountType) -> None:
+        """Move between demo and real. Refused while any chain or trade is running (their stakes
+        and results belong to the account they started on); real also needs QUOTEX_ALLOW_REAL."""
+        if self.manager.active_chains() or self.guard.open_trades:
+            raise AccountSwitchRefusedError(
+                f"{len(self.manager.active_chains())} chain(s) and {self.guard.open_trades} "
+                "trade(s) are still running: wait for them or end them first"
+            )
+        await self.adapter.set_account_type(account_type)
+
     # --- life cycle ---
 
     def load(self, recovery: RecoveryState) -> RecoverySummary:
         """Rebuild the in-memory state from the database: groups first, then flag what was in
         flight when we last stopped."""
+        self.guard.load(recovery.app_settings, recovery.recent_settled_trades)
         settings = {s.group_id: s for s in recovery.group_settings}
         for group in recovery.groups:
             if group.id is not None and group.id in settings:

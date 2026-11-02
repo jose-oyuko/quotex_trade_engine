@@ -22,6 +22,7 @@ from app.domain.records import (
     TradeRecord,
 )
 from app.engine.engine import Engine
+from app.engine.risk import RiskLimits
 from app.events.bus import EventBus, Subscription
 from app.events.types import (
     ChainAdvanced,
@@ -49,6 +50,7 @@ class GroupSpec:
     strategy: Strategy
     base: str = "1.00"
     multipliers: tuple[str, ...] = ()
+    min_payout_pct: int = 0
 
 
 @dataclass
@@ -78,6 +80,7 @@ class EngineRig:
             multipliers=tuple(D(m) for m in spec.multipliers),
             asset_suffix_mode=AssetSuffixMode.NONE,
             timezone="UTC",
+            min_payout_pct=spec.min_payout_pct,
         )
         self.engine.set_group(group, settings)
 
@@ -150,7 +153,11 @@ class EngineRig:
 
 
 def make_rig(
-    *, clock: Clock | None = None, hold_results: bool = False, result_margin_s: float = 60.0
+    *,
+    clock: Clock | None = None,
+    hold_results: bool = False,
+    result_margin_s: float = 60.0,
+    limits: RiskLimits | None = None,
 ) -> EngineRig:
     clock = clock or ManualClock()
     bus, tasks = EventBus(), TaskSupervisor()
@@ -165,6 +172,7 @@ def make_rig(
         clock=clock,
         tasks=tasks,
         result_margin_s=result_margin_s,
+        risk_limits=limits,
     )
     feed = bus.subscribe(name="test-feed", maxsize=1_000_000)
     return EngineRig(clock, bus, tasks, adapter, source, engine, feed)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -7,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Trade
 from app.db.repositories._mapping import page, to_record, to_values
-from app.domain.enums import UNSETTLED_TRADE_STATUSES, AccountType, TradeStatus
+from app.domain.enums import (
+    RESULT_TRADE_STATUSES,
+    UNSETTLED_TRADE_STATUSES,
+    AccountType,
+    TradeStatus,
+)
 from app.domain.records import TradeRecord
 
 
@@ -35,6 +41,15 @@ class TradeRepository:
             select(Trade)
             .where(Trade.status.in_(UNSETTLED_TRADE_STATUSES))
             .order_by(Trade.created_at)
+        )
+        return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
+
+    async def list_settled_since(self, since: datetime) -> list[TradeRecord]:
+        """Trades with a known result settled at or after `since` (rebuilds the daily totals)."""
+        stmt = (
+            select(Trade)
+            .where(Trade.settled_at >= since, Trade.status.in_(RESULT_TRADE_STATUSES))
+            .order_by(Trade.settled_at)
         )
         return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
 

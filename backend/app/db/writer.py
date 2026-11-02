@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.tasks import TaskSupervisor
 from app.db.repositories import (
+    AppSettingsRepository,
     BalanceSnapshotRepository,
     ChainRepository,
     RiskEventRepository,
@@ -41,6 +42,7 @@ from app.events.types import (
     ChainStarted,
     Event,
     RiskTripped,
+    SettingChanged,
     SignalReceived,
     TradeOpened,
     TradeSettled,
@@ -157,5 +159,9 @@ async def _apply(session: AsyncSession, event: Event) -> None:
             await RiskEventRepository(session).add(risk_event)
         case BalanceUpdated(snapshot=snapshot):
             await BalanceSnapshotRepository(session).add(snapshot)
+        case SettingChanged(setting=setting):
+            await AppSettingsRepository(session).set(
+                setting.key, setting.value, now=setting.updated_at
+            )
         case _:
             raise TypeError(f"DBWriter cannot persist {type(event).__name__}")

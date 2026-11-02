@@ -44,6 +44,7 @@ class ChainSpec:
     base_stake: Decimal
     multipliers: tuple[Decimal, ...]
     max_steps: int
+    min_payout_pct: int = 0  # the group's minimum payout, for the risk guard (not stored)
 
 
 class Chain:
@@ -56,6 +57,7 @@ class Chain:
         self.updated_at = now
         self.ended_at: datetime | None = None
         self.end_reason: str | None = None
+        self.stop_requested = False
 
     @property
     def id(self) -> UUID:
@@ -97,9 +99,16 @@ class Chain:
         if not has_follow_up(s.strategy, self.step, s.max_steps):
             self._end(ChainStatus.EXHAUSTED, f"all {self.step + 1} trade(s) lost", now)
             return None
+        if self.stop_requested:
+            self._end(ChainStatus.STOPPED, f"stopped after trade {self.step} as requested", now)
+            return None
         self.step += 1
         self.status = ChainStatus.OPEN
         return self.plan()
+
+    def request_stop(self) -> None:
+        """End the chain after the trade that is running now settles (no further step)."""
+        self.stop_requested = True
 
     def fail(self, reason: str, now: datetime) -> None:
         """An order was refused (nothing reached Quotex)."""

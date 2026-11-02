@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import ClassVar
 
 from app.domain.records import (
+    AppSettingRecord,
     BalanceSnapshotRecord,
     ChainRecord,
     RiskEventRecord,
@@ -71,6 +72,14 @@ class BalanceUpdated(Event):
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
+class SettingChanged(Event):
+    """A global setting changed (kill switch, paused groups, risk limits): stored as it is."""
+
+    name: ClassVar[str] = "setting.changed"
+    setting: AppSettingRecord
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
 class ConnectionChanged(Event):
     """Telegram/Quotex connectivity. Shown live; not stored."""
 
@@ -90,4 +99,5 @@ PERSISTED_EVENTS: tuple[type[Event], ...] = (
     TradeSettled,
     RiskTripped,
     BalanceUpdated,
+    SettingChanged,
 )
