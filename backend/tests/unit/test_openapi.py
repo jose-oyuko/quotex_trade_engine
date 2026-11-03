@@ -21,6 +21,7 @@ from scripts.export_openapi import OUTPUT, render
 EXPECTED_OPERATIONS = {
     ("GET", "/api/v1/health"),
     ("GET", "/api/v1/status"),
+    ("GET", "/api/v1/telegram/chats"),
     ("GET", "/api/v1/groups"),
     ("POST", "/api/v1/groups"),
     ("GET", "/api/v1/groups/{group_id}"),

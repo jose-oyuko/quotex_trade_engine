@@ -41,6 +41,7 @@ trust:
 | `GET /groups/{id}`, `PUT /groups/{id}`, `DELETE /groups/{id}` | Read one; replace its title, enabled flag and settings; delete one (only if it has no history — otherwise disable it). |
 | `POST /groups/{id}/pause`, `POST /groups/{id}/resume` | New signals of the group are ignored (and say so) while it is paused; its running chains finish. *Needs the engine.* |
 | `GET /groups/{id}/risk`, `PUT /groups/{id}/risk` | The group's own limits (max stake, daily stop-loss, daily profit target). |
+| `GET /telegram/chats` | The groups and channels the logged-in Telegram account is in (name, chat id, and whether a group for it already exists), for the "Choose from my Telegram chats" picker. Private chats are left out. Read-only. *Needs the engine* and a connected Telegram: otherwise 503 `engine_not_running`, `telegram_not_connected` or `telegram_unavailable`. |
 | `GET /chains`, `GET /chains/{id}` | Chain history (filters `group_id`, `status`, `account_type`); one chain with its trades and the message that started it. |
 | `POST /chains/{id}/stop-after-current` | Let the open trade settle, then end the chain without a further step. *Needs the engine.* |
 | `POST /chains/{id}/end` | End the chain now so the group is free for new signals (the dashboard's "skip to base"). An open trade still settles and is recorded. *Needs the engine.* |

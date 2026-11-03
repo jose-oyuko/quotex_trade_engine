@@ -7,6 +7,8 @@ fake Telegram source and the fake adapter; the application builds it with the re
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
+from typing import Literal
 
 from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock
@@ -14,7 +16,7 @@ from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
 from app.domain.enums import AccountType
 from app.domain.records import GroupRecord, GroupSettingsRecord
-from app.engine.errors import AccountSwitchRefusedError
+from app.engine.errors import AccountSwitchRefusedError, TelegramNotConnectedError
 from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
 from app.engine.risk import RiskGuard, RiskLimits
@@ -23,8 +25,19 @@ from app.events.types import AccountChanged
 from app.quotex.base import QuotexAdapter
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, PipelineConfig, SignalPipeline, Sleeper
-from app.telegram.listener import TelegramListener
-from app.telegram.source import TelegramSource
+from app.telegram.listener import ListenerState, TelegramListener
+from app.telegram.source import DialogKind, TelegramSource
+
+CHAT_LIST_TIMEOUT_S = 30.0  # listing chats is one request to Telegram; never wait longer than this
+
+
+@dataclass(slots=True, frozen=True)
+class ChatChoice:
+    """A Telegram group or channel the owner could take signals from."""
+
+    chat_id: int
+    title: str
+    kind: Literal["group", "channel"]
 
 
 class Engine:
@@ -44,6 +57,7 @@ class Engine:
         telegram_backoff: BackoffPolicy | None = None,
     ) -> None:
         self.adapter = adapter
+        self._source = source
         self._tasks = tasks
         self._bus = bus
         self._clock = clock
@@ -99,6 +113,25 @@ class Engine:
             )
         await self.adapter.set_account_type(account_type)
         self._bus.publish(AccountChanged(occurred_at=self._clock.now(), account_type=account_type))
+
+    # --- Telegram chats (for the "choose a group" picker) ---
+
+    async def list_chats(self, *, timeout_s: float | None = None) -> list[ChatChoice]:
+        """The chats the logged-in Telegram account is in. Read-only, and it uses the connection the
+        listener already has: asking never starts a second login on the same session file."""
+        if self.listener.state is not ListenerState.CONNECTED:
+            raise TelegramNotConnectedError("Telegram is not connected")
+        async with asyncio.timeout(CHAT_LIST_TIMEOUT_S if timeout_s is None else timeout_s):
+            dialogs = await self._source.list_dialogs()
+        return [
+            ChatChoice(
+                chat_id=d.chat_id,
+                title=d.title,
+                kind="group" if d.kind is DialogKind.GROUP else "channel",
+            )
+            for d in dialogs
+            if d.kind is not DialogKind.USER  # signals come from groups and channels
+        ]
 
     # --- life cycle ---
 

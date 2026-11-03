@@ -424,6 +424,14 @@ keeps the replaced database as `quotex.db.before-restore-<time>`. Session files 
 `npm start` and `npm run latency` follow the same rule: they only read or create, never delete the
 owner's data.
 
+**D-57. The Telegram chat picker goes through the running engine.** `GET /telegram/chats` asks the
+engine's existing Telegram connection for the account's chats (groups and channels, not private
+chats) and marks the ones that already have a group. It does not open a second Telegram connection:
+two programs sharing one `.session` file can lock each other out or log the account out. The cost is
+that the picker needs `ENGINE_ENABLED=true` and a connected Telegram; otherwise it says why and the
+owner types the id as before. The list is fetched only when the owner presses the button (never when
+the form opens), with a 30 s limit, and nothing it returns is stored.
+
 ---
 
 ## Decisions to be made later (record here when decided)

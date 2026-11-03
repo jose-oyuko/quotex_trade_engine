@@ -217,6 +217,16 @@ Everything below is safe: no real logins, no real money. The first five I have a
    `npm start` runs, and watch the banner; close it and watch the banner clear.
 8. Read [docs/FAILURE_MODES.md](../FAILURE_MODES.md) and check the live steps in section 7 on demo.
 
+## Addendum: Telegram chat picker (requested after Phase 9)
+The owner expected the add-group form to list their Telegram groups by name instead of asking for the
+numeric chat id. Added (D-57): `GET /api/v1/telegram/chats` (through the running engine's Telegram
+connection) and a **Choose from my Telegram chats** button on the add-group form, with search, groups
+that already exist greyed out, and clear messages when the engine is off or Telegram is not connected.
+Tests: `test_api_telegram_chats.py` (8) and `TelegramChatPicker.test.tsx` (9); 11 deliberate breakages
+all caught. Not verified against the real Telegram: the list is only exercised on the fake source.
+To try it yourself: with `ENGINE_ENABLED=true` and a connected Telegram, open Groups, Add a group,
+press the button, and check that your groups and channels appear with the right names.
+
 ## 12. Git state
 Committed by the agent after this report, with the owner's permission given for this session (message
 `feat: hardening and packaging (Phase 9)`). Not pushed. A stray scratch folder `C:\qte_clean` (the

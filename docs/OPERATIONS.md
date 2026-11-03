@@ -52,6 +52,12 @@ expires. The diagnostic only ever uses the demo account.
 with its strategy and stakes. Set the risk limits **before** enabling the engine (max stake, daily
 stop-loss and so on). These can be set while `ENGINE_ENABLED=false`.
 
+In the add-group form, **Choose from my Telegram chats** lists the groups and channels your Telegram
+account is in, by name; pick one and its chat id (and name, if you have not typed one) are filled in.
+The list comes through the running engine, so it only works once step 5 is done and Telegram has
+connected. Before that, type the chat id yourself (`npm run telegram:dialogs` prints them). Chats that
+already have a group are shown greyed out.
+
 **5. Turn it on.** Set `ENGINE_ENABLED=true` in `backend/.env` and restart. The summary printed at
 start-up should say "Logins: all present in .env" and "Account: demo only".
 

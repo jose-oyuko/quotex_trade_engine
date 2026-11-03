@@ -12,6 +12,11 @@ import {
   type GroupFormValues,
 } from './groupSchema'
 
+export interface PickedChat {
+  chat_id: number
+  title: string
+}
+
 function Field({
   label,
   error,
@@ -55,11 +60,14 @@ export function GroupForm({
   mode,
   onSubmit,
   onCancel,
+  chatPicker,
 }: {
   initial: GroupFormValues
   mode: 'create' | 'edit'
   onSubmit: (values: GroupFormValues) => Promise<void>
   onCancel: () => void
+  /** Shown when adding a group: a way to pick the Telegram chat from a list. */
+  chatPicker?: (pick: (chat: PickedChat) => void) => ReactNode
 }) {
   const form = useForm<GroupFormValues>({
     resolver: zodResolver(groupSchema),
@@ -96,6 +104,14 @@ export function GroupForm({
     )
   }, [steps, form, replace])
 
+  // Picking a chat fills in its id; the name only if the owner has not typed one already.
+  const pickChat = (chat: PickedChat) => {
+    setValue('telegram_chat_id', String(chat.chat_id), { shouldValidate: true, shouldDirty: true })
+    if (form.getValues('title').trim() === '') {
+      setValue('title', chat.title, { shouldValidate: true, shouldDirty: true })
+    }
+  }
+
   const submit = handleSubmit(async (values) => {
     setFormError(null)
     try {
@@ -125,6 +141,7 @@ export function GroupForm({
 
       <fieldset>
         <legend>Group</legend>
+        {mode === 'create' && chatPicker?.(pickChat)}
         <Field label="Name" error={errors.title}>
           {({ id, describedBy, invalid }) => (
             <input
@@ -138,7 +155,11 @@ export function GroupForm({
         <Field
           label="Telegram chat id"
           error={errors.telegram_chat_id}
-          help="Find it by running npm run telegram:dialogs. It cannot be changed later: that would be a different group."
+          help={
+            mode === 'create' && chatPicker !== undefined
+              ? 'Use "Choose from my Telegram chats" above to fill this in. It cannot be changed later: that would be a different group.'
+              : 'Find it by running npm run telegram:dialogs. It cannot be changed later: that would be a different group.'
+          }
         >
           {({ id, describedBy, invalid }) => (
             <input

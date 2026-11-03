@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { invalidateGroups, useGroup } from '../../api/queries'
 import { DataState } from '../../components/DataState'
 import { GroupForm } from './GroupForm'
+import { TelegramChatPicker } from './TelegramChatPicker'
 import { EMPTY_GROUP, fromGroup, toCreate, toUpdate, type GroupFormValues } from './groupSchema'
 
 function useSaveGroup(id: number | null) {
@@ -31,6 +32,7 @@ function NewGroup() {
       initial={EMPTY_GROUP}
       onSubmit={submit}
       onCancel={() => void navigate('/groups')}
+      chatPicker={(pick) => <TelegramChatPicker onPick={pick} />}
     />
   )
 }

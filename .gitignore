@@ -6,6 +6,7 @@ data/
 *.session
 *.session-journal
 session.json
+*.env
 
 # Python
 .venv/

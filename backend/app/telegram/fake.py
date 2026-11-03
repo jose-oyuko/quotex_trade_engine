@@ -135,6 +135,9 @@ class FakeTelegramSource:
             raise TelegramLoginError("fake: wrong password")
         self._authorized = True
 
+    def set_dialogs(self, dialogs: list[DialogInfo]) -> None:
+        self._dialogs = list(dialogs)
+
     async def list_dialogs(self) -> list[DialogInfo]:
         return list(self._dialogs)
 

@@ -26,6 +26,7 @@ import type {
   RiskLimitsInput,
   Signal,
   SignalStatus,
+  TelegramChat,
   Strategy,
   Snapshot,
   Trade,
@@ -140,6 +141,11 @@ export const api = {
       request<GroupRiskLimits>('GET', `/groups/${String(id)}/risk`, { signal }),
     setRisk: (id: number, body: GroupRiskLimitsInput) =>
       request<GroupRiskLimits>('PUT', `/groups/${String(id)}/risk`, { body }),
+  },
+
+  telegram: {
+    chats: (signal?: AbortSignal) =>
+      request<{ items: TelegramChat[] }>('GET', '/telegram/chats', { signal }),
   },
 
   chains: {

@@ -479,6 +479,56 @@
         "title": "ChainStatus",
         "type": "string"
       },
+      "ChatOut": {
+        "properties": {
+          "added": {
+            "description": "A group for this chat already exists.",
+            "title": "Added",
+            "type": "boolean"
+          },
+          "chat_id": {
+            "description": "What a group's `telegram_chat_id` must be.",
+            "title": "Chat Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "group",
+              "channel"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chat_id",
+          "title",
+          "kind",
+          "added"
+        ],
+        "title": "ChatOut",
+        "type": "object"
+      },
+      "ChatsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ChatsOut",
+        "type": "object"
+      },
       "ClientMessage": {
         "$ref": "#/components/schemas/ResyncRequest",
         "description": "The only message a client may send on /ws.",
@@ -6556,6 +6606,88 @@
         "summary": "Get Status",
         "tags": [
           "control"
+        ]
+      }
+    },
+    "/api/v1/telegram/chats": {
+      "get": {
+        "description": "Groups and channels the logged-in Telegram account is in, by name, marking the ones that\nalready have a group here. Needs the engine running (it owns the Telegram connection) and\nTelegram connected. Private chats are left out: signals come from groups and channels.",
+        "operationId": "list_chats_api_v1_telegram_chats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Chats",
+        "tags": [
+          "telegram"
         ]
       }
     },

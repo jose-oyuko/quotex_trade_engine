@@ -76,6 +76,13 @@ tools". The hash is 32 characters of 0-9 and a-f.
 **"Telegram is not connected" banner** — it is reconnecting by itself (1 to 30 seconds between tries). If
 it stays, check the internet and that Telegram is reachable (some networks block it).
 
+**"Choose from my Telegram chats" says the engine is not running** — the list is fetched through the running
+engine. Set `ENGINE_ENABLED=true` in `backend/.env` and restart, or type the chat id by hand
+(`npm run telegram:dialogs` prints them).
+
+**"Telegram is not connected yet" in that list** — wait a few seconds and press "Try again"; if it never
+connects, see "Telegram is not connected" above.
+
 **A group is not read** — run `npm run telegram:dialogs` to confirm the chat id (supergroups are negative
 numbers like `-1001234567890`) and that your account is a member. Try the parser on a message:
 `npm run signal:try -- "EURUSD PUT 1m"`.

@@ -481,6 +481,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/telegram/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Chats
+         * @description Groups and channels the logged-in Telegram account is in, by name, marking the ones that
+         *     already have a group here. Needs the engine running (it owns the Telegram connection) and
+         *     Telegram connected. Private chats are left out: signals come from groups and channels.
+         */
+        get: operations["list_chats_api_v1_telegram_chats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trades": {
         parameters: {
             query?: never;
@@ -734,6 +756,31 @@ export interface components {
          * @enum {string}
          */
         ChainStatus: "pending" | "open" | "completed" | "exhausted" | "stopped" | "failed" | "unknown";
+        /** ChatOut */
+        ChatOut: {
+            /**
+             * Added
+             * @description A group for this chat already exists.
+             */
+            added: boolean;
+            /**
+             * Chat Id
+             * @description What a group's `telegram_chat_id` must be.
+             */
+            chat_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "group" | "channel";
+            /** Title */
+            title: string;
+        };
+        /** ChatsOut */
+        ChatsOut: {
+            /** Items */
+            items: components["schemas"]["ChatOut"][];
+        };
         /**
          * ClientMessage
          * @description The only message a client may send on /ws.
@@ -3979,6 +4026,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_chats_api_v1_telegram_chats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatsOut"];
                 };
             };
             /** @description Not Found */
