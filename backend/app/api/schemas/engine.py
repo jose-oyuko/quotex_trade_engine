@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class LoginItemOut(BaseModel):
     label: str
     present: bool
-    source: Literal["dashboard", ".env", "missing", "unreadable"]
+    source: Literal["dashboard", ".env", ".session file", "missing", "unreadable"]
 
 
 class EngineOut(BaseModel):

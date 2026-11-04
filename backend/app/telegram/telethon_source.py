@@ -13,14 +13,21 @@ from typing import Any
 
 import structlog
 from telethon import TelegramClient, errors, events, functions
+from telethon.sessions import StringSession
 
 from app.core.clock import Clock
 from app.signals.models import RawMessage
 from app.telegram.source import (
+    ApiCredentialsError,
+    CodeExpiredError,
+    CodeInvalidError,
     DialogInfo,
     DialogKind,
+    FloodWaitLoginError,
     MessageHandler,
+    PasswordInvalidError,
     PasswordRequiredError,
+    PhoneInvalidError,
     TelegramError,
     TelegramLoginError,
 )
@@ -76,10 +83,24 @@ def describe_code_delivery(sent: Any) -> str:
 
 
 class TelethonSource:
-    def __init__(self, *, api_id: int, api_hash: str, session_path: Path, clock: Clock) -> None:
+    def __init__(
+        self,
+        *,
+        api_id: int,
+        api_hash: str,
+        clock: Clock,
+        session_path: Path | None = None,
+        session_string: str | None = None,
+    ) -> None:
+        """The login lives either in a file (`session_path`, the command-line login) or as text
+        (`session_string`: the dashboard keeps it encrypted in the database). An empty string is a
+        new session, to be logged in."""
+        if (session_path is None) == (session_string is None):
+            raise ValueError("give exactly one of session_path and session_string")
         self._api_id = api_id
         self._api_hash = api_hash
         self._session_path = session_path
+        self._session_string = session_string
         self._clock = clock
         self._client: Any = None
         self._handler: MessageHandler | None = None
@@ -94,8 +115,12 @@ class TelethonSource:
 
     async def connect(self) -> None:
         if self._client is None:
-            self._session_path.parent.mkdir(parents=True, exist_ok=True)
-            self._client = TelegramClient(str(self._session_path), self._api_id, self._api_hash)
+            if self._session_path is not None:
+                self._session_path.parent.mkdir(parents=True, exist_ok=True)
+                session: Any = str(self._session_path)
+            else:
+                session = StringSession(self._session_string or "")
+            self._client = TelegramClient(session, self._api_id, self._api_hash)
             self._client.add_event_handler(self._on_new, events.NewMessage())
             self._client.add_event_handler(self._on_edited, events.MessageEdited())
         try:
@@ -114,17 +139,17 @@ class TelethonSource:
         try:
             sent = await self._client.send_code_request(phone)
         except errors.PhoneNumberInvalidError as exc:
-            raise TelegramLoginError(
+            raise PhoneInvalidError(
                 "Telegram does not accept that phone number: use the international format "
                 "+<country code><number>, with no leading 0"
             ) from exc
         except errors.ApiIdInvalidError as exc:
-            raise TelegramLoginError(
-                "Telegram rejected TELEGRAM_API_ID / TELEGRAM_API_HASH: copy them again from "
-                "https://my.telegram.org (API development tools) into backend/.env"
+            raise ApiCredentialsError(
+                "Telegram rejected the API id / API hash: copy them again from "
+                "https://my.telegram.org (API development tools)"
             ) from exc
         except errors.FloodWaitError as exc:
-            raise TelegramLoginError(f"too many attempts: wait {exc.seconds} s and retry") from exc
+            raise FloodWaitLoginError(exc.seconds) from exc
         self._code_hash = sent.phone_code_hash
         return describe_code_delivery(sent)
 
@@ -143,7 +168,7 @@ class TelethonSource:
                 "and run the login again"
             ) from exc
         except errors.FloodWaitError as exc:
-            raise TelegramLoginError(f"too many attempts: wait {exc.seconds} s and retry") from exc
+            raise FloodWaitLoginError(exc.seconds) from exc
         self._code_hash = sent.phone_code_hash
         return describe_code_delivery(sent)
 
@@ -154,16 +179,34 @@ class TelethonSource:
             raise PasswordRequiredError(
                 "two-step verification is on: a password is needed"
             ) from exc
-        except (errors.PhoneCodeInvalidError, errors.PhoneCodeExpiredError) as exc:
-            raise TelegramLoginError("the code is wrong or has expired") from exc
+        except errors.PhoneCodeInvalidError as exc:
+            raise CodeInvalidError("the code is wrong") from exc
+        except errors.PhoneCodeExpiredError as exc:
+            raise CodeExpiredError("the code has expired") from exc
         except errors.FloodWaitError as exc:
-            raise TelegramLoginError(f"too many attempts: wait {exc.seconds} s and retry") from exc
+            raise FloodWaitLoginError(exc.seconds) from exc
 
     async def sign_in_password(self, password: str) -> None:
         try:
             await self._client.sign_in(password=password)
         except errors.PasswordHashInvalidError as exc:
-            raise TelegramLoginError("the two-step verification password is wrong") from exc
+            raise PasswordInvalidError("the two-step verification password is wrong") from exc
+        except errors.FloodWaitError as exc:
+            raise FloodWaitLoginError(exc.seconds) from exc
+
+    def session_string(self) -> str | None:
+        """The login as text: only for a source that was made with a string session."""
+        if self._session_path is not None or self._client is None:
+            return None
+        return str(self._client.session.save())
+
+    async def log_out(self) -> None:
+        try:
+            await self._client.log_out()
+        except (OSError, TimeoutError, errors.RPCError) as exc:
+            raise TelegramError(
+                f"Telegram did not confirm the logout: {type(exc).__name__}"
+            ) from exc
 
     async def list_dialogs(self) -> list[DialogInfo]:
         return [dialog_info(dialog) for dialog in await self._client.get_dialogs()]

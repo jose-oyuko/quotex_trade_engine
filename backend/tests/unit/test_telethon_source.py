@@ -104,7 +104,7 @@ async def test_a_crashing_handler_does_not_escape_into_the_library(tmp_path: Pat
 
 
 def test_the_factory_needs_the_api_credentials() -> None:
-    with pytest.raises(TelegramNotConfiguredError, match="TELEGRAM_API_ID"):
+    with pytest.raises(TelegramNotConfiguredError, match="Telegram API id"):
         build_telethon_source(Settings(_env_file=None), clock=ManualClock())  # type: ignore[call-arg]
     with pytest.raises(TelegramNotConfiguredError):
         build_telethon_source(
@@ -117,8 +117,37 @@ def test_the_factory_builds_a_source_with_the_session_in_the_data_directory(tmp_
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None, telegram_api_id=12345, telegram_api_hash="abcdef", data_dir=tmp_path
     )
-    assert isinstance(build_telethon_source(settings, clock=ManualClock()), TelethonSource)
     assert settings.telegram_session_path == tmp_path.resolve() / "telegram"
+    with pytest.raises(TelegramNotConfiguredError, match="not logged in"):
+        build_telethon_source(settings, clock=ManualClock())  # no login yet
+    (tmp_path / "telegram.session").write_bytes(b"made by the command-line login")
+    source = build_telethon_source(settings, clock=ManualClock())
+    assert isinstance(source, TelethonSource) and source.session_string() is None  # a file login
+
+
+def test_the_factory_uses_the_session_made_on_the_dashboard_before_any_file(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        telegram_api_id=12345,
+        telegram_api_hash="abcdef",
+        telegram_session="1AbCdEfStringSession",
+        data_dir=tmp_path,
+    )
+    (tmp_path / "telegram.session").write_bytes(b"an older file login")
+    source = build_telethon_source(settings, clock=ManualClock())
+    assert source._session_string == "1AbCdEfStringSession" and source._session_path is None
+
+
+def test_a_source_needs_exactly_one_kind_of_session(tmp_path: Path) -> None:
+    clock = ManualClock()
+    with pytest.raises(ValueError, match="exactly one"):
+        TelethonSource(api_id=1, api_hash="h", clock=clock)
+    with pytest.raises(ValueError, match="exactly one"):
+        TelethonSource(
+            api_id=1, api_hash="h", clock=clock, session_path=tmp_path / "t", session_string=""
+        )
 
 
 def test_telegram_settings_are_safe_and_blank_values_mean_unset() -> None:

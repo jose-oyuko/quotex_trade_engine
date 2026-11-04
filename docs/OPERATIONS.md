@@ -103,28 +103,36 @@ first time (and says so); `npm run key:create` does the same by hand (on a serve
 
 ## First-time logins
 
-Telegram and Quotex need no login until you start the engine (Settings page). Do these once, on the demo account.
-(These logins are still typed into a terminal and `backend/.env`; moving them into the dashboard is the
-next phases, see PHASES.md.)
+Telegram and Quotex need no login until you start the engine (Settings page). Do these once, on the demo
+account. The Telegram login is made on the dashboard (below); the Quotex login is stored on the dashboard
+too, and the command-line logins (`npm run telegram:login`, `npm run quotex:diagnose`) remain as a fallback.
 
-**1. Settings file.** Copy `.env.example` to `backend/.env`. It is git-ignored. Fill in:
+**1. Quotex.** On **Settings > Quotex login** store the email and password you use for Quotex (they are
+encrypted; see "Settings and stored logins"). Or put `QUOTEX_EMAIL` and `QUOTEX_PASSWORD` in `backend/.env`
+(a stored value wins).
 
-```
-QUOTEX_EMAIL=you@example.com
-QUOTEX_PASSWORD=your-password
-TELEGRAM_API_ID=1234567
-TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
-```
+**2. Telegram** (Settings > **Telegram**), in this order:
+1. **The API id and hash.** Create them at <https://my.telegram.org> (log in with your phone number, open
+   "API development tools", create an application with any name). Type them in the box and press Save.
+2. **The phone number** of the Telegram account that is in the signal groups, written with the country
+   code and no leading 0 (`+254712345678`), and press *Send me the code*.
+3. **The code.** Telegram says where it sent it (usually the Telegram app, as a message from "Telegram", not
+   an SMS). Type it. *Send it another way* asks for an SMS or a call (twice at most); a wrong code can simply
+   be typed again; an old one starts the login again.
+4. **The two-step password**, only if the account has two-step verification.
+Then it says *Logged in*. A half-made login survives a page reload (it is forgotten after ten minutes and
+when the application restarts). The login is stored encrypted in the database, not in a file. **Log out of
+Telegram** removes it (and ends it on Telegram's side). Logging in or out needs the engine **stopped**.
+Telegram lists this program among your devices (Settings > Devices), where you can also end it.
+If Telegram says to wait, the box says for how long: wait, do not retry.
 
-**2. Telegram.** Create the id and hash at <https://my.telegram.org> under "API development tools", then
-run `npm run telegram:login`. Type your phone number in international format (`+254712345678`: plus,
-country code, no leading 0), the code Telegram sends to your Telegram app (not an SMS, usually), and
-your two-step password if you have one. The login is saved in `backend/data/telegram.session`.
-`npm run telegram:dialogs` lists your chats with their ids, to find a group's number.
+(An older `backend/data/telegram.session` file made by `npm run telegram:login` still works when nothing is
+stored on the dashboard; *Log out of Telegram* removes it too.)
 
-**3. Quotex.** Run `npm run quotex:diagnose`. If Quotex emails you a PIN, type it into that window once.
-The session is saved in `backend/data/session.json` and the application does not ask again until it
-expires. The diagnostic only ever uses the demo account.
+**3. Quotex PIN.** If Quotex emails you a PIN at the first login, run `npm run quotex:diagnose` once and
+type it into that window (the PIN step is not on the dashboard yet). The session is saved in
+`backend/data/session.json` and the application does not ask again until it expires. The diagnostic only
+ever uses the demo account.
 
 **4. Groups and limits.** Start the app (`npm start`), open the **Groups** page and add each Telegram group
 with its strategy and stakes. Set the risk limits **before** enabling the engine (max stake, daily
@@ -136,10 +144,11 @@ The list comes through the running engine, so it only works once step 5 is done 
 connected. Before that, type the chat id yourself (`npm run telegram:dialogs` prints them). Chats that
 already have a group are shown greyed out.
 
-**5. Turn it on.** Open **Settings** and press **Start the engine** (see "The trading engine" above). The summary printed at
-start-up should say "Logins: all present in .env" and "Account: demo only".
+**5. Turn it on.** Open **Settings** and press **Start the engine** (see "The trading engine" above). The box
+lists each login and where it comes from; the button stays grey while one is missing.
 
-The two session files are as good as your passwords. Keep `backend/data/` private.
+The saved Quotex session file (and a Telegram `.session` file if you used the command line) are as good as
+your passwords. Keep `backend/data/` private.
 
 ## The daily routine
 

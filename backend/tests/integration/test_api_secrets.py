@@ -32,7 +32,13 @@ async def test_a_new_installation_lists_the_secrets_as_not_set(tmp_path: Path) -
     async with running_api(tmp_path, secret_key=KEY) as rig:
         body = (await rig.client.get(f"{API}/secrets")).json()
         assert body["key"] == "ok"
-        assert list(by_name(body)) == ["quotex_email", "quotex_password", "telegram_api_hash"]
+        assert list(by_name(body)) == [
+            "quotex_email",
+            "quotex_password",
+            "telegram_api_id",
+            "telegram_api_hash",
+        ]
+        assert {i["name"]: i["group"] for i in body["items"]}["telegram_api_hash"] == "telegram"
         assert all(i["is_set"] is False and i["readable"] is False for i in body["items"])
         assert all(i["updated_at"] is None for i in body["items"])
 

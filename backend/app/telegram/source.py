@@ -35,6 +35,34 @@ class PasswordRequiredError(TelegramLoginError):
     """The account has two-step verification: the code was accepted, a password is also needed."""
 
 
+class PhoneInvalidError(TelegramLoginError):
+    """Telegram does not accept the phone number."""
+
+
+class ApiCredentialsError(TelegramLoginError):
+    """Telegram rejected the API id / hash."""
+
+
+class CodeInvalidError(TelegramLoginError):
+    """The code is wrong; the same code request can be answered again."""
+
+
+class CodeExpiredError(TelegramLoginError):
+    """The code is too old: a new one has to be requested."""
+
+
+class PasswordInvalidError(TelegramLoginError):
+    """The two-step verification password is wrong."""
+
+
+class FloodWaitLoginError(TelegramLoginError):
+    """Telegram asks us to wait before trying again."""
+
+    def __init__(self, seconds: int) -> None:
+        super().__init__(f"too many attempts: wait {seconds} s and retry")
+        self.seconds = seconds
+
+
 class DialogKind(StrEnum):
     GROUP = "group"
     CHANNEL = "channel"
@@ -87,6 +115,15 @@ class TelegramSource(Protocol):
     async def sign_in_password(self, password: str) -> None: ...
 
     async def list_dialogs(self) -> list[DialogInfo]: ...
+
+    def session_string(self) -> str | None:
+        """The logged-in session as text (to store, encrypted), or None if the source keeps its
+        session somewhere else (a file)."""
+        ...
+
+    async def log_out(self) -> None:
+        """End this login on Telegram's side too."""
+        ...
 
     async def wait_disconnected(self) -> None:
         """Returns when the connection has been lost (after the library's own retries) or closed."""

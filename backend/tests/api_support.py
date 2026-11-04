@@ -154,6 +154,7 @@ async def running_api(
     seed: Callable[[async_sessionmaker[AsyncSession]], Awaitable[None]] | None = None,
     logged_in: bool = True,
     builder: EngineBuilder | None = None,
+    login_source: Any = None,
     **settings: Any,
 ) -> AsyncIterator[ApiRig]:
     """The application inside its lifespan, with an HTTP client for it. `seed` fills the database
@@ -168,6 +169,7 @@ async def running_api(
             seed=seed,
             logged_in=logged_in,
             builder=builder,
+            login_source=login_source,
             settings=settings,
         ) as rig:
             yield rig
@@ -182,6 +184,7 @@ async def _running_api(
     seed: Callable[[async_sessionmaker[AsyncSession]], Awaitable[None]] | None,
     logged_in: bool,
     builder: EngineBuilder | None,
+    login_source: Any,
     settings: dict[str, Any],
 ) -> AsyncIterator[ApiRig]:
     config = settings_for(tmp_path, engine_enabled=with_engine, **settings)
@@ -194,7 +197,9 @@ async def _running_api(
             await engine.dispose()
     parts: list[FakeParts] = []
     app = create_app(
-        config, engine_builder=builder or fake_builder(parts, hold_results=hold_results)
+        config,
+        engine_builder=builder or fake_builder(parts, hold_results=hold_results),
+        login_source=login_source,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with (

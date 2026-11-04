@@ -8,9 +8,13 @@ from datetime import datetime
 from app.core.clock import Clock
 from app.signals.models import RawMessage
 from app.telegram.source import (
+    CodeExpiredError,
+    CodeInvalidError,
     DialogInfo,
     MessageHandler,
+    PasswordInvalidError,
     PasswordRequiredError,
+    PhoneInvalidError,
     TelegramError,
     TelegramLoginError,
 )
@@ -27,12 +31,17 @@ class FakeTelegramSource:
         authorized: bool = True,
         login_code: str = "12345",
         two_step_password: str | None = None,
+        session: str | None = None,
     ) -> None:
         self._clock = clock
         self._dialogs = dialogs or []
         self._authorized = authorized
         self._login_code = login_code
         self._two_step_password = two_step_password
+        self._session = session
+        self._phone: str | None = None
+        self.scripted: dict[str, list[Exception]] = {}  # method name -> errors to raise, in turn
+        self.logged_out = False
         self._code_requested = False
         self._code_accepted = False
         self._handler: MessageHandler | None = None
@@ -105,14 +114,22 @@ class FakeTelegramSource:
     async def is_authorized(self) -> bool:
         return self._authorized
 
+    def _maybe_fail(self, method: str) -> None:
+        errors = self.scripted.get(method)
+        if errors:
+            raise errors.pop(0)
+
     async def request_code(self, phone: str) -> str:
+        self._maybe_fail("request_code")
         if not phone.startswith("+"):
-            raise TelegramLoginError("fake: phone number must start with +")
+            raise PhoneInvalidError("fake: phone number must start with +")
+        self._phone = phone
         self._code_requested = True
         self.resends = 0
         return "to your Telegram app"
 
     async def resend_code(self, phone: str) -> str:
+        self._maybe_fail("resend_code")
         if not self._code_requested:
             raise TelegramLoginError("fake: no code was requested")
         if self.resends >= self.max_resends:
@@ -121,19 +138,33 @@ class FakeTelegramSource:
         return "by SMS"
 
     async def sign_in(self, phone: str, code: str) -> None:
+        self._maybe_fail("sign_in")
         if not self._code_requested:
             raise TelegramLoginError("fake: no code was requested")
+        if code == "expired":
+            raise CodeExpiredError("fake: the code has expired")
         if code != self._login_code:
-            raise TelegramLoginError("fake: wrong code")
+            raise CodeInvalidError("fake: wrong code")
         self._code_accepted = True
         if self._two_step_password is not None:
             raise PasswordRequiredError("fake: two-step verification is on")
         self._authorized = True
 
     async def sign_in_password(self, password: str) -> None:
+        self._maybe_fail("sign_in_password")
         if not self._code_accepted or password != self._two_step_password:
-            raise TelegramLoginError("fake: wrong password")
+            raise PasswordInvalidError("fake: wrong password")
         self._authorized = True
+
+    def session_string(self) -> str | None:
+        if self._session is not None:
+            return self._session
+        return f"fake-session-for-{self._phone}" if self._authorized and self._phone else None
+
+    async def log_out(self) -> None:
+        self._maybe_fail("log_out")
+        self.logged_out = True
+        self._authorized = False
 
     def set_dialogs(self, dialogs: list[DialogInfo]) -> None:
         self._dialogs = list(dialogs)

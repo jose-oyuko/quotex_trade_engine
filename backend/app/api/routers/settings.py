@@ -48,6 +48,7 @@ def _secret_out(item: SecretStatus) -> SecretItemOut:
         name=item.name,
         label=item.label,
         help=item.help,
+        group=item.group,
         is_set=item.set,
         readable=item.readable,
         updated_at=item.updated_at,

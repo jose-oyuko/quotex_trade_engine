@@ -1,12 +1,14 @@
-import { useEngine, useSecrets, useSettings, useStatus } from '../../api/queries'
+import { useEngine, useSecrets, useSettings, useStatus, useTelegramLogin } from '../../api/queries'
 import { DataState } from '../../components/DataState'
 import { EnginePanel } from './EnginePanel'
 import { SecretsPanel } from './SecretsPanel'
 import { SettingsForm } from './SettingsForm'
+import { TelegramPanel } from './TelegramPanel'
 
 export default function SettingsPage() {
   const engine = useEngine()
   const status = useStatus()
+  const telegram = useTelegramLogin()
   const settings = useSettings()
   const secrets = useSecrets()
   return (
@@ -18,6 +20,7 @@ export default function SettingsPage() {
       <DataState query={engine}>
         {(info) => <EnginePanel engine={info} account={status.data?.account_type ?? 'demo'} />}
       </DataState>
+      <DataState query={telegram}>{(data) => <TelegramPanel status={data} />}</DataState>
       <DataState query={settings}>{(data) => <SettingsForm data={data} />}</DataState>
       <DataState query={secrets}>{(data) => <SecretsPanel data={data} />}</DataState>
     </section>

@@ -6,6 +6,7 @@ import type { SecretItem, SecretsOut, SettingsOut } from '../../api/types'
 import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
+import { telegramStatus } from './telegramFixtures'
 import SettingsPage from './SettingsPage'
 
 afterEach(() => {
@@ -15,6 +16,7 @@ afterEach(() => {
 const BASE = [
   ['GET', '/engine', json(engineInfo())],
   ['GET', '/status', json(makeSnapshot())],
+  ['GET', '/telegram/login', json(telegramStatus())],
 ] as const
 
 const NOTE = 'A saved setting is used from the next start of the application.'
@@ -56,6 +58,7 @@ function secret(name: string, label: string, over: Partial<SecretItem> = {}): Se
     name,
     label,
     help: `help for ${label}`,
+    group: 'logins',
     is_set: false,
     readable: false,
     updated_at: null,
@@ -69,7 +72,8 @@ function secrets(over: Partial<SecretsOut> = {}, items?: SecretItem[]): SecretsO
     items: items ?? [
       secret('quotex_email', 'Quotex email'),
       secret('quotex_password', 'Quotex password'),
-      secret('telegram_api_hash', 'Telegram API hash'),
+      secret('telegram_api_id', 'Telegram API id', { group: 'telegram' }),
+      secret('telegram_api_hash', 'Telegram API hash', { group: 'telegram' }),
     ],
     ...over,
   }
@@ -169,19 +173,29 @@ describe('stored logins', () => {
         json(
           secrets({}, [
             secret('quotex_email', 'Quotex email', { is_set: true, readable: true }),
-            secret('quotex_password', 'Quotex password'),
-            secret('telegram_api_hash', 'Telegram API hash', { is_set: true, readable: false }),
+            secret('quotex_password', 'Quotex password', { is_set: true, readable: false }),
+            secret('telegram_api_hash', 'Telegram API hash', {
+              group: 'telegram',
+              is_set: true,
+              readable: true,
+            }),
           ]),
         ),
       ],
     ])
     setup()
     expect(await screen.findByText('Stored')).toBeVisible()
-    expect(screen.getByText('Not set')).toBeVisible()
     expect(screen.getByText('Stored, cannot be read')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Replace Quotex email' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Set Quotex password' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Replace Quotex password' })).toBeVisible()
     expect(document.querySelectorAll('input[type=password]')).toHaveLength(0)
+  })
+
+  it('leaves the Telegram entries to the Telegram box', async () => {
+    mockApi([...BASE, ['GET', '/settings', json(settings())], ['GET', '/secrets', json(secrets())]])
+    setup()
+    expect(await screen.findByRole('button', { name: 'Set Quotex email' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Telegram API/ })).toBeNull()
   })
 
   it('stores a value, hides the box again and keeps no copy on the page', async () => {

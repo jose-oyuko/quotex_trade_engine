@@ -31,6 +31,7 @@ export const keys = {
   auth: ['auth'] as const,
   settings: ['settings'] as const,
   engine: ['engine'] as const,
+  telegramLogin: ['telegram', 'login'] as const,
   secrets: ['secrets'] as const,
 }
 
@@ -44,6 +45,14 @@ export function useStatus() {
 
 export function useEngine() {
   return useQuery({ queryKey: keys.engine, queryFn: ({ signal }) => api.engine.get(signal) })
+}
+
+export function useTelegramLogin() {
+  return useQuery({
+    queryKey: keys.telegramLogin,
+    queryFn: ({ signal }) => api.telegram.login.status(signal),
+    staleTime: 0, // a login in progress may have been changed from another window
+  })
 }
 
 export function useSettings() {

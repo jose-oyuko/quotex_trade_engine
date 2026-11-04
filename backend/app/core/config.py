@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     telegram_api_id: int | None = None
     telegram_api_hash: SecretStr | None = None
     telegram_phone: str | None = None  # international format, +<country code><number>
+    # A Telethon string session. The dashboard keeps the login encrypted in the database and fills
+    # this in when it builds the engine (decision D-65); it can also be pasted here by hand.
+    telegram_session: SecretStr | None = None
 
     @field_validator("telegram_api_id", "telegram_phone", mode="before")
     @classmethod
@@ -115,7 +118,12 @@ class Settings(BaseSettings):
 
     def secret_values(self) -> list[str]:
         """The values that must never appear in a log line."""
-        secrets = (self.quotex_password, self.telegram_api_hash, self.secret_key)
+        secrets = (
+            self.quotex_password,
+            self.telegram_api_hash,
+            self.secret_key,
+            self.telegram_session,
+        )
         return [s.get_secret_value() for s in secrets if s is not None]
 
     @property

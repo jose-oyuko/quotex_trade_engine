@@ -18,6 +18,7 @@ from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.risk_settings import RiskSettingsService
+from app.services.telegram_login import TelegramLoginService
 from app.vault.store import SecretStore
 
 
@@ -89,6 +90,11 @@ async def current_user(request: Request) -> UserInfo:
     return user
 
 
+def get_telegram_login(request: Request) -> TelegramLoginService:
+    service: TelegramLoginService = request.app.state.telegram_login
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -114,6 +120,7 @@ RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 CurrentUserDep = Annotated[UserInfo, Depends(current_user)]
+TelegramLoginDep = Annotated[TelegramLoginService, Depends(get_telegram_login)]
 ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]
 VaultDep = Annotated[SecretStore, Depends(get_vault)]

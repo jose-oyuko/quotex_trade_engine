@@ -41,6 +41,16 @@ from app.services.groups import (
     GroupNotFoundError,
     InvalidGroupError,
 )
+from app.services.telegram_login import (
+    CodeStaleError,
+    CodeWrongError,
+    EngineRunningError,
+    MustWaitError,
+    NotConfiguredError,
+    PasswordWrongError,
+    RefusedError,
+    WrongStepError,
+)
 from app.vault.errors import (
     InvalidSecretError,
     KeyInvalidError,
@@ -94,6 +104,14 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     UnknownSecretError: (404, "unknown_secret"),
     InvalidSecretError: (422, "invalid_secret"),
     InvalidSettingError: (422, "invalid_setting"),
+    NotConfiguredError: (409, "telegram_not_configured"),
+    EngineRunningError: (409, "engine_running"),
+    WrongStepError: (409, "telegram_login_step"),
+    CodeWrongError: (422, "telegram_code_invalid"),
+    CodeStaleError: (409, "telegram_code_expired"),
+    PasswordWrongError: (422, "telegram_password_invalid"),
+    RefusedError: (422, "telegram_login_refused"),
+    MustWaitError: (429, "telegram_wait"),
 }
 
 HTTP_CODES = {

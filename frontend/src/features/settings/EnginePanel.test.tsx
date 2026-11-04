@@ -6,6 +6,7 @@ import type { EngineInfo, Snapshot } from '../../api/types'
 import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
+import { telegramStatus } from './telegramFixtures'
 import SettingsPage from './SettingsPage'
 
 afterEach(() => {
@@ -26,6 +27,7 @@ function setup(
     ['GET', '/status', json(makeSnapshot({ account_type: account }))],
     ['GET', '/settings', json(SETTINGS)],
     ['GET', '/secrets', json(SECRETS)],
+    ['GET', '/telegram/login', json(telegramStatus())],
     ...extra,
   ])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

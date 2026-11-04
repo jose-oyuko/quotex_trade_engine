@@ -504,6 +504,20 @@ password here shares the lock with the login's other password attempts. The perm
 away while REAL is in use. The engine always starts on DEMO (D-15), also after a restart. Why: a stolen
 session cookie alone must not be enough to make trades use real money.
 
+**D-65. The Telegram login is made on the dashboard and kept as an encrypted string session.** The login
+(phone, code, two-step password) is a state machine in memory, `TelegramLoginService`: one at a time, only
+while the engine is stopped (the engine and a login would both be connections of one account), forgotten
+after ten minutes or at a restart, and not saved anywhere until it succeeds. The page can be reloaded or
+opened elsewhere and shows the step it is at. A successful login stores a Telethon *string session*
+(encrypted, D-61) instead of a `.session` file, together with the phone number (also encrypted); both are
+the application's own entries, which the secrets API can neither set nor list. The API id and hash are
+stored the same way (the id must be a number). The engine is built with the stored login, falling back to
+`TELEGRAM_SESSION` in `.env`, then to the old `.session` file; with none of them it does not start and says
+so. Logging out ends the session on Telegram's side if it can be reached, and removes the local copy
+(and the old file) either way. Telegram's refusals are told apart (wrong code, expired code, wrong password,
+flood wait with its seconds, bad phone, bad API id) so the page can say what to do. Not done: re-saving the
+session if Telegram moves the account to another data centre (rare; the owner would log in again).
+
 ---
 
 ## Decisions to be made later (record here when decided)

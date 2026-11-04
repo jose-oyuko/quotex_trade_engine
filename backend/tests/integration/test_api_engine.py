@@ -67,6 +67,7 @@ async def test_a_new_installation_has_the_engine_stopped_and_says_what_it_would_
             "Quotex password",
             "Telegram API hash",
             "Telegram API id",
+            "Telegram login",
         }
         # nothing that needs the engine works yet, and says how to fix it
         refused = await rig.client.post(f"{API}/kill-switch")

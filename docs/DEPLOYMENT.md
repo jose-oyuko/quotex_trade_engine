@@ -75,7 +75,8 @@ uv run --directory backend python -m scripts.telegram_cli login
 uv run --directory backend python -m scripts.quotex_diagnose          # demo account only
 ```
 
-Log in again on the server rather than copying `telegram.session` from your PC: Telegram may end a
+Log in again on the server (on the dashboard, through the tunnel: Settings > Telegram) rather than copying a
+`telegram.session` from your PC: Telegram may end a
 session that is used from two places at once. Quotex may treat a login from a new place (the server's
 address) as suspicious and email a PIN: expect it. The saved sessions in `backend/data/` then serve
 the service.

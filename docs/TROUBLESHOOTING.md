@@ -22,6 +22,20 @@ only adds a key when there is none, and never replaces one), then restart. If a 
 logins show "cannot be read", it is not the key they were stored with: see "Settings and stored logins"
 in [OPERATIONS.md](OPERATIONS.md).
 
+**Telegram login on the dashboard: "That code is not right" / "has expired"** — type the code again; if it
+says it expired, press *Use another number* (or just start again): Telegram sends a new one. If the code
+never arrives, look for a message from the chat named "Telegram" inside the Telegram app, then try *Send it
+another way*.
+
+**Telegram login: "Telegram asks you to wait"** — Telegram limits login attempts. Wait as long as it says,
+then try once; repeating makes the wait longer.
+
+**Telegram login: "Telegram rejected the API id / API hash"** — copy them again from my.telegram.org (the id is
+a number; the hash is 32 letters and digits) with *Change them*.
+
+**Telegram login: "Stop the trading engine first"** — logging in or out is refused while the engine is
+using the login. Stop it on the Settings page, do the login, start it again.
+
 **"Port 8000 is already in use"** — the app is probably already running (look for another window, or open
 <http://127.0.0.1:8000>). If not, another program has the port: stop it, or set `PORT=8001` in
 `backend/.env`. On Windows, `netstat -ano | findstr :8000` shows the process id; Task Manager can end it.
@@ -69,11 +83,12 @@ and ask once.
 **"Two-step verification password"** — type the password you set in Telegram (Settings, Privacy, Two-step
 verification). It is not stored.
 
-**"not logged in: run `npm run telegram:login`"** — the saved login expired or was ended from Telegram's
+**"Telegram is not logged in" / "not logged in: run `npm run telegram:login`"** — the saved login expired or was ended from Telegram's
 "Devices" list. Log in again.
 
-**Reset the Telegram login** — stop the app, delete `backend/data/telegram.session`, run
-`npm run telegram:login`. (Telegram may list the old session under Devices; you can end it there.)
+**Reset the Telegram login** — stop the engine, then on the dashboard's Settings page press *Log out of
+Telegram* and log in again. (Command line: stop the app, delete `backend/data/telegram.session`, run
+`npm run telegram:login`.) (Telegram may list the old session under Devices; you can end it there.)
 
 **`api_id` / `api_hash` invalid** — copy them again from <https://my.telegram.org>, "API development
 tools". The hash is 32 characters of 0-9 and a-f.

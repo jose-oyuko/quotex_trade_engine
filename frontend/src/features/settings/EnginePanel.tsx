@@ -20,6 +20,7 @@ const STATE_TEXT: Record<EngineInfo['state'], { text: string; tone: Tone }> = {
 const SOURCE_TEXT: Record<EngineInfo['logins'][number]['source'], string> = {
   dashboard: 'stored here',
   '.env': 'from backend/.env',
+  '.session file': 'from a login file (command line)',
   missing: 'missing',
   unreadable: 'stored, cannot be read',
 }

@@ -27,6 +27,7 @@ import type {
   RiskEvent,
   SecretItem,
   SecretsOut,
+  TelegramLoginStatus,
   SettingsOut,
   RiskLimits,
   RiskLimitsInput,
@@ -195,6 +196,19 @@ export const api = {
   telegram: {
     chats: (signal?: AbortSignal) =>
       request<{ items: TelegramChat[] }>('GET', '/telegram/chats', { signal }),
+    login: {
+      status: (signal?: AbortSignal) =>
+        request<TelegramLoginStatus>('GET', '/telegram/login', { signal }),
+      start: (phone: string) =>
+        request<TelegramLoginStatus>('POST', '/telegram/login/start', { body: { phone } }),
+      resend: () => request<TelegramLoginStatus>('POST', '/telegram/login/resend'),
+      code: (code: string) =>
+        request<TelegramLoginStatus>('POST', '/telegram/login/code', { body: { code } }),
+      password: (password: string) =>
+        request<TelegramLoginStatus>('POST', '/telegram/login/password', { body: { password } }),
+      cancel: () => request<TelegramLoginStatus>('POST', '/telegram/login/cancel'),
+    },
+    logout: () => request<TelegramLoginStatus>('POST', '/telegram/logout'),
   },
 
   chains: {

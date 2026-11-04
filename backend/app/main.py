@@ -40,7 +40,10 @@ from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.risk_settings import RiskSettingsService
+from app.services.telegram_login import TelegramLoginService
 from app.signals.parsers.registry import ParserRegistry
+from app.telegram.factory import new_login_source
+from app.telegram.source import TelegramSource
 from app.vault.crypto import Cipher
 from app.vault.store import SecretStore
 
@@ -49,6 +52,7 @@ log = structlog.get_logger()
 
 
 type EngineBuilder = Callable[[Settings, EventBus, TaskSupervisor], Engine]
+type LoginSourceFactory = Callable[[int, str, str | None], TelegramSource]
 
 
 class DatabaseNotMigratedError(RuntimeError):
@@ -56,7 +60,10 @@ class DatabaseNotMigratedError(RuntimeError):
 
 
 def create_app(
-    settings: Settings | None = None, *, engine_builder: EngineBuilder = build_engine
+    settings: Settings | None = None,
+    *,
+    engine_builder: EngineBuilder = build_engine,
+    login_source: LoginSourceFactory | None = None,
 ) -> FastAPI:
     """Build the application. Tests pass their own settings (and a fake-backed engine builder)."""
     settings = settings or get_settings()
@@ -166,6 +173,18 @@ def create_app(
             session_factory, clock, lambda: app.state.trading, ParserRegistry().names
         )
         app.state.auth = AuthService(session_factory, clock)
+        app.state.telegram_login = TelegramLoginService(
+            vault=app.state.vault,
+            settings=lambda: cfg,
+            source_factory=login_source
+            or (
+                lambda api_id, api_hash, session: new_login_source(
+                    api_id, api_hash, session, clock=clock
+                )
+            ),
+            controller=lambda: controller,
+            clock=clock,
+        )
         await app.state.auth.prepare()
         app.state.risk_settings = RiskSettingsService(
             app.state.bus, clock, live, lambda: app.state.trading
@@ -226,6 +245,7 @@ def create_app(
     app.state.config = None
     app.state.vault = None
     app.state.controller = None
+    app.state.telegram_login = None
 
     development = settings.environment == "development"
     app.add_middleware(

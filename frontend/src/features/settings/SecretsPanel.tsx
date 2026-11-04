@@ -156,11 +156,11 @@ export function SecretsPanel({ data }: { data: SecretsOut }) {
   const keyOk = data.key === 'ok'
   return (
     <fieldset>
-      <legend>Stored logins</legend>
+      <legend>Quotex login</legend>
       <p className="help">
         Encrypted in the database with the key in <code>backend/.env</code>. A value you type here
-        is never shown again. The trading engine does not use these yet: until the next phases it
-        still reads its logins from <code>backend/.env</code>.
+        is never shown again. The trading engine uses these when it starts (they win over{' '}
+        <code>backend/.env</code>): restart the engine after changing one.
       </p>
       {data.key !== 'ok' && (
         <p role="alert" className="form-error">
@@ -168,9 +168,11 @@ export function SecretsPanel({ data }: { data: SecretsOut }) {
         </p>
       )}
       <ul className="secret-list">
-        {data.items.map((item) => (
-          <SecretRow key={item.name} item={item} keyOk={keyOk} />
-        ))}
+        {data.items
+          .filter((item) => item.group === 'logins')
+          .map((item) => (
+            <SecretRow key={item.name} item={item} keyOk={keyOk} />
+          ))}
       </ul>
     </fieldset>
   )
