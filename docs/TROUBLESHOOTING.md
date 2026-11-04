@@ -121,12 +121,21 @@ Quotex asks for a PIN, it stops with "log in to Quotex on the Settings page": st
 again. A wrong PIN ends that login; start it again and Quotex sends a new PIN. Many logins in a row may get
 the account flagged: do not loop.
 
-**"Quotex's website refused the request before the login ... Cloudflare"** — the library crashed while
-reading Quotex's sign-in page (it got an HTTP error such as 403 instead of the page), and the application says
-so instead of showing the crash. It is **not** a wrong password: Quotex sits behind Cloudflare, which often
-refuses requests from servers, VPNs and some home connections. Things that can help: try again later; try
-from another connection (for example your phone's hotspot); if it works from your PC at home but not from a
-server, run the engine at home. The application does not try to get around the check.
+**A refused Quotex login: "Login failed. Unknown error"** — that is the library's own wording when Quotex's
+answer is a page it does not understand. The application now adds what Quotex **really** answered, taken from
+the page itself: for example `Quotex's website answered the login form's answer with HTTP 200 from
+https://quotex.com/en/sign-in/, titled "..." . The page says: "..."`, and, only when the page's own markers
+say so, `That looks like a Cloudflare check (not Quotex's own page)` or `a page that asks for a captcha`. The
+page is also saved, with your email and password taken out, as `backend/data/diagnostics/quotex-login-<time>.html`
+(the newest five are kept): open it in a browser to see exactly what came back. The same is added when the
+engine's own connection fails to log in. Reading it:
+- *a Cloudflare check / "Just a moment"*: Quotex sits behind Cloudflare, which often refuses requests from
+  servers, VPNs and some home connections. Try again later; try another connection (for example your phone's
+  hotspot); if it works from your PC at home but not from a server, run the engine at home. The application
+  does not try to get around the check.
+- *a page that asks for a captcha, or a verification step*: do it once in your browser at quotex.com first.
+- *an error page with Quotex's own words*: the words are shown; follow them (a wrong password says so).
+- *HTTP 403 or another error status with no readable text*: the site refused this address.
 
 **Reset the Quotex login** — stop the engine, then on the Settings page press *Remove the stored login* and log
 in again. (Command line: stop the app, delete `backend/data/session.json`, run `npm run quotex:diagnose`.)

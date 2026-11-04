@@ -24,7 +24,7 @@ from pyquotex.stable_api import Quotex
 
 from app.quotex.base import LoginRequest
 from app.quotex.errors import QuotexConnectionError
-from app.quotex.pyquotex_client import explain_connect_error
+from app.quotex.pyquotex_client import PageCapture, explain_connect_error, with_page_report
 
 log = structlog.get_logger()
 
@@ -49,14 +49,22 @@ class PyQuotexLogin:
                 on_otp_callback=request.ask_pin,
             )
             client.set_account_mode("PRACTICE")  # logging in never needs the real account
+            capture = PageCapture((request.email, request.password))
             try:
-                ok, reason = await client.connect()
+                with capture:
+                    ok, reason = await client.connect()
             except (QuotexConnectionError, TimeoutError):
                 raise
             except Exception as exc:
-                raise QuotexConnectionError(explain_connect_error(exc)) from exc
+                message = explain_connect_error(exc, capture)
+                raise QuotexConnectionError(
+                    with_page_report(message, capture, request.diagnostics_dir)
+                ) from exc
             if not ok:
-                raise QuotexConnectionError(f"Quotex did not accept the login: {reason}")
+                message = f"Quotex did not accept the login: {reason}"
+                raise QuotexConnectionError(
+                    with_page_report(message, capture, request.diagnostics_dir)
+                )
             session = _read_session(folder, request.email)
             if not session:
                 raise QuotexConnectionError("Quotex accepted the login but gave no session.")

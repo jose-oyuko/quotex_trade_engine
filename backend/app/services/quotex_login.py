@@ -174,7 +174,11 @@ class QuotexLoginService:
                 self._pin = None
 
         request = LoginRequest(
-            email=email, password=password, host=self._settings().quotex_host, ask_pin=ask_pin
+            email=email,
+            password=password,
+            host=self._settings().quotex_host,
+            ask_pin=ask_pin,
+            diagnostics_dir=self._settings().data_dir / "diagnostics",
         )
         self._task = self._tasks.spawn(self._run(self._make_login(request)), name="quotex-login")
         await self._wait_for_change()

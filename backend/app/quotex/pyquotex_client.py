@@ -20,11 +20,15 @@ Why it does not simply call `Quotex.buy()` (measured by reading the source):
 from __future__ import annotations
 
 import asyncio
+import html as html_lib
 import json
+import re
 import shutil
 import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
@@ -32,6 +36,7 @@ from typing import Any, Literal
 import structlog
 from pyquotex import config as qx_config
 from pyquotex import expiration as qx_expiration
+from pyquotex.network.login import Login
 from pyquotex.qxtypes import ReconnectPolicy
 from pyquotex.stable_api import Quotex
 from pyquotex.utils.account_type import AccountType as QxAccountType
@@ -62,11 +67,197 @@ async def refuse_pin(prompt: str) -> str:
     )
 
 
-def explain_connect_error(exc: Exception) -> str:
+MAX_PAGE_TEXT = 300  # characters of a page's visible text put in a message
+MAX_PAGE_HTML = 200_000  # characters of a page kept for the saved copy
+KEEP_PAGES = 5  # saved copies kept in the diagnostics folder
+# What a page says about itself when it is Cloudflare's check or a captcha, not Quotex's own page.
+CLOUDFLARE_MARKERS = (
+    "just a moment",
+    "cf-chl",
+    "challenge-platform",
+    "cf-turnstile",
+    "checking your browser",
+    "attention required",
+    "cloudflare",
+)
+CAPTCHA_MARKERS = ("recaptcha", "hcaptcha", "g-recaptcha")
+
+
+@dataclass(slots=True, frozen=True)
+class PageReport:
+    """One page Quotex's website answered with while logging in."""
+
+    step: str  # what was being asked: "the sign-in page", "the login form"
+    status: int | None
+    url: str
+    title: str | None
+    text: str  # the visible words, short
+    html: str  # the whole page, kept only to save a copy for the owner
+
+    @property
+    def looks_like(self) -> str | None:
+        """What the page says it is, from its own markers (never a guess about the account)."""
+        haystack = f"{self.title or ''} {self.text} {self.html}".lower()
+        if any(marker in haystack for marker in CLOUDFLARE_MARKERS):
+            return "a Cloudflare check (not Quotex's own page)"
+        if any(marker in haystack for marker in CAPTCHA_MARKERS):
+            return "a page that asks for a captcha"
+        return None
+
+
+def _visible_text(page: str) -> str:
+    page = re.sub(r"(?is)<(script|style|noscript)\b.*?</\1>", " ", page)
+    page = re.sub(r"(?s)<[^>]+>", " ", page)
+    return " ".join(html_lib.unescape(page).split())
+
+
+def _scrub(text: str, secrets: Sequence[str]) -> str:
+    for secret in secrets:
+        if secret and len(secret) >= 3:
+            text = text.replace(secret, "***")
+    return text
+
+
+def page_report(step: str, response: Any, secrets: Sequence[str]) -> PageReport | None:
+    """What a response says, with the owner's email and password taken out of it."""
+    if response is None:
+        return None
+    try:
+        body = str(response.text)
+    except Exception:
+        body = ""
+    body = _scrub(body, secrets)
+    found = re.search(r"(?is)<title[^>]*>(.*?)</title>", body)
+    title = " ".join(html_lib.unescape(found.group(1)).split()) if found else None
+    status = getattr(response, "status_code", None)
+    return PageReport(
+        step=step,
+        status=int(status) if isinstance(status, int) else None,
+        url=str(getattr(response, "url", "")).split("?")[0],
+        title=title or None,
+        text=_visible_text(body)[:MAX_PAGE_TEXT],
+        html=body[:MAX_PAGE_HTML],
+    )
+
+
+class PageCapture:
+    """Records what Quotex's website answers while the library logs in, so a refusal can say what
+    really came back instead of the library's "Unknown error".
+
+    The library keeps no trace of the pages it gets, so for the length of the `with` block the two
+    methods that receive them are wrapped; the wrappers hand every response on unchanged and put
+    the originals back afterwards, whatever happens. One at a time (logins are one at a time, and
+    the engine is stopped while one runs)."""
+
+    def __init__(self, secrets: Sequence[str] = ()) -> None:
+        self._secrets = tuple(secrets)
+        self.pages: list[PageReport] = []
+        self._original: dict[str, Any] = {}
+
+    def _record(self, step: str, response: Any) -> None:
+        try:
+            report = page_report(step, response, self._secrets)
+        except Exception:
+            log.warning("quotex_page_capture_failed", exc_info=True)
+            return
+        if report is not None:
+            self.pages.append(report)
+
+    def __enter__(self) -> PageCapture:
+        capture = self
+        original_get: Any = Login.get_sign_page
+        original_success: Any = Login.success_login
+
+        async def get_sign_page(login: Any, *args: Any, **kwargs: Any) -> Any:
+            response = await original_get(login, *args, **kwargs)
+            capture._record("the sign-in page", response)
+            return response
+
+        async def success_login(login: Any, *args: Any, **kwargs: Any) -> Any:
+            capture._record("the login form's answer", getattr(login, "response", None))
+            return await original_success(login, *args, **kwargs)
+
+        self._original = {"get_sign_page": original_get, "success_login": original_success}
+        for name, wrapper in (
+            ("get_sign_page", get_sign_page),
+            ("success_login", success_login),
+        ):
+            setattr(Login, name, wrapper)  # the library's class, for the length of the block
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._original:
+            for name, original in self._original.items():
+                setattr(Login, name, original)
+            self._original = {}
+
+    def describe(self) -> str | None:
+        """The last page Quotex answered with, in a sentence; None if no page was seen."""
+        if not self.pages:
+            return None
+        page = self.pages[-1]
+        parts = [f"Quotex's website answered {page.step} with HTTP {page.status or '?'}"]
+        parts.append(f"from {page.url or 'an unknown address'}")
+        if page.title:
+            parts.append(f'titled "{page.title}"')
+        sentence = ", ".join(parts)
+        if page.text:
+            sentence += f'. The page says: "{page.text}"'
+        kind = page.looks_like
+        sentence += f". That looks like {kind}." if kind else "."
+        return sentence
+
+    def save(self, directory: Path) -> Path | None:
+        """Keep the last page for the owner to open in a browser (without their email or password).
+        The newest few are kept. Returns where, or None if there was no page or it could not be
+        written."""
+        if not self.pages:
+            return None
+        page = self.pages[-1]
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+            path = directory / f"quotex-login-{stamp}.html"
+            note = (
+                f"<!-- saved by the application: {page.step}, HTTP {page.status}, {page.url}. "
+                "Your email and password were taken out. -->\n"
+            )
+            path.write_text(note + page.html, encoding="utf-8")
+            for old in sorted(directory.glob("quotex-login-*.html"))[:-KEEP_PAGES]:
+                old.unlink(missing_ok=True)
+        except OSError:
+            log.warning("quotex_page_save_failed", exc_info=True)
+            return None
+        return path
+
+
+def with_page_report(message: str, capture: PageCapture, directory: Path | None) -> str:
+    """`message` followed by what Quotex really answered, and where the page was saved."""
+    seen = capture.describe()
+    if seen is None:
+        return message
+    log.warning(
+        "quotex_login_page",
+        status=capture.pages[-1].status,
+        url=capture.pages[-1].url,
+        title=capture.pages[-1].title,
+    )
+    saved = capture.save(directory) if directory is not None else None
+    tail = f" The page was saved as {saved}: open it in a browser to see it." if saved else ""
+    return f"{message} {seen}{tail}"
+
+
+def explain_connect_error(exc: Exception, capture: PageCapture | None = None) -> str:
     """Words for an error the library raised while connecting. Its own crash on a refused sign-in
     page ("... has no attribute 'reason_phrase'") really means Quotex's website did not answer
-    the request normally: usually Cloudflare, which guards the site, refusing this address."""
+    the request normally. With a `capture`, the message says what it did answer; without one, it
+    names the usual cause: Cloudflare, which guards the site, refusing this address."""
     text = f"{type(exc).__name__}: {exc}"
+    if "reason_phrase" in text and capture is not None and capture.describe() is not None:
+        return (
+            "Quotex's website did not return its normal sign-in page, so the login could not "
+            "start. This is not a wrong password."
+        )
     if "reason_phrase" in text:
         return (
             "Quotex's website refused the request before the login (an HTTP error such as 403). "
@@ -161,18 +352,23 @@ class PyQuotexClient:
         )
         q.set_account_mode("PRACTICE" if demo else "REAL")
         self._q = q
+        capture = PageCapture((self._email, self._password))
+        diagnostics = self._data_dir / "diagnostics"
         try:
-            ok, reason = await q.connect()
+            with capture:
+                ok, reason = await q.connect()
         except QuotexConnectionError:
             raise
         except Exception as exc:
-            raise QuotexConnectionError(explain_connect_error(exc)) from exc
+            message = explain_connect_error(exc, capture)
+            raise QuotexConnectionError(with_page_report(message, capture, diagnostics)) from exc
         finally:
             self._scrub_session_file()
         if not ok:
             if STALE_SESSION_MARKER in str(reason).lower():
                 self._forget_stored_token()
-            raise QuotexConnectionError(str(reason))
+                raise QuotexConnectionError(str(reason))
+            raise QuotexConnectionError(with_page_report(str(reason), capture, diagnostics))
 
     def _forget_stored_token(self) -> None:
         """A rejected session token would otherwise be loaded again by every later attempt (the

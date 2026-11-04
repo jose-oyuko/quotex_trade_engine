@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from pathlib import Path
 from typing import Protocol
 
 from app.domain.enums import AccountType, Direction
@@ -152,6 +153,7 @@ class LoginRequest:
     password: str
     host: str
     ask_pin: PinAsker
+    diagnostics_dir: Path | None = None  # where a refused login's page is saved
 
 
 class QuotexLogin(Protocol):

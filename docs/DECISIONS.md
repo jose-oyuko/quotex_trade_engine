@@ -552,6 +552,19 @@ session file when there is no usable store (a new installation, no `SECRET_KEY`)
 old `.env` logins keep working (removing them would break installations that have not moved), and the
 `quotex_diagnose` PIN login is not stored by the script (the dashboard's is the one the engine uses).
 
+**D-68. A refused Quotex login says what Quotex really answered.** The library reports a login it cannot
+read as "Login failed. Unknown error" (or crashes on a non-2xx sign-in page) and keeps no trace of the page,
+so the owner was left guessing (Cloudflare? a captcha? a wrong password?). While the library logs in, the two
+methods that receive the pages (`Login.get_sign_page`, `Login.success_login`) are wrapped, only inside
+`pyquotex_client.py` (the library-facing module, D-6) and only for the length of one login: the wrappers pass
+every response on unchanged and the originals are restored whatever happens. The last page is described in
+the error (status, address without its query, title, a short piece of its visible text; a Cloudflare or captcha
+label only when the page's own markers say so) and saved, with the owner's email and password replaced, under
+`backend/data/diagnostics/` (newest five kept) to open in a browser. Applies to the dashboard login and to the
+engine's own login. Nothing is added when no page was seen (a saved token was used), and the old generic
+explanations remain for that case. Not done: reading the page's own error box with a smarter parser; the page's
+words are shown as they are.
+
 ---
 
 ## Decisions to be made later (record here when decided)
