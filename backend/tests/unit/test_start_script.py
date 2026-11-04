@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import Settings
+from app.vault.crypto import generate_key
 from scripts.start import (
     StartError,
     dashboard_needs_build,
@@ -69,7 +70,12 @@ def frontend(tmp_path: Path, *, modules: bool = True, built: bool = True) -> Pat
     return root
 
 
-def run_prepare(tmp_path: Path, rec: Recorder, root: Path, **kwargs: object):  # type: ignore[no-untyped-def]
+def run_prepare(  # type: ignore[no-untyped-def]
+    tmp_path: Path, rec: Recorder, root: Path, *, with_key: bool = True, **kwargs: object
+):
+    env = tmp_path / ".env"
+    if with_key and not env.exists():
+        env.write_text(f"SECRET_KEY={generate_key()}\n", encoding="utf-8")
     return prepare(
         settings_for(tmp_path),
         run=rec.run,
@@ -78,7 +84,7 @@ def run_prepare(tmp_path: Path, rec: Recorder, root: Path, **kwargs: object):  #
         say=rec.said.append,
         migrate=rec.migrate,
         port_busy=rec.port_busy,
-        **kwargs,  # type: ignore[arg-type]
+        **{"env_file": tmp_path / ".env", **kwargs},  # type: ignore[arg-type]
     )
 
 
@@ -132,6 +138,7 @@ def test_without_node_it_says_what_to_install(tmp_path: Path) -> None:
             settings_for(tmp_path),
             run=rec.run,
             which=lambda name: None,
+            env_file=tmp_path / ".env",
             frontend=frontend(tmp_path),
             say=rec.said.append,
             migrate=rec.migrate,
@@ -209,3 +216,21 @@ def test_real_money_being_allowed_is_visible_in_the_summary(tmp_path: Path) -> N
         summarise(settings_for(tmp_path, quotex_allow_real=True), env_file_exists=True).lines()
     )
     assert "REAL is allowed by settings" in text
+
+
+def test_a_secret_key_is_created_once_and_the_owner_is_told_to_keep_a_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    rec = Recorder()
+    root = frontend(tmp_path)
+    run_prepare(tmp_path, rec, root, with_key=False)
+    created = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "SECRET_KEY=" in created
+    assert any("SECRET_KEY" in line and "Keep a copy" in line for line in rec.said)
+    assert all(line.split("=")[-1] not in " ".join(rec.said) for line in created.splitlines()[-1:])
+
+    rec2 = Recorder()
+    run_prepare(tmp_path, rec2, root, with_key=False)  # the second start changes nothing
+    assert (tmp_path / ".env").read_text(encoding="utf-8") == created
+    assert not any("SECRET_KEY" in line for line in rec2.said)

@@ -17,6 +17,11 @@ close the window, open a new one, run again. (`npm` must be found: `npm --versio
 **"uv is not installed"** (from `start.bat`) — install uv from <https://docs.astral.sh/uv/>, open a new
 window, run again.
 
+**The Settings page says "SECRET_KEY is not set" or "is not a valid key"** — run `npm run key:create` (it
+only adds a key when there is none, and never replaces one), then restart. If a key was there and stored
+logins show "cannot be read", it is not the key they were stored with: see "Settings and stored logins"
+in [OPERATIONS.md](OPERATIONS.md).
+
 **"Port 8000 is already in use"** — the app is probably already running (look for another window, or open
 <http://127.0.0.1:8000>). If not, another program has the port: stop it, or set `PORT=8001` in
 `backend/.env`. On Windows, `netstat -ano | findstr :8000` shows the process id; Task Manager can end it.

@@ -185,3 +185,60 @@ def test_a_restore_into_an_empty_data_folder_works_too(tmp_path: Path) -> None:
     kept = restore(backup, new_data, now=T0)
     assert notes(new_data / DATABASE) == ["trade 0", "trade 1", "trade 2"]
     assert not kept.exists()  # there was nothing to put aside
+
+
+MARKER = "v1.CIPHERTEXT-MARKER-" + "Z" * 200
+
+
+def add_stored_secrets(data: Path) -> None:
+    """The tables Phase 10 and 11 added, holding something that must not leave in a safe backup."""
+    db = sqlite3.connect(data / DATABASE)
+    db.execute("CREATE TABLE secrets (name TEXT PRIMARY KEY, ciphertext TEXT)")
+    db.execute("CREATE TABLE auth_sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER)")
+    db.execute("INSERT INTO secrets VALUES ('quotex_password', ?)", (MARKER,))
+    db.execute("INSERT INTO auth_sessions VALUES ('SESSION-HASH-MARKER', 1)")
+    db.commit()
+    db.close()
+
+
+def everything_in(folder: Path) -> bytes:
+    return b"".join(p.read_bytes() for p in sorted(folder.rglob("*")) if p.is_file())
+
+
+def count(db_file: Path, table: str) -> int:
+    db = sqlite3.connect(db_file)
+    try:
+        return int(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("wal", [False, True])
+def test_a_backup_without_secrets_has_no_stored_secret_or_session_in_any_file(
+    tmp_path: Path, wal: bool
+) -> None:
+    data = make_data(tmp_path / "data", rows=4, wal=wal)
+    add_stored_secrets(data)
+    result = make_backup(data, tmp_path / "backups", include_secrets=False, now=T0)
+    copy = result.folder / DATABASE
+    assert count(copy, "secrets") == 0 and count(copy, "auth_sessions") == 0
+    raw = everything_in(result.folder)
+    assert MARKER.encode() not in raw  # not even in the file's unused pages (it was compacted)
+    assert b"SESSION-HASH-MARKER" not in raw
+    assert notes(copy) == [f"trade {n}" for n in range(4)]  # the history is all there
+    assert result.integrity == "ok"
+    # the running database is untouched
+    assert count(data / DATABASE, "secrets") == 1 and count(data / DATABASE, "auth_sessions") == 1
+
+
+def test_a_backup_with_secrets_keeps_them_and_a_database_without_the_tables_is_fine(
+    tmp_path: Path,
+) -> None:
+    data = make_data(tmp_path / "data")
+    add_stored_secrets(data)
+    full = make_backup(data, tmp_path / "backups", now=T0)
+    assert count(full.folder / DATABASE, "secrets") == 1
+
+    older = make_data(tmp_path / "older")  # a database from before those tables existed
+    safe = make_backup(older, tmp_path / "backups2", include_secrets=False, now=T0)
+    assert safe.integrity == "ok"

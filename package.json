@@ -27,6 +27,7 @@
     "latency": "uv run --directory backend python -m scripts.latency_report",
     "demo": "uv run --directory backend python -m scripts.demo_server",
     "api:watch": "uv run --directory backend python -m scripts.ws_watch",
+    "key:create": "uv run --directory backend python -m scripts.secret_key",
     "owner:reset": "uv run --directory backend python -m scripts.owner",
     "db:upgrade": "uv run --directory backend alembic upgrade head",
     "db:downgrade": "uv run --directory backend alembic downgrade base",

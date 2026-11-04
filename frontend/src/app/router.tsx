@@ -48,6 +48,12 @@ export const routes: RouteObject[] = [
         }),
       },
       {
+        path: 'settings',
+        lazy: async () => ({
+          Component: (await import('../features/settings/SettingsPage')).default,
+        }),
+      },
+      {
         path: 'account',
         lazy: async () => ({ Component: (await import('../features/auth/AccountPage')).default }),
       },

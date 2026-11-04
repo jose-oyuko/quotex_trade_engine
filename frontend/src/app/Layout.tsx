@@ -16,6 +16,7 @@ const NAV = [
   { to: '/groups', label: 'Groups', end: false },
   { to: '/history', label: 'History', end: false },
   { to: '/reports', label: 'Reports', end: false },
+  { to: '/settings', label: 'Settings', end: false },
 ]
 
 function Connection({ name, status }: { name: string; status: Snapshot }) {

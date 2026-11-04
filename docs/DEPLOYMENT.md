@@ -165,9 +165,17 @@ Schedule the backup command (cron or a systemd timer) and copy `backups/` off th
 30 3 * * *  mkdir -p /home/quotex/quotex_trade_engine/backups && cd /home/quotex/quotex_trade_engine && /home/quotex/.local/bin/uv run --directory backend python -m scripts.backup --no-secrets >> backups/cron.log 2>&1
 ```
 
-A backup is consistent while the application runs. Without `--no-secrets` it contains the saved logins:
-leave them out of automated copies that leave the server, and keep one manual copy with them if you
-want to avoid logging in again after a rebuild.
+A backup is consistent while the application runs. Without `--no-secrets` it contains the saved logins
+and the encrypted stored secrets: leave them out of automated copies that leave the server, and keep one
+manual copy with them if you want to avoid logging in again after a rebuild. With `--no-secrets` the
+copy of the database has its stored secrets and login sessions emptied out and is compacted, so none of
+it is left in the file.
+
+**`SECRET_KEY`** (in `backend/.env`, created by `npm start` or `uv run --directory backend python -m
+scripts.secret_key`) decrypts the stored secrets. Keep a copy of `.env` somewhere safe, **not next to a
+backup of the database**: together they are the logins. Lose the key and the stored logins are lost
+(they are typed in again); the rest of the data is unaffected. Restoring a database onto a machine with
+a different key leaves the stored secrets unreadable; the Settings page says so and lets you re-enter them.
 
 ## Docker
 

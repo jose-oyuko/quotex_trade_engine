@@ -19,8 +19,10 @@ and shows it on a live dashboard with reports.
   over plain HTTP on an open network is not safe. For a server, use an SSH tunnel
   ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 - **Credentials stay on your machine.** Telegram keys, Quotex password and session files live in
-  `backend/.env` and `backend/data/`, both git-ignored. They are stored unencrypted for now, so protect
-  the folder with normal file permissions. Never paste them into issues, logs or chat. Log files mask
+  `backend/.env` and `backend/data/`, both git-ignored. Logins typed into the dashboard's Settings page
+  are stored **encrypted** in the database with the key `SECRET_KEY` in `backend/.env` (made for you by
+  `npm start`): keep a copy of that file somewhere safe. The saved session files and `.env` logins are
+  still plain text, so protect the folder with normal file permissions. Never paste them into issues, logs or chat. Log files mask
   them, and backups that include the session files are as sensitive as the passwords.
 
 ## Requirements

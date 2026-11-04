@@ -1,17 +1,20 @@
 """Back up (and restore) the application's data.
 
     npm run backup                         make a backup in backups/quotex-<date>-<time>/
-    npm run backup -- --no-secrets         leave the login/session files out
+    npm run backup -- --no-secrets         leave out the logins, stored secrets and sessions
     npm run backup -- --keep 30            keep the newest 30 backups (default 14)
     npm run backup -- --restore backups/quotex-20261102-093000 --yes
 
 What is saved: the database (`quotex.db`: every trade, chain, signal, setting), taken with SQLite's
 own online-backup call so it is a consistent copy even while the app is running, plus the saved
-logins (`telegram.session`, `session.json`) unless `--no-secrets`. Not saved: `backend/.env` (your
-passwords; keep your own copy somewhere safe) and the log files.
+logins (`telegram.session`, `session.json`) unless `--no-secrets`. With `--no-secrets` the copy of
+the database also has its stored (encrypted) secrets and login sessions emptied out, and the file is
+compacted so none of it is left behind in unused space. Not saved: `backend/.env` (it holds
+`SECRET_KEY`; keep your own copy somewhere safe, because without the key the stored secrets
+cannot be read) and the log files.
 
-**A backup with the session files in it is as sensitive as your passwords.** Keep it somewhere only
-you can read.
+**A backup with the secrets in it is as sensitive as your passwords** (the encrypted ones are only
+as safe as the key). Keep it somewhere only you can read, and not next to `SECRET_KEY`.
 
 Restoring replaces the database with the backup's. The current database is kept next to it as
 `quotex.db.before-restore-<time>`, so a mistake can be undone. Stop the app first.
@@ -20,6 +23,7 @@ Restoring replaces the database with the backup's. The current database is kept 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import shutil
 import sqlite3
@@ -59,6 +63,19 @@ def _check(db: sqlite3.Connection) -> str:
     return str(row[0]) if row else "no answer"
 
 
+SECRET_TABLES = ("secrets", "auth_sessions")
+
+
+def _scrub_secrets(db: sqlite3.Connection) -> None:
+    """Empty the tables that hold stored secrets and login sessions, then VACUUM so the deleted
+    text is not left behind in the file's unused pages."""
+    for table in SECRET_TABLES:
+        with contextlib.suppress(sqlite3.OperationalError):  # a table an older database lacks
+            db.execute(f"DELETE FROM {table}")  # noqa: S608 - a fixed list of table names
+    db.commit()
+    db.execute("VACUUM")
+
+
 def _count_rows(db: sqlite3.Connection) -> dict[str, int]:
     counts: dict[str, int] = {}
     for table in COUNTED_TABLES:
@@ -91,6 +108,8 @@ def make_backup(
     copy = sqlite3.connect(folder / DATABASE)
     try:
         live.backup(copy)  # SQLite's online backup: consistent even while the app writes
+        if not include_secrets:
+            _scrub_secrets(copy)
         integrity = _check(copy)
         rows = _count_rows(copy)
     except sqlite3.DatabaseError as exc:  # the file is damaged: SQLite cannot even read it

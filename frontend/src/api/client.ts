@@ -24,6 +24,9 @@ import type {
   BreakdownKind,
   Risk,
   RiskEvent,
+  SecretItem,
+  SecretsOut,
+  SettingsOut,
   RiskLimits,
   RiskLimitsInput,
   Signal,
@@ -173,6 +176,19 @@ export const api = {
     logout: () => request<undefined>('POST', '/auth/logout'),
     changePassword: (body: { current_password: string; new_password: string }) =>
       request<undefined>('POST', '/auth/password', { body }),
+  },
+
+  settings: {
+    get: (signal?: AbortSignal) => request<SettingsOut>('GET', '/settings', { signal }),
+    save: (values: Record<string, string | null>) =>
+      request<SettingsOut>('PUT', '/settings', { body: { values } }),
+  },
+
+  secrets: {
+    list: (signal?: AbortSignal) => request<SecretsOut>('GET', '/secrets', { signal }),
+    set: (name: string, value: string) =>
+      request<SecretItem>('PUT', `/secrets/${encodeURIComponent(name)}`, { body: { value } }),
+    remove: (name: string) => request<undefined>('DELETE', `/secrets/${encodeURIComponent(name)}`),
   },
 
   telegram: {

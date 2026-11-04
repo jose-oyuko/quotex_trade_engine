@@ -49,6 +49,36 @@ and stops working as soon as the account exists. After that the login page is wh
 - The demo (`npm run demo`) has its own account: `demo` / `demo-password`.
 - `npm run api:watch -- --username <name>` asks for the password too.
 
+## Settings and stored logins (the Settings page)
+
+The **Settings** page in the dashboard replaces editing `backend/.env` for these:
+
+| Setting | Meaning |
+|---|---|
+| Log detail | How much is written to the log (`INFO` normally, `DEBUG` to find a problem) |
+| Quotex address | The domain Quotex is reached at (change it when Quotex moves) |
+| Trade expiry mode | `TIME` (clock-aligned) or `TIMER` (countdown) |
+
+A value saved there wins over `backend/.env`, which wins over the built-in default; each shows where it
+comes from. **A saved setting is used from the next start of the application.** "Go back to ..." removes
+the saved value.
+
+The page also has **Stored logins** (Quotex email, Quotex password, Telegram API hash): type a value,
+**Save**, and it is stored encrypted in the database. It is never shown again; the page only says
+*Stored*, *Not set* or *Stored, cannot be read*. **In this version the trading engine does not use them
+yet** (it still reads `backend/.env`); they become the source of the logins in the next phases.
+
+**The key.** Stored logins are encrypted with `SECRET_KEY` in `backend/.env`. `npm start` adds one the
+first time (and says so); `npm run key:create` does the same by hand (on a server:
+`uv run --directory backend python -m scripts.secret_key`). It never replaces a key that is there.
+- **Keep a copy of `backend/.env` somewhere safe.** Without the key the stored logins cannot be read; you
+  type them again, nothing else is lost.
+- **"Stored, cannot be read"** means the key is not the one the value was stored with (for example a
+  restored database on another machine). Press **Replace** and type it again.
+- **The page says SECRET_KEY is missing or not valid:** run `npm run key:create` (only if the line is
+  missing or you have nothing stored that you need), then restart.
+- A key is also found in the environment variable `SECRET_KEY` (for a server's service file).
+
 ## First-time logins
 
 Telegram and Quotex need no login until you set `ENGINE_ENABLED=true`. Do these once, on the demo account.
@@ -128,7 +158,7 @@ every 15 seconds and shows the problems in a banner.
 
 ```
 npm run backup                          copy to backups/quotex-<date>-<time>/
-npm run backup -- --no-secrets          leave the saved logins out
+npm run backup -- --no-secrets          leave out the saved logins, the stored secrets and the sessions
 npm run backup -- --keep 30             keep the newest 30 (default 14)
 npm run backup -- --restore backups/quotex-20261102-093000 --yes
 ```
@@ -136,8 +166,10 @@ npm run backup -- --restore backups/quotex-20261102-093000 --yes
 - **What it saves:** the database (every trade, chain, signal and setting) using SQLite's own
   online-backup call, so it is consistent even while the app is running, plus the two session files.
   It checks the copy's integrity and refuses to make a backup of a damaged database.
-- **What it does not save:** `backend/.env` (keep your own copy of your passwords somewhere safe) and the
-  logs.
+- **What it does not save:** `backend/.env` (keep your own copy somewhere safe: it holds `SECRET_KEY`, the
+  key to the secrets stored in the dashboard) and the logs.
+- **`--no-secrets`** also empties the stored secrets and login sessions out of the backup's copy of the
+  database and compacts it, so none of it stays in the file. The history is complete.
 - **A backup with the session files in it is as sensitive as your passwords.** `backups/` is
   git-ignored. Do not put it in a shared or public cloud folder; use `--no-secrets` if you only want the
   history.

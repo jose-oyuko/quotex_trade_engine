@@ -460,6 +460,27 @@ random bytes in an HttpOnly, SameSite=Strict cookie; the database holds only its
 database cannot be turned into logged-in sessions. Failed logins are throttled in memory (per username
 and overall), and an unknown user costs the same time as a wrong password.
 
+**D-61. Stored secrets: AES-256-GCM, the key in `.env`, the name bound to the value.** Secrets typed into
+the dashboard are encrypted with AES-256-GCM (the `cryptography` package, a new dependency) and stored
+in the `secrets` table as `v1.<nonce + ciphertext + tag>`. The key is `SECRET_KEY` in `backend/.env`
+(the owner's choice, D-58): 32 random bytes as text, created by `npm start` or `npm run key:create`,
+and never replaced if one exists. Each value has its own random nonce and its **name is bound to it**
+(authenticated data), so a value copied into another row does not decrypt, and a wrong key or damaged
+value is always an error, never a wrong answer. The API can set, remove and list (set / readable) but
+has no way to return a value; only code inside the process can read one. What this protects: a copied
+database or backup. What it does not: someone who can read both the database and `.env` on the
+machine. `backup --no-secrets` empties the `secrets` and `auth_sessions` tables in the copy and
+VACUUMs it. A missing or malformed key is reported when a secret is stored or read, not at start-up,
+so the dashboard can open and explain it.
+
+**D-62. Dashboard settings are read once, at start.** `log_level`, `quotex_host` and `quotex_time_mode`
+can be saved in the database (`app_settings`, keys `config.*`) and win over `.env`, which wins over the
+default. They are read when the application starts; saving takes effect at the next start (the page
+says so). Why: the engine is built once from its settings; applying a change to a running engine is
+Phase 12's job (restart the engine without restarting the application). A stored value that no longer
+passes its check is ignored with a log line, never a reason to refuse to start. `engine_enabled`,
+`quotex_allow_real`, the logins and the other settings are deliberately not editable yet.
+
 ---
 
 ## Decisions to be made later (record here when decided)

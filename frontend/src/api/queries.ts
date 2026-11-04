@@ -29,6 +29,8 @@ export const keys = {
   reports: ['reports'] as const,
   health: ['health'] as const,
   auth: ['auth'] as const,
+  settings: ['settings'] as const,
+  secrets: ['secrets'] as const,
 }
 
 export function useStatus() {
@@ -37,6 +39,14 @@ export function useStatus() {
     queryFn: ({ signal }) => api.status(signal),
     staleTime: Infinity, // the live feed keeps it current
   })
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: keys.settings, queryFn: ({ signal }) => api.settings.get(signal) })
+}
+
+export function useSecrets() {
+  return useQuery({ queryKey: keys.secrets, queryFn: ({ signal }) => api.secrets.list(signal) })
 }
 
 export function useRisk() {

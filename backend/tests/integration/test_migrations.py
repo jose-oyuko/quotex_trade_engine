@@ -16,6 +16,7 @@ EXPECTED_TABLES = {
     "group_settings",
     "groups",
     "risk_events",
+    "secrets",
     "signals",
     "trades",
     "users",
@@ -116,4 +117,4 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0002"
+    assert head_revision() == "0003"

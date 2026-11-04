@@ -9,7 +9,8 @@ Preparation, each step skipped when it is already done:
   2. install the dashboard's packages if they are missing
   3. build the dashboard if it is missing or older than its source
   4. create or update the database (`alembic upgrade head`)
-  5. check that the port is free, and show how the app is configured (never the secrets)
+  5. make sure `SECRET_KEY` exists in backend/.env (it encrypts the logins stored in the dashboard)
+  6. check that the port is free, and show how the app is configured (never the secrets)
 Then the backend serves both the API and the dashboard on one address.
 """
 
@@ -33,6 +34,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.db.migrations import alembic_config
+from app.vault.key import ensure_secret_key
 
 BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
@@ -142,6 +144,7 @@ def prepare(
     *,
     run: Runner = run_command,
     which: Callable[[str], str | None] = shutil.which,
+    env_file: Path,
     frontend: Path = FRONTEND,
     say: Say = print,
     migrate: Callable[[Settings], None] | None = None,
@@ -164,6 +167,12 @@ def prepare(
             raise StartError("Building the dashboard failed. The messages above say why.")
     say("Preparing the database...")
     (migrate or _migrate)(settings)
+    if ensure_secret_key(env_file):
+        say(
+            "Created SECRET_KEY in backend/.env: it encrypts the logins you store in the "
+            "dashboard. Keep a copy of that file somewhere safe; without the key they cannot "
+            "be read again."
+        )
     if port_busy(settings.host, settings.port):
         raise StartError(
             f"Port {settings.port} is already in use. Is the app already running? Open "
@@ -206,7 +215,7 @@ def main(argv: Sequence[str]) -> int:
         sys.stderr.write(f"Invalid configuration in backend/.env:\n{exc}\n")
         return 2
     try:
-        summary = prepare(settings)
+        summary = prepare(settings, env_file=BACKEND / ".env")
     except StartError as exc:
         sys.stderr.write(f"\nCannot start: {exc}\n")
         return 1

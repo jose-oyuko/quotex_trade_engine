@@ -28,11 +28,19 @@ from app.core.errors import DomainError
 from app.engine.errors import AccountSwitchRefusedError, UnknownChainError
 from app.engine.risk import RiskConfigError
 from app.quotex.errors import NotConnectedError, QuotexError, RealAccountNotAllowedError
+from app.services.app_config import InvalidSettingError
 from app.services.groups import (
     GroupExistsError,
     GroupInUseError,
     GroupNotFoundError,
     InvalidGroupError,
+)
+from app.vault.errors import (
+    InvalidSecretError,
+    KeyInvalidError,
+    KeyMissingError,
+    SecretUnreadableError,
+    UnknownSecretError,
 )
 
 log = structlog.get_logger()
@@ -71,6 +79,12 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     SetupClosedError: (409, "setup_closed"),
     WrongSetupCodeError: (403, "wrong_setup_code"),
     InvalidAccountError: (422, "invalid_account"),
+    KeyMissingError: (503, "secret_key_missing"),
+    KeyInvalidError: (503, "secret_key_invalid"),
+    SecretUnreadableError: (409, "secret_unreadable"),
+    UnknownSecretError: (404, "unknown_secret"),
+    InvalidSecretError: (422, "invalid_secret"),
+    InvalidSettingError: (422, "invalid_setting"),
 }
 
 HTTP_CODES = {

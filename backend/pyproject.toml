@@ -16,6 +16,7 @@ dependencies = [
     # app/quotex/ may import it.
     "pyquotex @ git+https://github.com/cleitonleonel/pyquotex@a50a030b425937fec4595b1ff1c226e160c52943",
     "tzdata>=2026.6",
+    "cryptography>=44",
 ]
 
 [dependency-groups]

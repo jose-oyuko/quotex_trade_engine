@@ -15,6 +15,7 @@ from app.api.errors import install_error_handlers
 from app.api.hub import Hub
 from app.api.openapi import build_openapi
 from app.api.routers import auth, chains, control, groups, reports, telegram, trades
+from app.api.routers import settings as settings_router
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
@@ -31,10 +32,13 @@ from app.db.writer import DBWriter
 from app.engine.engine import Engine
 from app.engine.factory import build_engine
 from app.events.bus import EventBus
+from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.risk_settings import RiskSettingsService
 from app.signals.parsers.registry import ParserRegistry
+from app.vault.crypto import Cipher
+from app.vault.store import SecretStore
 
 VERSION = "0.1.0"
 log = structlog.get_logger()
@@ -83,12 +87,32 @@ def create_app(
         recovery = await load_recovery_state(session_factory)
         app.state.recovery = recovery
 
+        # What the owner saved in the dashboard wins over `.env` (decision D-58); read once, here.
+        clock = SystemClock()
+        config = ConfigService(settings, session_factory, clock)
+        cfg = await config.effective()
+        if cfg.log_level != settings.log_level:
+            configure_logging(
+                cfg.log_level,
+                json_output=cfg.environment == "production",
+                log_file=cfg.log_path if cfg.log_to_file else None,
+                max_bytes=cfg.log_max_mb * 1024 * 1024,
+                backups=cfg.log_backups,
+                secrets=cfg.secret_values(),
+            )
+        app.state.settings = cfg
+        app.state.config = config
+        app.state.vault = SecretStore(
+            session_factory,
+            Cipher(cfg.secret_key.get_secret_value() if cfg.secret_key else None),
+            clock,
+        )
+
         # The live picture and the WebSocket hub listen from before the engine starts, so they see
         # every event it publishes, recovery's included.
-        clock = SystemClock()
         live = LiveState(recovery.app_settings)
         snapshots = SnapshotBuilder(
-            settings=settings, version=VERSION, live=live, engine=lambda: app.state.trading
+            settings=cfg, version=VERSION, live=live, engine=lambda: app.state.trading
         )
         hub = Hub(
             bus=app.state.bus,
@@ -96,8 +120,8 @@ def create_app(
             snapshots=snapshots,
             clock=clock,
             tasks=app.state.tasks,
-            client_queue=settings.ws_client_queue,
-            heartbeat_s=settings.ws_heartbeat_s,
+            client_queue=cfg.ws_client_queue,
+            heartbeat_s=cfg.ws_heartbeat_s,
         )
         hub.start()
         app.state.live = live
@@ -118,9 +142,9 @@ def create_app(
             unsettled_trades=len(recovery.unsettled_trades),
         )
 
-        if settings.engine_enabled:
+        if cfg.engine_enabled:
             try:
-                trading = engine_builder(settings, app.state.bus, app.state.tasks)
+                trading = engine_builder(cfg, app.state.bus, app.state.tasks)
                 summary = await trading.start(recovery)
             except Exception:
                 # e.g. a missing login: leave nothing half-started behind, then say what is wrong
@@ -169,6 +193,8 @@ def create_app(
     app.state.groups = None
     app.state.risk_settings = None
     app.state.auth = None
+    app.state.config = None
+    app.state.vault = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -198,6 +224,7 @@ def create_app(
         control.router,
         reports.router,
         telegram.router,
+        settings_router.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

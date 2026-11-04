@@ -107,6 +107,14 @@ and are flagged `unknown` on the next start, like after a crash. Tested:
 start, naming what is missing, with nothing half-started. `npm start` also prints this before it
 starts. With `ENGINE_ENABLED=false` (the default) the application never touches either service.
 
+## Missing or wrong SECRET_KEY
+
+The key that decrypts the logins stored in the dashboard is only needed when one is stored or read.
+Without it (or with a malformed one) the application still starts and trades as before; the Settings
+page says what is wrong and storing a login is refused (503). With a *different* key, each stored value
+reads as "cannot be read" instead of giving a wrong answer (the encryption is authenticated), and typing
+it again replaces it. Nothing else is touched. Tested in `test_api_secrets.py`.
+
 ## What the chaos test checks
 
 `test_chaos.py` plays 14 seeded random storms: good, duplicate, unreadable and unknown-asset signals,

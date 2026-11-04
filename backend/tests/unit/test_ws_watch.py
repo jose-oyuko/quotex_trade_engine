@@ -52,8 +52,14 @@ async def test_it_prints_what_a_real_server_sends(
 ) -> None:
     async with running_api(tmp_path, ws_heartbeat_s=0.05) as rig, serve(rig.app) as address:
         with pytest.raises(TimeoutError):
-            await asyncio.wait_for(watch(f"ws://{address}/ws", rig.ws_headers()["Cookie"]), 0.5)
-    lines = capsys.readouterr().out.splitlines()
+            # connecting alone takes up to half a second on a slow PC; heartbeats come every 50 ms
+            await asyncio.wait_for(watch(f"ws://{address}/ws", rig.ws_headers()["Cookie"]), 2.0)
+    # the application's own log lines may share stdout (depending on which tests ran before)
+    lines = [
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith(("connected to", "#"))
+    ]
     assert lines[0] == f"connected to ws://{address}/ws"
     assert lines[1].startswith("#0 snapshot reason=connect account=demo")
     assert "#0 heartbeat" in lines

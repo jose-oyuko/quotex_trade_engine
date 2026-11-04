@@ -13,9 +13,11 @@ from app.api.snapshot import SnapshotBuilder
 from app.auth.service import SESSION_COOKIE, AuthService, UserInfo
 from app.core.config import Settings
 from app.engine.engine import Engine
+from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.risk_settings import RiskSettingsService
+from app.vault.store import SecretStore
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -87,6 +89,16 @@ async def current_user(request: Request) -> UserInfo:
     return user
 
 
+def get_config(request: Request) -> ConfigService:
+    config: ConfigService = request.app.state.config
+    return config
+
+
+def get_vault(request: Request) -> SecretStore:
+    vault: SecretStore = request.app.state.vault
+    return vault
+
+
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 EngineDep = Annotated[Engine | None, Depends(get_engine)]
 RunningEngineDep = Annotated[Engine, Depends(require_engine)]
@@ -97,3 +109,5 @@ RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 CurrentUserDep = Annotated[UserInfo, Depends(current_user)]
+ConfigDep = Annotated[ConfigService, Depends(get_config)]
+VaultDep = Annotated[SecretStore, Depends(get_vault)]

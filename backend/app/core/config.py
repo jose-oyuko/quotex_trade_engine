@@ -27,6 +27,14 @@ def is_loopback_host(host: str) -> bool:
         return False
 
 
+def normalise_quotex_host(value: str) -> str:
+    """A bare lower-case domain name; raises ValueError for anything else."""
+    host = value.strip().lower()
+    if not host or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for c in host):
+        raise ValueError("QUOTEX_HOST must be a bare domain name such as quotex.com")
+    return host
+
+
 class Settings(BaseSettings):
     """All configuration. Defaults are the safe ones: loopback bind, demo account."""
 
@@ -59,6 +67,10 @@ class Settings(BaseSettings):
     # The built dashboard (`npm run build`), served by the backend when it exists.
     frontend_dir: Path = Path("../frontend/dist")
 
+    # Encrypts the logins stored in the dashboard (decision D-61). 32 random bytes as base64 text;
+    # `npm run key:create` (or `npm start`) writes one here. Without it nothing can be stored.
+    secret_key: SecretStr | None = None
+
     # Starts the trading engine (Quotex + Telegram + chains) with the application. Off by default:
     # starting the backend must never log in to Quotex or Telegram by surprise.
     engine_enabled: bool = False
@@ -88,10 +100,7 @@ class Settings(BaseSettings):
     @field_validator("quotex_host")
     @classmethod
     def _bare_hostname(cls, value: str) -> str:
-        host = value.strip().lower()
-        if not host or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789.-" for c in host):
-            raise ValueError("QUOTEX_HOST must be a bare domain name such as quotex.com")
-        return host
+        return normalise_quotex_host(value)
 
     @property
     def telegram_session_path(self) -> Path:
@@ -104,7 +113,7 @@ class Settings(BaseSettings):
 
     def secret_values(self) -> list[str]:
         """The values that must never appear in a log line."""
-        secrets = (self.quotex_password, self.telegram_api_hash)
+        secrets = (self.quotex_password, self.telegram_api_hash, self.secret_key)
         return [s.get_secret_value() for s in secrets if s is not None]
 
     @property
