@@ -9,6 +9,9 @@ All commands are run from the repository root.
 
 ## Starting and stopping
 
+(Running in Docker instead? Everything on this page applies except the `npm` commands; see
+[DOCKER.md](DOCKER.md) for the equivalents.)
+
 | You want to | Do this |
 |---|---|
 | Start everything | `npm start` (or double-click `start.bat` on Windows) |

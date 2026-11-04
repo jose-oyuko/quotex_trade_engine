@@ -1,0 +1,6 @@
+# The start script runs inside a Linux container: it must keep Unix line endings even when this
+# repository is checked out on Windows (a carriage return would make `sh` fail).
+*.sh text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+compose.yaml text eol=lf

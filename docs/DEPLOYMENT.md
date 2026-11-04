@@ -186,11 +186,14 @@ backup of the database**: together they are the logins. Lose the key and the sto
 (they are typed in again); the rest of the data is unaffected. Restoring a database onto a machine with
 a different key leaves the stored secrets unreadable; the Settings page says so and lets you re-enter them.
 
-## Docker
+## Docker (an alternative to everything above)
 
-Not provided. The application needs interactive logins and a persistent data folder, so a container
-adds volume and terminal handling for no gain on a single-user setup (see decision D-53). If you want
-it, a small Dockerfile is straightforward, but it would be new, untested scope.
+The application also comes as a Docker image and a `compose.yaml`: `docker compose up -d --build` on the server
+replaces the Setup and systemd sections (no Node, `uv`, Python, service file or `scp` of the dashboard), and
+`restart: unless-stopped` does what the service's `Restart=` did. The port is still published to `127.0.0.1`
+only, so the SSH tunnel is still how you reach it. The cost on a 1 GB server is the Docker service itself
+(roughly 80-150 MB, an estimate), so systemd remains the leaner choice there. Everything about it, including
+the key to the stored logins, backups and upgrades, is in [DOCKER.md](DOCKER.md) (decision D-69).
 
 ## Checklist before real money
 

@@ -1,0 +1,43 @@
+# Quotex Trade Engine with Docker (docs/DOCKER.md):   docker compose up -d --build
+#
+# The dashboard is then at http://127.0.0.1:8000 on THIS machine only. The port is published to
+# 127.0.0.1 and nothing else: on a server, reach it through an SSH tunnel, never by opening the port.
+services:
+  app:
+    build: .
+    image: quotex-trade-engine:local
+    restart: unless-stopped
+    # Only this machine can reach it (the application has a login, but it is plain HTTP).
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # The database, logs and (by default) the key to the stored logins. A named volume, not a
+      # folder of yours: SQLite is slow and unreliable on folders shared with macOS or Windows.
+      - qte-data:/data
+    environment:
+      # Optional. Empty: the application makes a key once and keeps it in the volume. To keep the
+      # key apart from the data (safer), put SECRET_KEY=... in a file called .env beside this one.
+      SECRET_KEY: "${SECRET_KEY:-}"
+    # The same orderly shutdown as Ctrl+C: the engine stops, the writer drains, the database closes.
+    stop_signal: SIGINT
+    stop_grace_period: 40s
+    init: true
+    # A small machine (a 1 GB server) keeps room for itself.
+    mem_limit: 512m
+    pids_limit: 256
+    # Harden: nothing writable but the volume and /tmp, no extra privileges.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  qte-data:

@@ -21,19 +21,19 @@ def test_loopback_hosts_are_accepted(host: str) -> None:
     assert make(host=host).host == host
 
 
-@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "example.com", "::"])  # noqa: S104
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.10", "example.com", "::"])
 def test_public_bind_is_refused_without_flag(host: str) -> None:
     with pytest.raises(ValidationError, match="Refusing to listen"):
         make(host=host)
 
 
 def test_public_bind_allowed_with_explicit_flag() -> None:
-    settings = make(host="0.0.0.0", allow_public_bind=True)  # type: ignore[arg-type]  # noqa: S104
-    assert settings.host == "0.0.0.0"  # noqa: S104
+    settings = make(host="0.0.0.0", allow_public_bind=True)  # type: ignore[arg-type]
+    assert settings.host == "0.0.0.0"
 
 
 def test_public_bind_refused_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HOST", "0.0.0.0")  # noqa: S104
+    monkeypatch.setenv("HOST", "0.0.0.0")
     with pytest.raises(ValidationError, match="ALLOW_PUBLIC_BIND"):
         Settings(_env_file=None)  # type: ignore[call-arg]
 

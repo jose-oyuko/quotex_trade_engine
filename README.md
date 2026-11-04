@@ -36,6 +36,18 @@ and shows it on a live dashboard with reports.
 
 You do not need Python installed yourself: `uv` downloads Python 3.12 when needed.
 
+## Quick start with Docker (Mac, Linux, a server)
+
+Nothing to install but Docker (no Node.js, `uv` or Python):
+
+```
+docker compose up -d --build
+```
+
+then open <http://127.0.0.1:8000>, take the setup code from `docker compose logs app`, and continue on the
+Settings page as below. Details, backups and the 1 GB server are in [docs/DOCKER.md](docs/DOCKER.md). On
+Windows use the quick start that follows.
+
 ## Quick start (a new machine)
 
 1. Install the three tools above.
@@ -78,6 +90,7 @@ installation; `npm start -- --no-browser` does not open a browser window.
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | You see an error: phone number format, `getaddrinfo failed`, session reset, port in use ... |
 | [docs/FAILURE_MODES.md](docs/FAILURE_MODES.md) | You want to know what happens when Telegram, Quotex or the database fails |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Moving it to a VPS |
+| [docs/DOCKER.md](docs/DOCKER.md) | Running it in Docker on a Mac, Linux or a server |
 | [docs/API.md](docs/API.md) | Using the API or the live feed directly |
 | [docs/STATUS.md](docs/STATUS.md) | Where the project is and what is still unverified |
 

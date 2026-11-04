@@ -1,0 +1,35 @@
+# What never goes into the image: secrets, local state, and what the build makes itself.
+.git
+.gitattributes
+.gitignore
+
+**/.env
+**/.env.*
+!.env.example
+**/*.session
+**/*.session-journal
+**/session.json
+**/*.db
+**/*.db-wal
+**/*.db-shm
+backups
+backend/data
+
+**/node_modules
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+frontend/dist
+frontend/coverage
+**/*.tsbuildinfo
+
+# Not needed to run it
+backend/tests
+docs
+*.md
+start.bat
+compose.yaml
+Dockerfile

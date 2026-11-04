@@ -398,7 +398,7 @@ visible without reading a log.
 
 **D-53. VPS deployment: systemd and an SSH tunnel; no Docker, no login.** The application keeps its
 loopback bind and the owner reaches the dashboard through an SSH tunnel, so nothing but SSH is exposed.
-A systemd unit runs it with an orderly stop. Docker is not provided: the application needs interactive
+A systemd unit runs it with an orderly stop (the "no Docker" part is superseded by D-69). Docker is not provided: the application needs interactive
 logins and a persistent data folder, and on a single-user setup a container adds volumes and terminal
 handling for nothing. A reverse proxy is documented only with authentication in front of every path.
 Adding a dashboard login stayed in the "Later" backlog then; D-58 and D-59 brought it forward and replace the "no login" part of this decision (the loopback bind and the tunnel stay). Not verified on a real server.
@@ -564,6 +564,29 @@ label only when the page's own markers say so) and saved, with the owner's email
 engine's own login. Nothing is added when no page was seen (a saved token was used), and the old generic
 explanations remain for that case. Not done: reading the page's own error box with a smarter parser; the page's
 words are shown as they are.
+
+**D-69. Docker, as an optional way to run it (supersedes the "no Docker" part of D-53).** D-53 declined Docker
+because the logins needed a terminal; since they moved to the dashboard (D-58 to D-66) that reason is gone. The
+image is built in three stages (the dashboard with Node, the packages with `uv` and git, and a slim runtime that
+holds neither), runs as an ordinary user, and keeps everything it writes in one volume (`/data`: database, logs
+and, by default, the key to the stored logins). Choices and why:
+- **`CONTAINER=true`** is a new setting, set by the image, that lets the application listen on all addresses
+  *inside* the container (which Docker needs) without touching the localhost-only host-name check; the older
+  `ALLOW_PUBLIC_BIND` also switches that check off, which would have been the wrong tool. `compose.yaml`
+  publishes the port to the host's `127.0.0.1` only, so the SSH-tunnel rule of D-53 still holds.
+- **The key** is taken from `SECRET_KEY` if given, else made once into `/data/secret_key` (mode 600, never printed,
+  never in the image). That puts it beside the database by default, which D-61 warns against; the guide says
+  so and shows how to keep it apart.
+- **A start script** (`docker/entrypoint.sh`) makes the key if needed and runs the migrations before the
+  application starts (the application refuses a database that is behind), so an upgrade is a new image; a failed
+  migration stops the container.
+- **Hardening:** read-only root filesystem (plus a small `/tmp`), all capabilities dropped, no new privileges,
+  a memory limit of 512 MB, `SIGINT` as the stop signal (the same orderly shutdown as Ctrl+C), the data on a
+  named volume (SQLite is unreliable on folders shared with macOS or Windows).
+- `.dockerignore` keeps `.env`, session files, databases and backups out of the build; `.gitattributes` keeps
+  the script's Unix line endings on a Windows checkout and the Dockerfile also strips a stray carriage return.
+- Not changed: `npm start` and the systemd guide stay (Windows; the leanest 1 GB setup). Not verified: a real
+  Mac (including Apple Silicon) or a real server; the Docker service's memory cost on the 1 GB VPS is an estimate.
 
 ---
 

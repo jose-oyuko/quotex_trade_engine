@@ -86,7 +86,7 @@ async def test_only_loopback_host_names_are_served(tmp_path: Path) -> None:
 
 
 async def test_an_explicit_public_bind_turns_the_host_check_off(tmp_path: Path) -> None:
-    async with running_api(tmp_path, allow_public_bind=True, host="0.0.0.0") as rig:  # noqa: S104
+    async with running_api(tmp_path, allow_public_bind=True, host="0.0.0.0") as rig:
         response = await rig.client.get(f"{API}/health", headers={"Host": "my-vps.example"})
         assert response.status_code == 200
 

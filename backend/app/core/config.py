@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # The API can place trades. It has a login (decision D-59), but a login alone is not enough on
     # an open network (no HTTPS), so a public bind must still be a deliberate choice.
     allow_public_bind: bool = False
+    # Set by the Docker image (decision D-69). Inside a container the application must listen on
+    # all addresses for Docker to reach it, but that is not "public": the compose file publishes
+    # the port to the host's 127.0.0.1 only. Unlike `allow_public_bind` this does NOT switch off
+    # the check that a request is addressed to localhost, so the protection against hostile web
+    # pages stays on.
+    container: bool = False
 
     environment: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -137,10 +143,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _refuse_public_bind(self) -> Settings:
-        if not self.allow_public_bind and not is_loopback_host(self.host):
+        if not self.allow_public_bind and not self.container and not is_loopback_host(self.host):
             raise PublicBindRefusedError(
                 f"Refusing to listen on {self.host!r}: the API can place trades and is meant for "
-                "loopback. Use HOST=127.0.0.1, or set ALLOW_PUBLIC_BIND=true if you really mean it."
+                "loopback. Use HOST=127.0.0.1, or set ALLOW_PUBLIC_BIND=true if you really mean "
+                "it. (Inside the Docker image, CONTAINER=true is set for you.)"
             )
         return self
 

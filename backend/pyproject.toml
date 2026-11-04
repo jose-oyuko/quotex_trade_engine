@@ -45,7 +45,8 @@ select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "C4", "SIM", "RUF"]
 known-third-party = ["alembic"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]  # asserts and obviously fake passwords are fine in tests
+# asserts, obviously fake passwords and the address 0.0.0.0 (named to prove it is refused)
+"tests/**" = ["S101", "S104", "S105", "S106"]
 
 [tool.mypy]
 python_version = "3.12"
