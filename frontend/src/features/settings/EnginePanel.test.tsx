@@ -30,6 +30,7 @@ function setup(
     ['GET', '/secrets', json(SECRETS)],
     ['GET', '/telegram/login', json(telegramStatus())],
     ['GET', '/quotex/login', json(quotexStatus())],
+    ['GET', '/settings/env-logins', json({ items: [] })],
     ...extra,
   ])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

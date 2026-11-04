@@ -7,8 +7,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Response
 
-from app.api.deps import ConfigDep, VaultDep
+from app.api.deps import ConfigDep, EnvImportDep, VaultDep
 from app.api.schemas.settings import (
+    EnvImportOut,
+    EnvLoginOut,
+    EnvLoginsOut,
     SecretIn,
     SecretItemOut,
     SecretsOut,
@@ -17,6 +20,7 @@ from app.api.schemas.settings import (
     SettingsOut,
 )
 from app.services.app_config import ConfigService
+from app.services.env_import import EnvLogin
 from app.vault.store import SecretStatus, VaultStatus
 
 router = APIRouter(tags=["settings"])
@@ -92,3 +96,26 @@ async def delete_secret(name: str, vault: VaultDep) -> Response:
     """Remove a stored secret. Fine if it was not set."""
     await vault.delete(name)
     return Response(status_code=204)
+
+
+# --- the logins `backend/.env` used to hold ---
+
+
+def _env_logins(items: list[EnvLogin]) -> list[EnvLoginOut]:
+    return [EnvLoginOut(label=i.label, in_env=i.in_env, stored=i.stored) for i in items]
+
+
+@router.get("/settings/env-logins", response_model=EnvLoginsOut)
+async def get_env_logins(imports: EnvImportDep) -> EnvLoginsOut:
+    """Which logins are still written in `backend/.env`, and which of those are already stored.
+    Never a value."""
+    return EnvLoginsOut(items=_env_logins(await imports.status()))
+
+
+@router.post("/settings/env-logins/import", response_model=EnvImportOut)
+async def import_env_logins(imports: EnvImportDep) -> EnvImportOut:
+    """Move the logins from `backend/.env` into the encrypted store (never over one that is already
+    stored). `.env` itself is not touched: delete those lines yourself, or use `npm run env:import`.
+    Needs SECRET_KEY."""
+    imported = await imports.import_all()
+    return EnvImportOut(imported=imported, items=_env_logins(await imports.status()))

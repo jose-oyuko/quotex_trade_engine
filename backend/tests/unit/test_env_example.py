@@ -15,8 +15,12 @@ def documented_keys() -> set[str]:
     return set(KEY.findall(EXAMPLE.read_text(encoding="utf-8")))
 
 
+# Set by the application, never by `.env` (they have no environment name worth writing).
+RUNTIME_ONLY = {"QUOTEX_ALLOW_REAL"}
+
+
 def test_every_setting_is_documented_in_the_example() -> None:
-    missing = {name.upper() for name in Settings.model_fields} - documented_keys()
+    missing = {name.upper() for name in Settings.model_fields} - documented_keys() - RUNTIME_ONLY
     assert not missing, f"add these to .env.example: {sorted(missing)}"
 
 
@@ -31,7 +35,7 @@ def test_the_example_loads_as_is_and_stays_safe(tmp_path: Path) -> None:
     copy.write_text(EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
     settings = Settings(_env_file=copy)  # type: ignore[call-arg]
     assert settings.host == "127.0.0.1" and settings.allow_public_bind is False
-    assert settings.engine_enabled is False and settings.quotex_allow_real is False
+    assert settings.quotex_allow_real is False
     assert settings.quotex_email is None and settings.telegram_api_hash is None
 
 

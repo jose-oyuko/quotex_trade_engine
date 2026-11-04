@@ -4,7 +4,7 @@ A local web app that listens to several Telegram signal groups, turns the signal
 binary-option trades, runs a martingale / flip strategy per group, stores everything in a database
 and shows it on a live dashboard with reports.
 
-> **Status:** all nine phases are built and tested on fakes (a simulated Quotex and Telegram). **Nothing
+> **Status:** all fifteen phases are built and tested on fakes (a simulated Quotex and Telegram). **Nothing
 > has been run against the real Quotex or Telegram by the builder.** Run it on the **demo** account
 > first and do the live checks listed in the phase reports ([docs/STATUS.md](docs/STATUS.md)).
 
@@ -18,12 +18,13 @@ and shows it on a live dashboard with reports.
   only and **refuses to start on any other address** unless you set `ALLOW_PUBLIC_BIND=true`: a login
   over plain HTTP on an open network is not safe. For a server, use an SSH tunnel
   ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
-- **Credentials stay on your machine.** Telegram keys, Quotex password and session files live in
-  `backend/.env` and `backend/data/`, both git-ignored. Logins typed into the dashboard's Settings page
-  are stored **encrypted** in the database with the key `SECRET_KEY` in `backend/.env` (made for you by
-  `npm start`): keep a copy of that file somewhere safe. The saved session files and `.env` logins are
-  still plain text, so protect the folder with normal file permissions. Never paste them into issues, logs or chat. Log files mask
-  them, and backups that include the session files are as sensitive as the passwords.
+- **Credentials stay on your machine, encrypted.** You type the Telegram and Quotex logins on the
+  dashboard's Settings page; they are stored **encrypted** in the database (`backend/data/`, git-ignored)
+  with the key `SECRET_KEY` in `backend/.env`, which `npm start` makes for you: **keep a copy of that file
+  somewhere safe**, because without the key the stored logins cannot be read. Real-money trading is off
+  until you allow it on the dashboard with your password. Never paste logins, `.env` or a backup into
+  issues, logs or chat. Log files mask them, and a backup is as sensitive as the passwords unless it is made
+  with `--no-secrets`.
 
 ## Requirements
 
@@ -55,8 +56,11 @@ That is all: `npm start` builds the dashboard if needed, creates the database, c
 how the app is configured (never your passwords) and opens <http://127.0.0.1:8000>. Stop it with
 Ctrl+C.
 
-With no settings file it runs safely: demo only, **trading off**. You can look around, create groups and
-set limits. To trade, follow the first-time logins in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+The first time, the window prints a **setup code**: open the address, create the owner account with it, then
+use the **Settings** page for everything else: store the Quotex login, log in to Telegram (phone, code), and
+press **Start the engine**. It starts on the demo account, and real money stays impossible until you allow it
+there with your password. No file needs editing. The steps, one by one, are in
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 **To see everything working with no accounts at all:** `npm run build`, then `npm run demo`, and open
 <http://127.0.0.1:8000>, logging in as `demo` with the password `demo-password`. The demo runs on a simulated Quotex and simulated Telegram groups, posts a
@@ -79,34 +83,41 @@ installation; `npm start -- --no-browser` does not open a browser window.
 
 ## Configuration
 
-Optional: copy `.env.example` to `backend/.env` and edit. Every setting is listed there with its
-meaning. The defaults are safe and need no file. The main ones:
+`backend/.env` holds only what the application needs *before* it can open its database, and `npm start`
+creates it for you. Everything you choose while using the application is on the dashboard's Settings page
+and kept in the database: the logins (encrypted), whether the engine is on, whether real money is allowed,
+the Quotex address, the expiry mode, the log detail. `.env.example` lists every setting that remains:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ENGINE_ENABLED` | `false` | Only the starting value: start and stop the engine on the dashboard's Settings page, which remembers it |
-| `QUOTEX_EMAIL`, `QUOTEX_PASSWORD` | unset | Quotex login (secrets) |
-| `QUOTEX_HOST` | `quotex.com` | The broker's domain; changes now and then |
-| `QUOTEX_ALLOW_REAL` | `false` | Only the starting value: allow real money on the Settings page (asks for your password) |
-| `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | unset | From <https://my.telegram.org> (secrets) |
 | `PORT` | `8000` | Port on `127.0.0.1` |
-| `LOG_LEVEL`, `LOG_TO_FILE`, `LOG_MAX_MB`, `LOG_BACKUPS` | `INFO`, `true`, `10`, `5` | Logs, also in `backend/data/logs/engine.log` |
+| `ENVIRONMENT` | `development` | `production` for a server (JSON console logs) |
+| `DATA_DIR` | `data` | Where the database, logs and sessions live |
+| `SECRET_KEY` | made by `npm start` | The key to the stored logins: **keep a copy** |
+| `LOG_TO_FILE`, `LOG_MAX_MB`, `LOG_BACKUPS` | `true`, `10`, `5` | Logs, also in `backend/data/logs/engine.log` |
+
+Logins written in `.env` by an older version still work until you move them (`npm run env:import`, or
+the notice on the Settings page). `ENGINE_ENABLED` and `QUOTEX_ALLOW_REAL` no longer exist: the engine is
+started on the dashboard, and an old line in `.env` can neither start it nor allow real money.
 
 ## What it does
 
-- **Telegram and signals.** Reads the groups you add, understands the signal formats of the old bot
-  (`npm run signal:try -- "EURUSD PUT 1m"` tests a message). Test a group without trading:
-  `npm run telegram:listen -- --chat -1001234567890 --suffix auto --tz UTC-3`.
+- **Telegram and signals.** Reads the groups you add (pick them from a list of your chats), understands the
+  signal formats of the old bot (`npm run signal:try -- "EURUSD PUT 1m"` tests a message). Test a group
+  without trading: `npm run telegram:listen -- --chat -1001234567890 --suffix auto --tz UTC-3`.
 - **Quotex.** One adapter, demo by default. `npm run quotex:diagnose` connects and shows the balance
-  and payout; with `-- --order` it places one demo order.
+  and payout; with `-- --order` it places one demo order. Both command-line tools use the logins stored
+  on the dashboard.
+- **Logins on the dashboard.** Telegram (phone, code, two-step password) and Quotex (email, password and the
+  e-mailed PIN), stored encrypted; no terminal, no `.env` editing.
 - **Strategies.** Per group: no martingale, martingale, flip every loss, two-step flip, as chains of steps. Orders
   go out on a short path with no database wait (the result is stored in the background).
 - **Safety.** Limits before every order (max stake, exposure, concurrent trades, chain length, minimum
   payout, daily stop-loss and profit target, globally and per group), a kill switch, group pausing, "stop
   after current trade" and "end chain". Kill switch, pauses and limits survive restarts. If the app
   stops with trades open, the next start marks them `unknown`: check them on Quotex.
-- **Dashboard.** Live, Signals, Groups, History and Reports pages, fed over a WebSocket. A banner
-  appears when something is wrong.
+- **Dashboard.** Live, Signals, Groups, History, Reports, Settings and Account pages, fed over a
+  WebSocket, behind an owner login. A banner appears when something is wrong.
 - **Reports.** Profit, win rate, drawdown, streaks, results by group, asset, strategy, hour and weekday,
   how deep chains go, and a plain verdict comparing the win rate with the break-even line (it refuses
   to conclude from too few trades). Demo and real are never mixed. Every table downloads as an

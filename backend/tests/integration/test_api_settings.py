@@ -74,7 +74,7 @@ async def test_the_engine_is_built_with_the_stored_settings(tmp_path: Path) -> N
         await rig.client.put(f"{API}/settings", json={"values": {"quotex_host": "stored.example"}})
 
     from app.main import create_app
-    from tests.api_support import fake_builder, settings_for
+    from tests.api_support import fake_builder, leave_engine_running, settings_for
 
     parts: list[Any] = []
     inner = fake_builder(parts)
@@ -83,7 +83,9 @@ async def test_the_engine_is_built_with_the_stored_settings(tmp_path: Path) -> N
         seen.append((settings.quotex_host, settings.quotex_time_mode))
         return inner(settings, bus, tasks)
 
-    app = create_app(settings_for(tmp_path, engine_enabled=True), engine_builder=spy)
+    config = settings_for(tmp_path)
+    await leave_engine_running(config)
+    app = create_app(config, engine_builder=spy)
     async with app.router.lifespan_context(app):
         pass
     assert seen == [("stored.example", "TIME")]

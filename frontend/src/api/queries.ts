@@ -33,6 +33,7 @@ export const keys = {
   engine: ['engine'] as const,
   telegramLogin: ['telegram', 'login'] as const,
   quotexLogin: ['quotex', 'login'] as const,
+  envLogins: ['settings', 'env-logins'] as const,
   secrets: ['secrets'] as const,
 }
 
@@ -63,6 +64,13 @@ export function useQuotexLogin() {
     staleTime: 0,
     // while the application is talking to Quotex there is nothing to type: look again soon
     refetchInterval: (query) => (query.state.data?.state === 'working' ? 2000 : false),
+  })
+}
+
+export function useEnvLogins() {
+  return useQuery({
+    queryKey: keys.envLogins,
+    queryFn: ({ signal }) => api.envLogins.get(signal),
   })
 }
 

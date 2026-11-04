@@ -16,7 +16,7 @@ from app.signals.parsers.registry import ParserRegistry
 from app.telegram import FakeTelegramSource
 from scripts import demo_server
 from scripts.demo_server import CHAT_TALK, GROUPS, DemoFeed, log_in_demo, seed_groups
-from tests.api_support import BASE_URL, migrate, running_api, settings_for
+from tests.api_support import BASE_URL, leave_engine_running, migrate, running_api, settings_for
 
 FORBIDDEN_IMPORTS = (
     "app.quotex.pyquotex",
@@ -75,8 +75,9 @@ async def test_the_demo_groups_are_created_once_through_the_real_api(tmp_path: P
 async def test_the_feed_drives_the_real_engine_to_settled_trades(tmp_path: Path) -> None:
     """A whole application on the demo's own engine builder (result delay shortened for speed)."""
     holder: list[demo_server.Fakes] = []
-    settings = settings_for(tmp_path, engine_enabled=True)
+    settings = settings_for(tmp_path)
     await migrate(settings)
+    await leave_engine_running(settings)
     app = create_app(settings, engine_builder=demo_server.fake_builder(holder))
     transport = httpx.ASGITransport(app=app)
     async with (

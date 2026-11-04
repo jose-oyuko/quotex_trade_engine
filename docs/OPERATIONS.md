@@ -62,14 +62,31 @@ application keeps running: no `.env` edit, no restart.
   at them on Quotex.
 - **Restart:** stop and start again, for example after storing a different login.
 - **It remembers:** an engine you left running starts again by itself when the application starts (also after
-  a crash, with the service restarting it); one you stopped stays stopped. `ENGINE_ENABLED` in `.env` is now
-  only the starting value for an installation that never decided.
+  a crash, with the service restarting it); one you stopped stays stopped. A new installation never starts it
+  by itself. (The old `ENGINE_ENABLED` line in `.env` is not read any more.)
 - **A login that is stored but cannot be read** (wrong `SECRET_KEY`) stops the start with a message; the engine
   never quietly uses an older `.env` password instead.
 - **Real money:** *Allow real-money trading* (needs your password) only makes the switch possible; the account
   stays DEMO until you press *Switch to the REAL account* (password again, refused while a chain or trade is
   running). Both are written to the risk log. You cannot stop allowing it while REAL is in use. After a
   restart the engine is on demo again.
+
+## Moving old logins out of `.env`
+
+Versions before the dashboard kept the Quotex and Telegram logins in `backend/.env`, in plain text. They still
+work, and a login stored on the dashboard always wins over them. To move them:
+
+- **On the dashboard:** the Settings page shows a notice naming them; press *Move them into the encrypted
+  store*. It never overwrites a login that is already stored and never shows a value. Then delete those
+  lines from `backend/.env` yourself (the notice says so).
+- **Or from a terminal:** `npm run env:import` (on a server: `uv run --directory backend python -m
+  scripts.env_import`). It lists what will move, asks, stores them encrypted, replaces each line in `.env` by
+  a comment (so the value is gone from the file) and retires the lines it no longer reads. If `.env` said
+  `ENGINE_ENABLED=true` and you never decided on the dashboard, the engine is left running so it starts with
+  the application as before. `QUOTEX_ALLOW_REAL=true` is **never** carried over: allow real money on the
+  Settings page, with your password. `--yes` does not ask.
+
+Both need `SECRET_KEY` (made by `npm start`) and a migrated database, and both say so if not.
 
 ## Settings and stored logins (the Settings page)
 

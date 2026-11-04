@@ -71,7 +71,9 @@ def test_the_factory_builds_a_demo_adapter_that_cannot_go_real() -> None:
 
 
 async def test_the_factory_allows_real_only_when_enabled() -> None:
-    settings = make(quotex_email="a@b.c", quotex_password="pw", quotex_allow_real=True)
+    settings = make(quotex_email="a@b.c", quotex_password="pw").model_copy(
+        update={"quotex_allow_real": True}
+    )
     adapter = build_pyquotex_adapter(settings, tasks=TaskSupervisor(), clock=SystemClock())
     await adapter.set_account_type(AccountType.REAL)  # not connected: only records the choice
     assert adapter.account_type is AccountType.REAL

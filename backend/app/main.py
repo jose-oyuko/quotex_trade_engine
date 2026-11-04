@@ -49,6 +49,7 @@ from app.events.bus import EventBus
 from app.quotex.base import LoginRequest, QuotexLogin
 from app.quotex.factory import new_quotex_login
 from app.services.app_config import ConfigService
+from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.quotex_login import QuotexLoginService
@@ -156,8 +157,8 @@ def create_app(
             flags=flags,
             bus=app.state.bus,
             clock=clock,
-            desired=cfg.engine_enabled if stored_desired is None else stored_desired,
-            real_allowed=cfg.quotex_allow_real if stored_real is None else stored_real,
+            desired=bool(stored_desired),  # nothing is started by surprise: only what was left on
+            real_allowed=bool(stored_real),
         )
         app.state.controller = controller
 
@@ -188,6 +189,7 @@ def create_app(
             session_factory, clock, lambda: app.state.trading, ParserRegistry().names
         )
         app.state.auth = AuthService(session_factory, clock)
+        app.state.env_import = EnvImportService(app.state.vault, lambda: cfg)
         app.state.quotex_login = QuotexLoginService(
             vault=app.state.vault,
             settings=lambda: cfg,
@@ -270,6 +272,7 @@ def create_app(
     app.state.controller = None
     app.state.telegram_login = None
     app.state.quotex_login = None
+    app.state.env_import = None
 
     development = settings.environment == "development"
     app.add_middleware(

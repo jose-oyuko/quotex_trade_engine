@@ -23,6 +23,11 @@ def script(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+
+    async def no_store(settings: Any) -> Any:
+        return settings  # never open the developer's real database from a test
+
+    monkeypatch.setattr(module, "with_stored_logins", no_store)
     monkeypatch.setenv("QUOTEX_EMAIL", "secret-user@example.invalid")
     monkeypatch.setenv("QUOTEX_PASSWORD", "secret-password-123")
     return module

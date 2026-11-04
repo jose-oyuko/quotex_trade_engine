@@ -19,6 +19,7 @@ const BASE = [
   ['GET', '/status', json(makeSnapshot())],
   ['GET', '/telegram/login', json(telegramStatus())],
   ['GET', '/quotex/login', json(quotexStatus())],
+  ['GET', '/settings/env-logins', json({ items: [] })],
 ] as const
 
 const NOTE = 'A saved setting is used from the next start of the application.'

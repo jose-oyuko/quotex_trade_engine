@@ -535,6 +535,23 @@ password; the application does not try to get around the check. The Quotex sessi
 the library refreshes while the engine runs is not saved back; the next start uses the stored one and the
 library logs in again if it was refused.
 
+**D-67. The old `.env` switches are gone, and the old logins can be moved; the tools share the store.**
+`ENGINE_ENABLED` and `QUOTEX_ALLOW_REAL` no longer exist (D-63 said they would go): the engine's "left
+running" and the real-money permission live in the database and change only on the dashboard (the latter
+with the password). `QUOTEX_ALLOW_REAL` is still a field of the settings object because the adapter
+factories read it, but it has an environment name nobody would write, so an old line cannot allow real
+money (tested). A new installation never starts the engine by itself. The logins that `.env` used to hold
+(`QUOTEX_EMAIL`, `QUOTEX_PASSWORD`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`) still work until moved, and a
+stored one always wins; they are moved by `POST /settings/env-logins/import` (a button on the Settings
+page; it never overwrites a stored login, never shows a value, never edits the file) or by `npm run
+env:import`, which also replaces each moved line by a comment, retires the two switches, leaves the engine
+running if `ENGINE_ENABLED=true` was set and the dashboard never decided, and never carries real money
+over. The command-line tools (`telegram_cli`, `quotex_diagnose`) open the same store: `telegram_cli login`
+stores its session there, both use the stored API id/hash/login, and both fall back to `.env` and the old
+session file when there is no usable store (a new installation, no `SECRET_KEY`). Kept deliberately: the
+old `.env` logins keep working (removing them would break installations that have not moved), and the
+`quotex_diagnose` PIN login is not stored by the script (the dashboard's is the one the engine uses).
+
 ---
 
 ## Decisions to be made later (record here when decided)

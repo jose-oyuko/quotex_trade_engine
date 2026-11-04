@@ -4,10 +4,12 @@
     npm run quotex:diagnose -- --order           also place ONE demo order and wait for its result
     npm run quotex:diagnose -- --asset EURUSD_otc --duration 60 --amount 1 --direction put --order
 
-It never uses the real account: there is no switch for it. Credentials come from backend/.env
-(QUOTEX_EMAIL, QUOTEX_PASSWORD, optional QUOTEX_HOST) and are never printed. If Quotex asks for an
-email PIN, type it in this terminal; the session is then stored in backend/data/session.json so
-the application itself never has to ask.
+It never uses the real account: there is no switch for it. It uses the logins stored on the
+dashboard (the email, the password and, if you made one there, the Quotex login), else
+QUOTEX_EMAIL and QUOTEX_PASSWORD from backend/.env, and never prints them. If Quotex asks for an
+email PIN, type it in this terminal: the check goes on, but the PIN login is not stored by this
+script, so make the login that the engine uses on the dashboard (Settings > Quotex login), where
+the PIN is asked for too.
 """
 
 from __future__ import annotations
@@ -25,8 +27,10 @@ from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AccountType, Direction
+from app.engine.errors import EngineStartError
 from app.quotex.errors import QuotexError
 from app.quotex.factory import build_pyquotex_adapter
+from scripts._store import with_stored_logins
 
 
 async def read_pin(prompt: str) -> str:
@@ -53,7 +57,7 @@ async def run(args: argparse.Namespace) -> int:
         print(f"--amount {args.amount!r} is not a number")
         return 2
     try:
-        settings = Settings()
+        settings = await with_stored_logins(Settings())
         tasks = TaskSupervisor()
         adapter = build_pyquotex_adapter(
             settings,
@@ -62,7 +66,7 @@ async def run(args: argparse.Namespace) -> int:
             account_type=AccountType.DEMO,
             otp_callback=read_pin,
         )
-    except (ValidationError, QuotexError) as exc:
+    except (ValidationError, QuotexError, EngineStartError) as exc:
         print(f"Cannot start: {exc}")
         return 2
 

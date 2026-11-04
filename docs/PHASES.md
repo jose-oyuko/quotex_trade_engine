@@ -263,6 +263,8 @@ design leaves room to invite more people later (see "Not in these phases" below)
 
 The command-line logins (`npm run telegram:login`, `npm run quotex:diagnose`) stay as a fallback.
 
+**Outcome: all six phases are done** (reports `docs/reports/phase-10.md` to `phase-15.md`; decisions D-58 to D-67).
+
 ### Phase 10 — Owner account and login
 
 **Goal:** the API and the dashboard are behind a login. No secrets are stored yet.

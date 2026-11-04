@@ -25,6 +25,7 @@ from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
 from app.engine.engine import Engine
+from app.engine.flags import EngineFlags
 from app.events.bus import EventBus
 from app.main import EngineBuilder, create_app
 from app.quotex.base import ConnectionState
@@ -129,6 +130,22 @@ async def migrate(settings: Settings) -> None:
     await asyncio.to_thread(command.upgrade, alembic_config(settings.database_url), "head")
 
 
+async def leave_engine_running(
+    settings: Settings, *, running: bool = True, allow_real: bool = False
+) -> None:
+    """What the owner would have left in the database: the engine on (it starts with the
+    application), and optionally the permission for real money (decisions D-63, D-64)."""
+    engine = create_engine(settings.database_url)
+    try:
+        flags = EngineFlags(create_session_factory(engine), SystemClock())
+        if running:
+            await flags.set_desired(True)
+        if allow_real:
+            await flags.set_allow_real(True)
+    finally:
+        await engine.dispose()
+
+
 def fake_builder(parts: list[FakeParts], *, hold_results: bool = False) -> EngineBuilder:
     def build(settings: Settings, bus: EventBus, tasks: TaskSupervisor) -> Engine:
         clock = SystemClock()
@@ -156,6 +173,7 @@ async def running_api(
     builder: EngineBuilder | None = None,
     login_source: Any = None,
     quotex_login: Any = None,
+    allow_real: bool = False,
     **settings: Any,
 ) -> AsyncIterator[ApiRig]:
     """The application inside its lifespan, with an HTTP client for it. `seed` fills the database
@@ -172,6 +190,7 @@ async def running_api(
             builder=builder,
             login_source=login_source,
             quotex_login=quotex_login,
+            allow_real=allow_real,
             settings=settings,
         ) as rig:
             yield rig
@@ -188,10 +207,13 @@ async def _running_api(
     builder: EngineBuilder | None,
     login_source: Any,
     quotex_login: Any,
+    allow_real: bool,
     settings: dict[str, Any],
 ) -> AsyncIterator[ApiRig]:
-    config = settings_for(tmp_path, engine_enabled=with_engine, **settings)
+    config = settings_for(tmp_path, **settings)
     await migrate(config)
+    if with_engine or allow_real:
+        await leave_engine_running(config, running=with_engine, allow_real=allow_real)
     if seed is not None:
         engine = create_engine(config.database_url)
         try:

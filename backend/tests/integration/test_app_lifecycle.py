@@ -20,6 +20,7 @@ from app.main import DatabaseNotMigratedError, EngineBuilder, create_app
 from app.quotex.base import ConnectionState
 from app.quotex.fake import FakeQuotexAdapter
 from app.telegram import FakeTelegramSource
+from tests.api_support import leave_engine_running
 from tests.factories import NOW, make_group, make_signal
 
 
@@ -128,8 +129,8 @@ async def test_an_enabled_engine_starts_with_the_app_and_stops_before_the_writer
     migrated_settings: Settings,
 ) -> None:
     captured: list[Engine] = []
-    enabled = migrated_settings.model_copy(update={"engine_enabled": True})
-    app = create_app(enabled, engine_builder=fake_engine_builder(captured))
+    await leave_engine_running(migrated_settings)
+    app = create_app(migrated_settings, engine_builder=fake_engine_builder(captured))
     async with app.router.lifespan_context(app):
         [engine] = captured
         assert app.state.trading is engine
@@ -142,8 +143,8 @@ async def test_an_enabled_engine_starts_with_the_app_and_stops_before_the_writer
 async def test_a_missing_login_leaves_the_application_up_and_the_engine_failed_with_the_reason(
     migrated_settings: Settings,
 ) -> None:
-    enabled = migrated_settings.model_copy(update={"engine_enabled": True})
-    app = create_app(enabled)  # the real builder, no credentials in these settings
+    await leave_engine_running(migrated_settings)
+    app = create_app(migrated_settings)  # the real builder, no credentials in these settings
     async with app.router.lifespan_context(app):
         assert app.state.trading is None
         controller = app.state.controller

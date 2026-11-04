@@ -29,8 +29,10 @@ from alembic import command
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
+from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
 from app.engine.engine import Engine
+from app.engine.flags import EngineFlags
 from app.events.bus import EventBus
 from app.main import create_app
 from app.quotex.base import TradeOutcome
@@ -152,6 +154,16 @@ async def log_in_demo(app: Any, client: httpx.AsyncClient) -> None:
     response.raise_for_status()
 
 
+async def leave_engine_running(settings: Settings) -> None:
+    """The demo's engine starts with the application: the owner's choice, remembered in the
+    demo's own database like on the real one (decision D-63)."""
+    engine = create_engine(settings.database_url)
+    try:
+        await EngineFlags(create_session_factory(engine), SystemClock()).set_desired(True)
+    finally:
+        await engine.dispose()
+
+
 async def seed_groups(client: httpx.AsyncClient) -> int:
     """Create the demo groups through the real API, if there are none yet."""
     existing = (await client.get("/api/v1/groups")).json()["total"]
@@ -173,10 +185,10 @@ async def run(port: int, interval: float, win_rate: float, reset: bool) -> int:
         _env_file=None,  # never read the real credentials
         data_dir=DEMO_DIR,
         port=port,
-        engine_enabled=True,
         frontend_dir=FRONTEND_DIST,
     )
     await asyncio.to_thread(command.upgrade, alembic_config(settings.database_url), "head")
+    await leave_engine_running(settings)
     holder: list[Fakes] = []
     app = create_app(settings, engine_builder=fake_builder(holder))
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -39,3 +41,20 @@ def test_public_bind_refused_from_environment(monkeypatch: pytest.MonkeyPatch) -
 def test_is_loopback_host() -> None:
     assert is_loopback_host("LOCALHOST")
     assert not is_loopback_host("not a host")
+
+
+def test_an_old_engine_or_real_money_line_in_env_changes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ENGINE_ENABLED and QUOTEX_ALLOW_REAL are gone (decisions D-63, D-64): the engine is
+    started and real money allowed on the dashboard, with the password. An old line does neither."""
+    env = tmp_path / ".env"
+    env.write_text("ENGINE_ENABLED=true\nQUOTEX_ALLOW_REAL=true\n", encoding="utf-8")
+    settings = Settings(_env_file=env)  # type: ignore[call-arg]
+    assert settings.quotex_allow_real is False and not hasattr(settings, "engine_enabled")
+    monkeypatch.setenv("QUOTEX_ALLOW_REAL", "true")
+    monkeypatch.setenv("ENGINE_ENABLED", "true")
+    assert Settings(_env_file=None).quotex_allow_real is False  # type: ignore[call-arg]
+    # the application itself sets it (it does, from the owner's stored permission)
+    allowed = Settings(_env_file=None).model_copy(update={"quotex_allow_real": True})  # type: ignore[call-arg]
+    assert allowed.quotex_allow_real is True

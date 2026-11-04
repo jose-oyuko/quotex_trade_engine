@@ -11,6 +11,8 @@ import type {
   ChainStatus,
   Controls,
   EngineInfo,
+  EnvImport,
+  EnvLogins,
   Group,
   GroupCreate,
   GroupRiskLimits,
@@ -185,6 +187,11 @@ export const api = {
     get: (signal?: AbortSignal) => request<SettingsOut>('GET', '/settings', { signal }),
     save: (values: Record<string, string | null>) =>
       request<SettingsOut>('PUT', '/settings', { body: { values } }),
+  },
+
+  envLogins: {
+    get: (signal?: AbortSignal) => request<EnvLogins>('GET', '/settings/env-logins', { signal }),
+    move: () => request<EnvImport>('POST', '/settings/env-logins/import'),
   },
 
   secrets: {

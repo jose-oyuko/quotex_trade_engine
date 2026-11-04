@@ -45,8 +45,12 @@ uv sync --directory backend                               # Python 3.12 and ever
 uv run --directory backend alembic upgrade head           # creates the database
 cp .env.example backend/.env
 chmod 600 backend/.env
-nano backend/.env          # ENVIRONMENT=production; the logins can be typed on the dashboard instead
+nano backend/.env          # only ENVIRONMENT=production; the logins are typed on the dashboard
+uv run --directory backend python -m scripts.secret_key   # adds SECRET_KEY to backend/.env (kept if present)
 ```
+
+Copy `backend/.env` somewhere safe now (not next to a backup of the database): the key in it decrypts the
+logins you will store.
 
 `uv sync` fetches the Quotex library from GitHub, so the server needs `git` and internet access
 (it has both). All other packages come ready-built for Linux; one small one (`pyaes`) is built on the
@@ -66,20 +70,24 @@ dashboard. The backend finds it at `../frontend/dist` and serves it on the same 
 Use `ENVIRONMENT=production` (JSON console logs; the development-only CORS allowance for the Vite
 server is off). Leave `HOST=127.0.0.1`.
 
-**Logins on a server.** The Telegram login and the Quotex PIN are interactive. Do them over SSH, with
-the service stopped, as in [OPERATIONS.md](OPERATIONS.md), but with `uv` in place of `npm` (there is
-no Node on the server):
+**First start and the logins on a server.** Nothing is typed in a terminal any more: after the service is
+running (next section) and the tunnel is open (the section after that), everything is done on the
+dashboard at <http://127.0.0.1:8000>:
 
-```bash
-uv run --directory backend python -m scripts.telegram_cli login
-uv run --directory backend python -m scripts.quotex_diagnose          # demo account only
-```
+1. **Owner account.** The setup code is in the service's log: `journalctl -u quotex-engine | grep
+   owner_setup_required`. Create the account with it. (Lost the password later? On the server:
+   `uv run --directory backend python -m scripts.owner`.)
+2. **Settings.** Store the Quotex email and password, log in to Quotex (the e-mailed PIN is typed there),
+   enter the Telegram API id and hash and log in to Telegram (phone, code), then press **Start the engine**.
+   Log in on the server itself rather than copying a login from your PC: Telegram may end a session used
+   from two places, and Quotex may treat a login from a new place (the server's address) as suspicious and
+   e-mail a PIN: expect it. Quotex's website may also refuse a server's address outright (Cloudflare); the
+   dashboard then says so in words (see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)).
+3. The engine, once left running, starts again by itself whenever the service restarts.
 
-Log in again on the server (on the dashboard, through the tunnel: Settings > Telegram) rather than copying a
-`telegram.session` from your PC: Telegram may end a
-session that is used from two places at once. Quotex may treat a login from a new place (the server's
-address) as suspicious and email a PIN: expect it. The saved sessions in `backend/data/` then serve
-the service.
+Old logins in `backend/.env` from an earlier version can be moved with `uv run --directory backend python -m
+scripts.env_import` (or the notice on the Settings page). The command-line tools (`scripts.telegram_cli`,
+`scripts.quotex_diagnose`) use the same stored logins and remain available over SSH.
 
 ## Running it as a service (systemd)
 
@@ -190,6 +198,10 @@ it, a small Dockerfile is straightforward, but it would be new, untested scope.
 - [ ] Reachable only through the tunnel (or an authenticated proxy): `curl http://<server ip>:8000`
       from another machine must fail.
 - [ ] `backend/.env` is mode 600 and not in any backup that leaves the server.
+- [ ] A copy of `backend/.env` (it holds `SECRET_KEY`) is kept somewhere safe, apart from database backups:
+      without the key the stored logins cannot be read.
+- [ ] Real money is allowed on the dashboard only deliberately (it asks for your password), and the engine
+      always comes back on the demo account after a restart.
 - [ ] Risk limits set (max stake, daily stop-loss); kill switch tested.
 - [ ] A backup exists off the server and a restore has been rehearsed.
 - [ ] You know where the log is and have read a day of it.

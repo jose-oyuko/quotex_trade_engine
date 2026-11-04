@@ -8,6 +8,7 @@ import {
 } from '../../api/queries'
 import { DataState } from '../../components/DataState'
 import { EnginePanel } from './EnginePanel'
+import { EnvLoginsNotice } from './EnvLoginsNotice'
 import { QuotexPanel } from './QuotexPanel'
 import { SecretsPanel } from './SecretsPanel'
 import { SettingsForm } from './SettingsForm'
@@ -26,6 +27,7 @@ export default function SettingsPage() {
       <p className="lead">
         What used to be edited in <code>backend/.env</code> is changed here.
       </p>
+      <EnvLoginsNotice />
       <DataState query={engine}>
         {(info) => <EnginePanel engine={info} account={status.data?.account_type ?? 'demo'} />}
       </DataState>

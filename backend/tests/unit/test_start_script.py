@@ -183,7 +183,6 @@ def test_the_summary_never_contains_a_secret(tmp_path: Path) -> None:
     secret_password, secret_hash = "hunter2-hunter2", "feedfacefeedfacefeedfacefeedface"
     settings = settings_for(
         tmp_path,
-        engine_enabled=True,
         quotex_email="me@example.com",
         quotex_password=secret_password,
         telegram_api_id=12345,
@@ -191,22 +190,20 @@ def test_the_summary_never_contains_a_secret(tmp_path: Path) -> None:
     )
     text = "\n".join(summarise(settings, env_file_exists=True).lines())
     assert secret_password not in text and secret_hash not in text and "me@example.com" not in text
-    assert "starts with the application" in text
+    assert "Settings page" in text
 
 
 def test_with_nothing_decided_it_says_where_the_engine_is_started(tmp_path: Path) -> None:
     summary = summarise(settings_for(tmp_path), env_file_exists=False)
     text = "\n".join(summary.lines())
-    assert "Settings page" in text and "starts with the application" not in text
-    assert "demo only" in text and "no backend/.env" in text
+    assert "Settings page" in text
+    assert "demo" in text and "no backend/.env" in text
     assert "Log file" in text  # where to look when something goes wrong
 
 
-def test_real_money_being_allowed_is_visible_in_the_summary(tmp_path: Path) -> None:
-    text = "\n".join(
-        summarise(settings_for(tmp_path, quotex_allow_real=True), env_file_exists=True).lines()
-    )
-    assert "REAL is allowed by settings" in text
+def test_the_summary_says_real_money_is_only_allowed_on_the_dashboard(tmp_path: Path) -> None:
+    text = "\n".join(summarise(settings_for(tmp_path), env_file_exists=True).lines())
+    assert "demo" in text and "only on the dashboard" in text
 
 
 def test_a_secret_key_is_created_once_and_the_owner_is_told_to_keep_a_copy(

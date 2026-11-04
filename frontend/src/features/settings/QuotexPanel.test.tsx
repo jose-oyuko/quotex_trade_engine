@@ -20,6 +20,7 @@ const SECRETS = { key: 'ok', items: [] }
 function setup(login: () => QuotexLoginStatus, extra: Parameters<typeof mockApi>[0] = []) {
   const api = mockApi([
     ['GET', '/quotex/login', () => json(login())],
+    ['GET', '/settings/env-logins', json({ items: [] })],
     ['GET', '/telegram/login', json(telegramStatus())],
     ['GET', '/engine', json(engineInfo())],
     ['GET', '/status', json(makeSnapshot())],

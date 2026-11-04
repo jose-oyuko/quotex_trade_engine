@@ -47,3 +47,18 @@ class SecretsOut(BaseModel):
 
 class SecretIn(BaseModel):
     value: str = Field(min_length=1, max_length=512)
+
+
+class EnvLoginOut(BaseModel):
+    label: str
+    in_env: bool = Field(description="backend/.env still has a value for it.")
+    stored: bool = Field(description="The encrypted store has one (it wins over .env).")
+
+
+class EnvLoginsOut(BaseModel):
+    items: list[EnvLoginOut]
+
+
+class EnvImportOut(BaseModel):
+    imported: list[str] = Field(description="The logins moved just now.")
+    items: list[EnvLoginOut]

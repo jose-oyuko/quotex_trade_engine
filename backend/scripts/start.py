@@ -106,18 +106,16 @@ def summarise(settings: Settings, *, env_file_exists: bool) -> Summary:
     credentials: list[str] = []
     if not env_file_exists:
         credentials.append("Settings:     no backend/.env: defaults are used (safe, trading off)")
-    # The engine is started and stopped on the dashboard (decision D-63); what the owner left
-    # running there is remembered, so the summary can only say what `.env` alone would do.
+    # The engine is started and stopped on the dashboard (decision D-63) and the application
+    # remembers what the owner left running, so all the summary can do is say where.
     engine_text = (
-        "starts with the application (ENGINE_ENABLED=true); stop it on the Settings page"
-        if settings.engine_enabled
-        else "start and stop it on the dashboard's Settings page (it starts on the demo account)"
+        "start and stop it on the dashboard's Settings page (it starts on the demo account)"
     )
     return Summary(
         url=f"http://{settings.host}:{settings.port}",
         environment=settings.environment,
         engine=engine_text,
-        account="REAL is allowed by settings" if settings.quotex_allow_real else "demo only",
+        account="demo (real money is allowed only on the dashboard, with your password)",
         credentials=credentials,
         data_dir=str(settings.data_dir.resolve()),
         log_file=str(settings.log_path) if settings.log_to_file else None,

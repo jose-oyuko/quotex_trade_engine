@@ -227,23 +227,20 @@ async def test_an_engine_left_running_starts_again_with_the_application(tmp_path
         assert (await engine_state(again))["state"] == "running"
 
 
-async def test_an_engine_the_owner_stopped_stays_stopped_whatever_the_old_env_setting_says(
-    tmp_path: Path,
-) -> None:
+async def test_an_engine_the_owner_stopped_stays_stopped_after_a_restart(tmp_path: Path) -> None:
     async with running_api(tmp_path) as rig:
         await started(rig)
         await rig.client.post(f"{API}/engine/stop")
-    async with running_api(tmp_path, with_engine=True) as again:
+    async with running_api(tmp_path) as again:
         assert again.app.state.trading is None
         assert (await engine_state(again))["state"] == "stopped"
 
 
-async def test_the_env_setting_only_decides_for_an_installation_that_never_decided(
-    tmp_path: Path,
-) -> None:
-    async with running_api(tmp_path, with_engine=True) as rig:  # ENGINE_ENABLED=true, no choice yet
-        assert rig.app.state.trading is not None
-        assert (await engine_state(rig))["desired"] is True
+async def test_a_new_installation_never_starts_the_engine_by_itself(tmp_path: Path) -> None:
+    async with running_api(tmp_path) as rig:
+        assert rig.app.state.trading is None and rig.parts == []
+        body = await engine_state(rig)
+        assert body["desired"] is False and body["state"] == "stopped"
 
 
 async def test_shutting_the_application_down_keeps_the_owners_choice(tmp_path: Path) -> None:

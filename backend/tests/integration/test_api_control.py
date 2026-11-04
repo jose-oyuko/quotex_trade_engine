@@ -298,7 +298,7 @@ async def test_commands_on_a_chain_that_never_existed_are_a_404(tmp_path: Path) 
 async def test_the_account_can_be_read_and_switched_when_nothing_is_running(
     tmp_path: Path,
 ) -> None:
-    async with running_api(tmp_path, with_engine=True, quotex_allow_real=True) as rig:
+    async with running_api(tmp_path, with_engine=True, allow_real=True) as rig:
         assert (await rig.client.get(f"{API}/account")).json() == {
             "account_type": "demo",
             "real_trading_allowed": True,
@@ -328,9 +328,7 @@ async def test_switching_to_real_is_refused_unless_it_was_switched_on_in_the_set
 
 
 async def test_the_account_cannot_be_switched_while_a_chain_is_running(tmp_path: Path) -> None:
-    async with running_api(
-        tmp_path, with_engine=True, hold_results=True, quotex_allow_real=True
-    ) as rig:
+    async with running_api(tmp_path, with_engine=True, hold_results=True, allow_real=True) as rig:
         await rig.create_group()
         await start_running_chain(rig)
         response = await rig.client.put(

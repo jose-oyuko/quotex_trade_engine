@@ -26,6 +26,7 @@ from tests.api_support import (
     ApiRig,
     FakeParts,
     fake_builder,
+    leave_engine_running,
     migrate,
     running_api,
     settings_for,
@@ -61,8 +62,9 @@ async def test_a_hard_crash_leaves_work_in_flight_and_the_restart_flags_it_unkno
     tmp_path: Path,
 ) -> None:
     # --- first life: a trade is open (its result is held back), limits and a pause are set ---
-    config = settings_for(tmp_path, engine_enabled=True)
+    config = settings_for(tmp_path)
     await migrate(config)
+    await leave_engine_running(config)
     parts: list[FakeParts] = []
     app = create_app(config, engine_builder=fake_builder(parts, hold_results=True))
     lifespan = app.router.lifespan_context(app)
@@ -124,8 +126,9 @@ async def test_a_hard_crash_leaves_work_in_flight_and_the_restart_flags_it_unkno
 
 
 async def test_the_kill_switch_and_the_days_loss_survive_a_crash(tmp_path: Path) -> None:
-    config = settings_for(tmp_path, engine_enabled=True)
+    config = settings_for(tmp_path)
     await migrate(config)
+    await leave_engine_running(config)
     parts: list[FakeParts] = []
     app = create_app(config, engine_builder=fake_builder(parts))  # results arrive at once
     lifespan = app.router.lifespan_context(app)

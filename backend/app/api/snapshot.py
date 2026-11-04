@@ -75,9 +75,7 @@ class SnapshotBuilder:
             environment=self._settings.environment,
             engine=engine_status(controller, running=engine is not None),
             account_type=live.account_type,
-            real_trading_allowed=(
-                self._settings.quotex_allow_real if controller is None else controller.real_allowed
-            ),
+            real_trading_allowed=controller is not None and controller.real_allowed,
             connections={
                 name: ConnectionOut(
                     connected=status.connected, detail=status.detail, since=status.since

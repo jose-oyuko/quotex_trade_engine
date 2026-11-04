@@ -26,6 +26,7 @@ function setup(login: () => TelegramLoginStatus, extra: Parameters<typeof mockAp
     ['GET', '/settings', json(SETTINGS)],
     ['GET', '/secrets', json(SECRETS)],
     ['GET', '/quotex/login', json(quotexStatus())],
+    ['GET', '/settings/env-logins', json({ items: [] })],
     ...extra,
   ])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

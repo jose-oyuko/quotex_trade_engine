@@ -4,9 +4,12 @@
     npm run telegram:dialogs                     list your chats with the ids to use for a group
     npm run telegram:listen -- --chat -100123    print what the pipeline makes of each new message
 
-Credentials come from backend/.env (TELEGRAM_API_ID, TELEGRAM_API_HASH, optional TELEGRAM_PHONE).
-The login code and any password are typed in this terminal and are never stored or printed; only
-the session file backend/data/telegram.session is kept, which is git-ignored and must stay private.
+These use the same login as the dashboard (Settings > Telegram): the API id and hash stored there
+(or TELEGRAM_API_ID and TELEGRAM_API_HASH in backend/.env), and the session kept encrypted in the
+database. `login` stores its session there too, so either way of logging in serves both. Without a
+usable store (a new installation, no SECRET_KEY) they fall back to the old session file
+backend/data/telegram.session. The login code and any password are typed in this terminal and are
+never stored or printed.
 """
 
 from __future__ import annotations
@@ -23,16 +26,20 @@ from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AssetSuffixMode
+from app.engine.errors import EngineStartError
+from app.engine.logins import resolve_settings
 from app.events.bus import EventBus
 from app.events.types import ConnectionChanged, SignalReceived
 from app.signals.models import Signal
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, SignalPipeline
 from app.signals.timezones import InvalidTimezoneError, parse_timezone
-from app.telegram.factory import build_telethon_source
+from app.telegram.factory import build_telethon_source, new_login_source
 from app.telegram.listener import TelegramListener
 from app.telegram.login import log_in
 from app.telegram.source import TelegramError, TelegramSource
+from app.telegram.telethon_source import TelethonSource
+from scripts._store import Store, StoreUnavailableError, open_store
 
 
 async def ask(prompt: str) -> str:
@@ -58,7 +65,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def do_login(settings: Settings, source: TelegramSource) -> int:
+async def do_login(settings: Settings, source: TelegramSource, store: Store | None) -> int:
     if await source.is_authorized():
         print("[ok] already logged in; nothing to do.")
         return 0
@@ -66,10 +73,16 @@ async def do_login(settings: Settings, source: TelegramSource) -> int:
         "Phone number in international format (+<country code><number>)"
     )
     await log_in(source, phone=phone, ask_code=ask, ask_password=ask_secret)
-    print(
-        f"[ok] logged in. Session saved in {settings.telegram_session_path}.session "
-        "(keep it private)."
-    )
+    session = source.session_string()
+    if store is not None and session:
+        await store.vault.put("telegram_session", session, internal_ok=True)
+        await store.vault.put("telegram_phone", phone.strip(), internal_ok=True)
+        print("[ok] logged in. The login is stored, encrypted: the dashboard uses it too.")
+    else:
+        print(
+            f"[ok] logged in. Session saved in {settings.telegram_session_path}.session "
+            "(keep it private)."
+        )
     return 0
 
 
@@ -146,18 +159,52 @@ async def do_listen(args: argparse.Namespace, source: TelegramSource) -> int:
         await tasks.shutdown()
 
 
+def make_source(
+    args: argparse.Namespace, settings: Settings, store: Store | None
+) -> TelegramSource:
+    """The connection to use: for `login`, a new login (stored as text when there is a store, else
+    in the old session file); for the others, the login that exists."""
+    if args.command != "login":
+        return build_telethon_source(settings, clock=SystemClock())
+    api_hash = settings.telegram_api_hash.get_secret_value() if settings.telegram_api_hash else ""
+    if settings.telegram_api_id is None or not api_hash.strip():
+        raise TelegramError(
+            "The Telegram API id and hash are not set: store them on the dashboard "
+            "(Settings > Telegram) or put them in backend/.env."
+        )
+    if store is not None:
+        return new_login_source(
+            settings.telegram_api_id, api_hash.strip(), None, clock=SystemClock()
+        )
+    return TelethonSource(
+        api_id=settings.telegram_api_id,
+        api_hash=api_hash.strip(),
+        session_path=settings.telegram_session_path,
+        clock=SystemClock(),
+    )
+
+
 async def run(args: argparse.Namespace) -> int:
+    store: Store | None = None
     try:
         settings = Settings()
-        source = build_telethon_source(settings, clock=SystemClock())
-    except (ValidationError, TelegramError) as exc:
+        try:
+            store = await open_store(settings)
+        except StoreUnavailableError:
+            store = None  # no store yet: `.env` and the old session file, as before
+        if store is not None:
+            settings = await resolve_settings(settings, store.vault, allow_real=False)
+        source = make_source(args, settings, store)
+    except (ValidationError, TelegramError, EngineStartError) as exc:
         print(f"Cannot start: {exc}")
+        if store is not None:
+            await store.close()
         return 2
     try:
         await source.connect()
         match args.command:
             case "login":
-                return await do_login(settings, source)
+                return await do_login(settings, source, store)
             case "dialogs":
                 return await do_dialogs(source)
             case _:
@@ -167,6 +214,8 @@ async def run(args: argparse.Namespace) -> int:
         return 1
     finally:
         await source.disconnect()
+        if store is not None:
+            await store.close()
 
 
 def main() -> int:

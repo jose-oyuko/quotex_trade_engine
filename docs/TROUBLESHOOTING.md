@@ -68,8 +68,10 @@ is expected). The message names the setting. A line like `TELEGRAM_API_ID=` with
 says the engine is stopped. Start it on the dashboard's Settings page. Also check the group is
 added on the **Groups** page, enabled and not paused, and the kill switch is not on.
 
-**"ENGINE_ENABLED is true but ... is missing"** — the summary names the missing settings
-(`QUOTEX_EMAIL`, `QUOTEX_PASSWORD`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`). Add them to `backend/.env`.
+**The engine will not start, and the Settings page lists missing logins** — it names each one (the Quotex
+email and password, the Telegram API id and hash, the Telegram login). Store them on the Settings page (the
+Quotex ones in *Quotex email and password*, the Telegram ones in *Telegram*). The button stays grey until
+everything it needs is there.
 
 ## Telegram
 
