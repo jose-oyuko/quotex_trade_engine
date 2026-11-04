@@ -7,6 +7,7 @@ import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
 import SettingsPage from './SettingsPage'
+import { quotexStatus } from './quotexFixtures'
 import { telegramStatus } from './telegramFixtures'
 
 afterEach(() => {
@@ -24,6 +25,7 @@ function setup(login: () => TelegramLoginStatus, extra: Parameters<typeof mockAp
     ['GET', '/status', json(makeSnapshot())],
     ['GET', '/settings', json(SETTINGS)],
     ['GET', '/secrets', json(SECRETS)],
+    ['GET', '/quotex/login', json(quotexStatus())],
     ...extra,
   ])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

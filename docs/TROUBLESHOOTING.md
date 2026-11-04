@@ -113,12 +113,21 @@ numbers like `-1001234567890`) and that your account is a member. Try the parser
 check) or Quotex changed its domain: follow "When Quotex changes its domain" in
 [OPERATIONS.md](OPERATIONS.md). Try `nslookup quotex.com` to tell the cases apart.
 
-**An email with a PIN arrives** — Quotex asks for a PIN when it sees a new login. Type it where the
-diagnostic (`npm run quotex:diagnose`) asks. If the *application* starts a login you cannot answer, stop
-it and run the diagnostic first. Many logins in a row may get the account flagged: do not loop.
+**An email with a PIN arrives** — Quotex asks for a PIN when it sees a new login. On the Settings page, in
+the Quotex login box, type the digits and press *Send the PIN*. If the *engine* starts a login by itself and
+Quotex asks for a PIN, it stops with "log in to Quotex on the Settings page": stop it, log in there, start it
+again. A wrong PIN ends that login; start it again and Quotex sends a new PIN. Many logins in a row may get
+the account flagged: do not loop.
 
-**Reset the Quotex login** — stop the app, delete `backend/data/session.json`, run
-`npm run quotex:diagnose`.
+**"Quotex's website refused the request before the login ... Cloudflare"** — the library crashed while
+reading Quotex's sign-in page (it got an HTTP error such as 403 instead of the page), and the application says
+so instead of showing the crash. It is **not** a wrong password: Quotex sits behind Cloudflare, which often
+refuses requests from servers, VPNs and some home connections. Things that can help: try again later; try
+from another connection (for example your phone's hotspot); if it works from your PC at home but not from a
+server, run the engine at home. The application does not try to get around the check.
+
+**Reset the Quotex login** — stop the engine, then on the Settings page press *Remove the stored login* and log
+in again. (Command line: stop the app, delete `backend/data/session.json`, run `npm run quotex:diagnose`.)
 
 **"Quotex is not connected" banner** — it is reconnecting by itself. While it is down, orders fail and are
 recorded as `failed` (they are not queued); see [FAILURE_MODES.md](FAILURE_MODES.md). If it stays, run

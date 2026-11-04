@@ -518,6 +518,23 @@ so. Logging out ends the session on Telegram's side if it can be reached, and re
 flood wait with its seconds, bad phone, bad API id) so the page can say what to do. Not done: re-saving the
 session if Telegram moves the account to another data centre (rare; the owner would log in again).
 
+**D-66. The Quotex login is made on the dashboard, with the PIN, and never touches the disk.** The library
+only understands a session *file*, so the application gives it one in a private temporary folder: for a
+dashboard login the folder is made, the library logs in (asking for the e-mailed PIN through a callback the
+dashboard answers), the saved session is read back as text and stored encrypted (D-61), and the folder is
+removed whatever the outcome. For the engine, a stored session is written into a fresh private folder, the
+file is deleted the moment the connection is made, and the folder is removed on close. The login is one long
+call into the library that *waits* for the PIN, so it runs as a background task and the PIN is handed to it
+through a future (a page reload shows the step; five minutes without a PIN end it). The service never needs
+the engine running (it must be stopped, as for Telegram) and always logs in on the demo account. A refused
+login (wrong password, wrong PIN, Quotex unavailable) is a normal answer with the reason in `message`. The
+library's crash on a refused sign-in page (`'Response' object has no attribute 'reason_phrase'`, a non-2xx
+answer such as Cloudflare's 403) is translated into a sentence saying exactly that and that it is not a wrong
+password; the application does not try to get around the check. The Quotex session is optional for the engine
+(without it the email and password are used, which only fails if Quotex asks for a PIN). Known limit: a token
+the library refreshes while the engine runs is not saved back; the next start uses the stored one and the
+library logs in again if it was refused.
+
 ---
 
 ## Decisions to be made later (record here when decided)

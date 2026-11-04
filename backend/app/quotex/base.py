@@ -6,6 +6,7 @@ hot path needs (`balance`, `payout`, `is_open`) are answered from memory and nev
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -136,4 +137,25 @@ class QuotexAdapter(Protocol):
 
     async def await_result(self, order_id: str, timeout_s: float) -> TradeResult:
         """Wait for the order to settle. Raises `ResultTimeoutError` after `timeout_s` seconds."""
+        ...
+
+
+type PinAsker = Callable[[str], Awaitable[str]]
+
+
+@dataclass(slots=True, frozen=True)
+class LoginRequest:
+    """What logging in to Quotex needs. `ask_pin` is called with Quotex's own wording when it emails
+    a PIN, and returns the digits the owner typed; it may wait as long as it likes."""
+
+    email: str
+    password: str
+    host: str
+    ask_pin: PinAsker
+
+
+class QuotexLogin(Protocol):
+    async def run(self) -> str:
+        """Log in and return the session as text (to be stored encrypted). Raises
+        `QuotexConnectionError` with a message for the owner if it cannot."""
         ...

@@ -71,7 +71,9 @@ function EngineControls({ engine }: { engine: EngineInfo }) {
         {engine.logins.map((login) => (
           <li key={login.label}>
             {login.label}:{' '}
-            <Badge tone={login.present ? 'good' : 'bad'}>{SOURCE_TEXT[login.source]}</Badge>
+            <Badge tone={login.present ? 'good' : login.required ? 'bad' : 'muted'}>
+              {SOURCE_TEXT[login.source]}
+            </Badge>
           </li>
         ))}
       </ul>

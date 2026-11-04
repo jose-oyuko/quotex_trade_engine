@@ -65,6 +65,7 @@ KINDS: tuple[SecretKind, ...] = (
         "From https://my.telegram.org, 'API development tools'.",
         group="telegram",
     ),
+    SecretKind("quotex_session", "Quotex login", "Set by the login.", "logins", True),
     SecretKind("telegram_phone", "Telegram phone", "Set by the login.", "telegram", True),
     SecretKind("telegram_session", "Telegram login", "Set by the login.", "telegram", True),
 )

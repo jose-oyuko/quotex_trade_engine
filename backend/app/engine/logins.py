@@ -22,6 +22,7 @@ STORED_LOGINS = (
     ("telegram_api_id", "telegram_api_id", "Telegram API id"),
     ("telegram_api_hash", "telegram_api_hash", "Telegram API hash"),
     ("telegram_session", "telegram_session", "Telegram login"),
+    ("quotex_session", "quotex_session", "Quotex login"),
 )
 _NUMBERS = {"telegram_api_id"}
 
@@ -31,6 +32,7 @@ class LoginItem:
     label: str
     present: bool
     source: str  # `dashboard`, `.env`, `.session file`, `missing` or `unreadable`
+    required: bool = True  # the engine cannot start without it
 
 
 async def resolve_settings(settings: Settings, vault: SecretStore, *, allow_real: bool) -> Settings:
@@ -61,6 +63,9 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
         if name == "telegram_session":
             items.append(await _telegram_login(settings, vault))
             continue
+        if name == "quotex_session":
+            items.append(await _quotex_login(settings, vault))
+            continue
         stored = status[name]
         if stored.set and stored.readable:
             items.append(LoginItem(label, True, "dashboard"))
@@ -71,6 +76,21 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
         else:
             items.append(LoginItem(label, False, "missing"))
     return items
+
+
+async def _quotex_login(settings: Settings, vault: SecretStore) -> LoginItem:
+    """The Quotex login made on the dashboard. Not required: without it the engine logs in with the
+    email and password, which only fails if Quotex asks for an e-mailed PIN."""
+    label = "Quotex login"
+    if await vault.has("quotex_session"):
+        try:
+            await vault.get("quotex_session")
+        except VaultError:
+            return LoginItem(label, False, "unreadable", required=False)
+        return LoginItem(label, True, "dashboard", required=False)
+    if _env_has(settings, "quotex_session"):
+        return LoginItem(label, True, ".env", required=False)
+    return LoginItem(label, False, "missing", required=False)
 
 
 async def _telegram_login(settings: Settings, vault: SecretStore) -> LoginItem:

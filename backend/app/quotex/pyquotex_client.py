@@ -20,6 +20,9 @@ Why it does not simply call `Quotex.buy()` (measured by reading the source):
 from __future__ import annotations
 
 import asyncio
+import json
+import shutil
+import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from decimal import Decimal
@@ -54,9 +57,24 @@ async def refuse_pin(prompt: str) -> str:
     """Default for unattended use: `input()` would freeze the whole application, so a login that
     needs an email PIN fails with an explanation instead."""
     raise QuotexConnectionError(
-        "Quotex asked for an email PIN. Log in once interactively with `npm run quotex:diagnose`, "
-        "which stores the session, then start the application again."
+        "Quotex asked for an email PIN. Log in to Quotex on the Settings page (it asks for the PIN "
+        "there), then start the engine again."
     )
+
+
+def explain_connect_error(exc: Exception) -> str:
+    """Words for an error the library raised while connecting. Its own crash on a refused sign-in
+    page ("... has no attribute 'reason_phrase'") really means Quotex's website did not answer
+    the request normally: usually Cloudflare, which guards the site, refusing this address."""
+    text = f"{type(exc).__name__}: {exc}"
+    if "reason_phrase" in text:
+        return (
+            "Quotex's website refused the request before the login (an HTTP error such as 403). "
+            "This is not a wrong password: Quotex sits behind Cloudflare, which often refuses "
+            "requests from server and VPN addresses. Try from another connection or computer; "
+            "if it works from your own PC at home, run the engine there."
+        )
+    return text
 
 
 class PyQuotexClient:
@@ -70,7 +88,14 @@ class PyQuotexClient:
         time_mode: TimeMode = "TIME",
         otp_callback: OtpCallback = refuse_pin,
         wss_url_override: str | None = None,
+        session: str | None = None,
     ) -> None:
+        """`session` is the login made on the dashboard (text, kept encrypted by the application).
+        The library only reads a file, so it is given one in a private temporary folder that is
+        emptied as soon as the connection is made and removed on close: the login is never left on
+        disk. Without it, the library uses `data_dir` as before (the command-line login)."""
+        self._session_text = session
+        self._workdir: Path | None = None
         self._email = email
         self._password = password
         self._host = host
@@ -94,18 +119,41 @@ class PyQuotexClient:
 
     # ---- connection --------------------------------------------------------------------------
 
+    def _prepare_folder(self) -> Path:
+        """Where the library keeps its session file: a private temporary folder when the login
+        comes from the dashboard, else the data folder (the command-line login)."""
+        if self._session_text is None:
+            self._data_dir.mkdir(parents=True, exist_ok=True)
+            return self._data_dir
+        if self._workdir is None:
+            self._workdir = Path(tempfile.mkdtemp(prefix="qte-quotex-"))  # private to this user
+        qx_config.base_dir = self._workdir
+        try:
+            entry = json.loads(self._session_text)
+        except ValueError as exc:
+            raise QuotexConnectionError(
+                "The stored Quotex login is damaged: log in again."
+            ) from exc
+        if isinstance(entry, dict):
+            qx_config.update_session(self._email, entry)
+        return self._workdir
+
+    def _scrub_session_file(self) -> None:
+        """Take the login (cookies, token) off the disk the moment it is no longer needed there."""
+        if self._workdir is not None:
+            (self._workdir / "session.json").unlink(missing_ok=True)
+
     async def connect(self, *, demo: bool) -> None:
-        self._data_dir.mkdir(parents=True, exist_ok=True)
+        folder = self._prepare_folder()
         # The library writes session.json (cookies + token) into `config.base_dir`, which it
-        # initialises to the current working directory. Point it at our data folder so the
-        # secret stays in the git-ignored data directory.
-        qx_config.base_dir = self._data_dir
+        # initialises to the current working directory. Point it at a folder we control.
+        qx_config.base_dir = folder
         q = Quotex(
             email=self._email,
             password=self._password,
             host=self._host,
             lang="en",
-            root_path=str(self._data_dir),
+            root_path=str(folder),
             on_otp_callback=self._otp_callback,
             # One owner for reconnecting: the adapter (backoff, events, fresh login if needed).
             reconnect_policy=ReconnectPolicy(enabled=False),
@@ -118,7 +166,9 @@ class PyQuotexClient:
         except QuotexConnectionError:
             raise
         except Exception as exc:
-            raise QuotexConnectionError(f"{type(exc).__name__}: {exc}") from exc
+            raise QuotexConnectionError(explain_connect_error(exc)) from exc
+        finally:
+            self._scrub_session_file()
         if not ok:
             if STALE_SESSION_MARKER in str(reason).lower():
                 self._forget_stored_token()
@@ -147,9 +197,14 @@ class PyQuotexClient:
             await self.wait_for_balance(10.0)
 
     async def close(self) -> None:
-        if self._q is not None:
-            q, self._q = self._q, None
-            await q.close()
+        try:
+            if self._q is not None:
+                q, self._q = self._q, None
+                await q.close()
+        finally:
+            if self._workdir is not None:
+                shutil.rmtree(self._workdir, ignore_errors=True)
+                self._workdir = None
 
     def is_connected(self) -> bool:
         from pyquotex.global_value import AuthStatus, WebsocketStatus

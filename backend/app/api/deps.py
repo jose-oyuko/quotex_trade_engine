@@ -17,6 +17,7 @@ from app.engine.engine import Engine
 from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
 from app.services.telegram_login import TelegramLoginService
 from app.vault.store import SecretStore
@@ -95,6 +96,11 @@ def get_telegram_login(request: Request) -> TelegramLoginService:
     return service
 
 
+def get_quotex_login(request: Request) -> QuotexLoginService:
+    service: QuotexLoginService = request.app.state.quotex_login
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -120,6 +126,7 @@ RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 CurrentUserDep = Annotated[UserInfo, Depends(current_user)]
+QuotexLoginDep = Annotated[QuotexLoginService, Depends(get_quotex_login)]
 TelegramLoginDep = Annotated[TelegramLoginService, Depends(get_telegram_login)]
 ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]

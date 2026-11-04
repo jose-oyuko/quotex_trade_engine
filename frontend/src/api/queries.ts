@@ -32,6 +32,7 @@ export const keys = {
   settings: ['settings'] as const,
   engine: ['engine'] as const,
   telegramLogin: ['telegram', 'login'] as const,
+  quotexLogin: ['quotex', 'login'] as const,
   secrets: ['secrets'] as const,
 }
 
@@ -52,6 +53,16 @@ export function useTelegramLogin() {
     queryKey: keys.telegramLogin,
     queryFn: ({ signal }) => api.telegram.login.status(signal),
     staleTime: 0, // a login in progress may have been changed from another window
+  })
+}
+
+export function useQuotexLogin() {
+  return useQuery({
+    queryKey: keys.quotexLogin,
+    queryFn: ({ signal }) => api.quotex.login.status(signal),
+    staleTime: 0,
+    // while the application is talking to Quotex there is nothing to type: look again soon
+    refetchInterval: (query) => (query.state.data?.state === 'working' ? 2000 : false),
   })
 }
 

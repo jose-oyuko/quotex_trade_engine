@@ -41,15 +41,15 @@ from app.services.groups import (
     GroupNotFoundError,
     InvalidGroupError,
 )
+from app.services.login_errors import EngineRunningError, WrongStepError
+from app.services.quotex_login import NoPinWantedError, PinInvalidError, QuotexNotConfiguredError
 from app.services.telegram_login import (
     CodeStaleError,
     CodeWrongError,
-    EngineRunningError,
     MustWaitError,
     NotConfiguredError,
     PasswordWrongError,
     RefusedError,
-    WrongStepError,
 )
 from app.vault.errors import (
     InvalidSecretError,
@@ -112,6 +112,9 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     PasswordWrongError: (422, "telegram_password_invalid"),
     RefusedError: (422, "telegram_login_refused"),
     MustWaitError: (429, "telegram_wait"),
+    QuotexNotConfiguredError: (409, "quotex_not_configured"),
+    PinInvalidError: (422, "quotex_pin_invalid"),
+    NoPinWantedError: (409, "quotex_login_step"),
 }
 
 HTTP_CODES = {

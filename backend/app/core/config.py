@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # Quotex. Credentials are secrets: SecretStr never shows up in logs or repr().
     quotex_email: SecretStr | None = None
     quotex_password: SecretStr | None = None
+    # The login made on the dashboard (text), filled in from the encrypted store when the engine is
+    # built (decision D-66). Not meant to be written by hand.
+    quotex_session: SecretStr | None = None
     # The broker's domain changes from time to time (the old qxbroker.com stopped resolving).
     quotex_host: str = "quotex.com"
     # The starting value for the real-money permission, used until the owner has decided on the
@@ -123,6 +126,7 @@ class Settings(BaseSettings):
             self.telegram_api_hash,
             self.secret_key,
             self.telegram_session,
+            self.quotex_session,
         )
         return [s.get_secret_value() for s in secrets if s is not None]
 

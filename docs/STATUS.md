@@ -19,12 +19,12 @@ agent to start the next phase.
 | 11 | Encrypted store and settings in the database | Done — awaiting owner approval (not committed) |
 | 12 | Engine control from the dashboard | Done — committed; live checks pending |
 | 13 | Telegram login in the dashboard | Done — committed; live checks pending |
-| 14 | Quotex login in the dashboard | Not started |
+| 14 | Quotex login in the dashboard | Done — committed; live checks pending |
 | 15 | Clean-up and documentation | Not started |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phases 10-13 are done and committed (reports: [phase-10](reports/phase-10.md), [phase-11](reports/phase-11.md), [phase-12](reports/phase-12.md), [phase-13](reports/phase-13.md)). The owner asked the agent to carry on through Phase 15, testing and committing after each phase. Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; the next is Phase 14. Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
+**Current phase:** Phases 10-14 are done and committed (reports: [phase-10](reports/phase-10.md), [phase-11](reports/phase-11.md), [phase-12](reports/phase-12.md), [phase-13](reports/phase-13.md), [phase-14](reports/phase-14.md)). The owner asked the agent to carry on through Phase 15, testing and committing after each phase. Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; the next is Phase 15. Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
 carry on through the remaining phases in order, committing after each finished and tested phase; that is
 complete. Phases 2-9 are only verified on fakes; their live checks are in each report's "could not be
 verified" section (for Phase 9: the real signal-to-order latency with `npm run latency`, real reconnects,

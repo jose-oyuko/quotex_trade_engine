@@ -12,6 +12,7 @@ class LoginItemOut(BaseModel):
     label: str
     present: bool
     source: Literal["dashboard", ".env", ".session file", "missing", "unreadable"]
+    required: bool = Field(description="The engine cannot start without it.")
 
 
 class EngineOut(BaseModel):

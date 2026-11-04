@@ -6,6 +6,7 @@ import type { EngineInfo, Snapshot } from '../../api/types'
 import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
+import { quotexStatus } from './quotexFixtures'
 import { telegramStatus } from './telegramFixtures'
 import SettingsPage from './SettingsPage'
 
@@ -28,6 +29,7 @@ function setup(
     ['GET', '/settings', json(SETTINGS)],
     ['GET', '/secrets', json(SECRETS)],
     ['GET', '/telegram/login', json(telegramStatus())],
+    ['GET', '/quotex/login', json(quotexStatus())],
     ...extra,
   ])
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -67,7 +69,7 @@ describe('starting and stopping the engine', () => {
     setup(() =>
       engineInfo({
         missing_logins: ['Quotex password'],
-        logins: [{ label: 'Quotex password', present: false, source: 'missing' }],
+        logins: [{ label: 'Quotex password', present: false, source: 'missing', required: true }],
       }),
     )
     expect(await screen.findByRole('button', { name: 'Start the engine' })).toBeDisabled()

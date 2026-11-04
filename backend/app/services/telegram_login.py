@@ -23,9 +23,9 @@ import structlog
 
 from app.core.clock import Clock
 from app.core.config import Settings
-from app.core.errors import DomainError
 from app.engine.controller import EngineController, EngineState
 from app.engine.logins import login_items
+from app.services.login_errors import EngineRunningError, LoginProblem, WrongStepError
 from app.telegram.login import normalise_phone
 from app.telegram.source import (
     ApiCredentialsError,
@@ -58,20 +58,12 @@ class LoginState(StrEnum):
     LOGGED_IN = "logged_in"
 
 
-class TelegramLoginProblem(DomainError):
-    """Base of the errors the login steps raise; the messages are for the owner."""
+class TelegramLoginProblem(LoginProblem):
+    """Base of the errors the Telegram login steps raise; the messages are for the owner."""
 
 
 class NotConfiguredError(TelegramLoginProblem):
     """The API id and hash are not stored yet."""
-
-
-class EngineRunningError(TelegramLoginProblem):
-    """Logging in or out needs the engine stopped."""
-
-
-class WrongStepError(TelegramLoginProblem):
-    """There is no login at the step this request belongs to (it may have expired)."""
 
 
 class CodeWrongError(TelegramLoginProblem):

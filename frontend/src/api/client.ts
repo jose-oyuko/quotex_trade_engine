@@ -26,6 +26,7 @@ import type {
   Risk,
   RiskEvent,
   SecretItem,
+  QuotexLoginStatus,
   SecretsOut,
   TelegramLoginStatus,
   SettingsOut,
@@ -191,6 +192,18 @@ export const api = {
     set: (name: string, value: string) =>
       request<SecretItem>('PUT', `/secrets/${encodeURIComponent(name)}`, { body: { value } }),
     remove: (name: string) => request<undefined>('DELETE', `/secrets/${encodeURIComponent(name)}`),
+  },
+
+  quotex: {
+    login: {
+      status: (signal?: AbortSignal) =>
+        request<QuotexLoginStatus>('GET', '/quotex/login', { signal }),
+      start: () => request<QuotexLoginStatus>('POST', '/quotex/login/start'),
+      pin: (pin: string) =>
+        request<QuotexLoginStatus>('POST', '/quotex/login/pin', { body: { pin } }),
+      cancel: () => request<QuotexLoginStatus>('POST', '/quotex/login/cancel'),
+    },
+    logout: () => request<QuotexLoginStatus>('POST', '/quotex/logout'),
   },
 
   telegram: {

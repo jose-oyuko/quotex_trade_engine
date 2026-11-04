@@ -107,9 +107,13 @@ Telegram and Quotex need no login until you start the engine (Settings page). Do
 account. The Telegram login is made on the dashboard (below); the Quotex login is stored on the dashboard
 too, and the command-line logins (`npm run telegram:login`, `npm run quotex:diagnose`) remain as a fallback.
 
-**1. Quotex.** On **Settings > Quotex login** store the email and password you use for Quotex (they are
-encrypted; see "Settings and stored logins"). Or put `QUOTEX_EMAIL` and `QUOTEX_PASSWORD` in `backend/.env`
-(a stored value wins).
+**1. Quotex.** On **Settings > Quotex email and password** store what you use to log in to Quotex (encrypted;
+see "Settings and stored logins"), then press **Log in to Quotex** in the box below. If Quotex e-mails you a
+PIN (it does the first time, and when it sees a new place), the box asks for it: type the digits and press
+*Send the PIN*. The login is then stored encrypted and the engine uses it. A refused login says why in words
+(a wrong password, or Quotex's website refusing this computer's address: see TROUBLESHOOTING). The login
+uses the **demo** account. Logging in or out needs the engine stopped. `QUOTEX_EMAIL` and `QUOTEX_PASSWORD`
+in `backend/.env` still work (a stored value wins).
 
 **2. Telegram** (Settings > **Telegram**), in this order:
 1. **The API id and hash.** Create them at <https://my.telegram.org> (log in with your phone number, open
@@ -129,10 +133,10 @@ If Telegram says to wait, the box says for how long: wait, do not retry.
 (An older `backend/data/telegram.session` file made by `npm run telegram:login` still works when nothing is
 stored on the dashboard; *Log out of Telegram* removes it too.)
 
-**3. Quotex PIN.** If Quotex emails you a PIN at the first login, run `npm run quotex:diagnose` once and
-type it into that window (the PIN step is not on the dashboard yet). The session is saved in
-`backend/data/session.json` and the application does not ask again until it expires. The diagnostic only
-ever uses the demo account.
+**3. Checking the Quotex connection (optional).** `npm run quotex:diagnose` is still there: it logs in and
+shows the balance from a terminal (demo only; it keeps its own `backend/data/session.json`). The dashboard
+login needs none of it, and writes nothing to disk: the library's session file lives only in a private
+temporary folder while a login or a connection is being made.
 
 **4. Groups and limits.** Start the app (`npm start`), open the **Groups** page and add each Telegram group
 with its strategy and stakes. Set the risk limits **before** enabling the engine (max stake, daily
@@ -217,9 +221,11 @@ sign is a connection error that mentions `getaddrinfo failed`, or Quotex never c
 1. Stop the app.
 2. Find the new address by opening Quotex in your browser (the bare domain, for example `quotex.io`).
 3. In `backend/.env` set `QUOTEX_HOST=quotex.io` (no `https://`, no path).
-4. Delete `backend/data/session.json` (it belongs to the old domain).
-5. Run `npm run quotex:diagnose` (demo only), type the PIN if asked.
-6. Start the app again.
+4. On Settings, press *Remove the stored login* (and delete `backend/data/session.json` if you used the
+   command line): they belong to the old domain. (Or save the new address as *Quotex address* on the Settings
+   page instead of editing `.env`.)
+5. Press *Log in to Quotex* (demo only), type the PIN if asked.
+6. Start the engine again.
 
 ## Upgrading
 

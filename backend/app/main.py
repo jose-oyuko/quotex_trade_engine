@@ -14,7 +14,17 @@ from app.api.deps import current_user
 from app.api.errors import install_error_handlers
 from app.api.hub import Hub
 from app.api.openapi import build_openapi
-from app.api.routers import auth, chains, control, engine, groups, reports, telegram, trades
+from app.api.routers import (
+    auth,
+    chains,
+    control,
+    engine,
+    groups,
+    quotex,
+    reports,
+    telegram,
+    trades,
+)
 from app.api.routers import settings as settings_router
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
@@ -36,9 +46,12 @@ from app.engine.factory import build_engine
 from app.engine.flags import EngineFlags
 from app.engine.logins import resolve_settings
 from app.events.bus import EventBus
+from app.quotex.base import LoginRequest, QuotexLogin
+from app.quotex.factory import new_quotex_login
 from app.services.app_config import ConfigService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
 from app.services.telegram_login import TelegramLoginService
 from app.signals.parsers.registry import ParserRegistry
@@ -53,6 +66,7 @@ log = structlog.get_logger()
 
 type EngineBuilder = Callable[[Settings, EventBus, TaskSupervisor], Engine]
 type LoginSourceFactory = Callable[[int, str, str | None], TelegramSource]
+type QuotexLoginFactory = Callable[[LoginRequest], QuotexLogin]
 
 
 class DatabaseNotMigratedError(RuntimeError):
@@ -64,6 +78,7 @@ def create_app(
     *,
     engine_builder: EngineBuilder = build_engine,
     login_source: LoginSourceFactory | None = None,
+    quotex_login: QuotexLoginFactory | None = None,
 ) -> FastAPI:
     """Build the application. Tests pass their own settings (and a fake-backed engine builder)."""
     settings = settings or get_settings()
@@ -173,6 +188,14 @@ def create_app(
             session_factory, clock, lambda: app.state.trading, ParserRegistry().names
         )
         app.state.auth = AuthService(session_factory, clock)
+        app.state.quotex_login = QuotexLoginService(
+            vault=app.state.vault,
+            settings=lambda: cfg,
+            login_factory=quotex_login or new_quotex_login,
+            controller=lambda: controller,
+            tasks=app.state.tasks,
+            clock=clock,
+        )
         app.state.telegram_login = TelegramLoginService(
             vault=app.state.vault,
             settings=lambda: cfg,
@@ -246,6 +269,7 @@ def create_app(
     app.state.vault = None
     app.state.controller = None
     app.state.telegram_login = None
+    app.state.quotex_login = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -277,6 +301,7 @@ def create_app(
         telegram.router,
         settings_router.router,
         engine.router,
+        quotex.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

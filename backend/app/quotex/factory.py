@@ -7,9 +7,11 @@ from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import AccountType
 from app.events.bus import EventBus
+from app.quotex.base import LoginRequest, QuotexLogin
 from app.quotex.errors import QuotexError
 from app.quotex.pyquotex_adapter import PyQuotexAdapter
 from app.quotex.pyquotex_client import OtpCallback, PyQuotexClient, refuse_pin
+from app.quotex.pyquotex_login import PyQuotexLogin
 
 
 def build_pyquotex_adapter(
@@ -30,6 +32,10 @@ def build_pyquotex_adapter(
             "(or as QUOTEX_EMAIL and QUOTEX_PASSWORD in backend/.env)."
         )
 
+    session = (
+        settings.quotex_session.get_secret_value().strip() if settings.quotex_session else None
+    )
+
     def make_client() -> PyQuotexClient:
         return PyQuotexClient(
             email=email,
@@ -38,6 +44,7 @@ def build_pyquotex_adapter(
             data_dir=settings.data_dir.resolve(),
             time_mode=settings.quotex_time_mode,
             otp_callback=otp_callback,
+            session=session or None,
         )
 
     return PyQuotexAdapter(
@@ -48,3 +55,8 @@ def build_pyquotex_adapter(
         account_type=account_type,
         allow_real=settings.quotex_allow_real,
     )
+
+
+def new_quotex_login(request: LoginRequest) -> QuotexLogin:
+    """The login the dashboard uses (a private temporary folder; see `pyquotex_login`)."""
+    return PyQuotexLogin(request)

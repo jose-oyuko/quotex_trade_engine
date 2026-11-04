@@ -156,7 +156,7 @@ export function SecretsPanel({ data }: { data: SecretsOut }) {
   const keyOk = data.key === 'ok'
   return (
     <fieldset>
-      <legend>Quotex login</legend>
+      <legend>Quotex email and password</legend>
       <p className="help">
         Encrypted in the database with the key in <code>backend/.env</code>. A value you type here
         is never shown again. The trading engine uses these when it starts (they win over{' '}

@@ -6,6 +6,7 @@ import type { SecretItem, SecretsOut, SettingsOut } from '../../api/types'
 import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
+import { quotexStatus } from './quotexFixtures'
 import { telegramStatus } from './telegramFixtures'
 import SettingsPage from './SettingsPage'
 
@@ -17,6 +18,7 @@ const BASE = [
   ['GET', '/engine', json(engineInfo())],
   ['GET', '/status', json(makeSnapshot())],
   ['GET', '/telegram/login', json(telegramStatus())],
+  ['GET', '/quotex/login', json(quotexStatus())],
 ] as const
 
 const NOTE = 'A saved setting is used from the next start of the application.'

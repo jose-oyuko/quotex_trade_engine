@@ -21,8 +21,11 @@ async def engine_out(
         error=controller.error,
         since=controller.since,
         real_trading_allowed=controller.real_allowed,
-        logins=[LoginItemOut(label=i.label, present=i.present, source=i.source) for i in items],
-        missing_logins=[i.label for i in items if not i.present],
+        logins=[
+            LoginItemOut(label=i.label, present=i.present, source=i.source, required=i.required)
+            for i in items
+        ],
+        missing_logins=[i.label for i in items if i.required and not i.present],
     )
 
 

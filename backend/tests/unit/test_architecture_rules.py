@@ -30,14 +30,15 @@ def test_only_the_quotex_package_imports_pyquotex() -> None:
     assert offenders == []
 
 
-def test_within_the_quotex_package_only_the_client_module_imports_pyquotex() -> None:
-    """The adapter logic stays testable without the library: only pyquotex_client.py imports it."""
+def test_within_the_quotex_package_only_the_two_library_modules_import_pyquotex() -> None:
+    """The adapter logic stays testable without the library: only the connection
+    (pyquotex_client.py) and the dashboard login (pyquotex_login.py, D-66) import it."""
     importers = sorted(
         path.name
         for path in (APP / "quotex").rglob("*.py")
         if any(m == "pyquotex" or m.startswith("pyquotex.") for m in imported_modules(path))
     )
-    assert importers == ["pyquotex_client.py"]
+    assert importers == ["pyquotex_client.py", "pyquotex_login.py"]
 
 
 def test_the_guard_actually_sees_imports() -> None:
