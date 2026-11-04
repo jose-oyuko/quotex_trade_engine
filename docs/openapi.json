@@ -49,6 +49,19 @@
         "properties": {
           "account_type": {
             "$ref": "#/components/schemas/AccountType"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner's password: required to switch to REAL, not to go back to demo.",
+            "title": "Password"
           }
         },
         "required": [
@@ -919,15 +932,113 @@
         "title": "DrawdownOut",
         "type": "object"
       },
+      "EngineOut": {
+        "properties": {
+          "desired": {
+            "description": "It is started again when the application starts.",
+            "title": "Desired",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last start failed, in words.",
+            "title": "Error"
+          },
+          "logins": {
+            "description": "The logins it would use, never their values.",
+            "items": {
+              "$ref": "#/components/schemas/LoginItemOut"
+            },
+            "title": "Logins",
+            "type": "array"
+          },
+          "missing_logins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Logins",
+            "type": "array"
+          },
+          "real_trading_allowed": {
+            "title": "Real Trading Allowed",
+            "type": "boolean"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "state": {
+            "enum": [
+              "stopped",
+              "starting",
+              "running",
+              "stopping",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "desired",
+          "error",
+          "since",
+          "real_trading_allowed",
+          "logins",
+          "missing_logins"
+        ],
+        "title": "EngineOut",
+        "type": "object"
+      },
       "EngineStatus": {
         "properties": {
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
           "running": {
             "title": "Running",
             "type": "boolean"
+          },
+          "state": {
+            "default": "stopped",
+            "enum": [
+              "stopped",
+              "starting",
+              "running",
+              "stopping",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
           }
         },
         "required": [
@@ -1717,6 +1828,35 @@
         "title": "LoginIn",
         "type": "object"
       },
+      "LoginItemOut": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "dashboard",
+              ".env",
+              "missing",
+              "unreadable"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "present",
+          "source"
+        ],
+        "title": "LoginItemOut",
+        "type": "object"
+      },
       "MetricsOut": {
         "properties": {
           "avg_payout_pct": {
@@ -2022,6 +2162,28 @@
           "new_password"
         ],
         "title": "PasswordChangeIn",
+        "type": "object"
+      },
+      "RealTradingIn": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "password": {
+            "description": "The owner's own password.",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed",
+          "password"
+        ],
+        "title": "RealTradingIn",
         "type": "object"
       },
       "ResyncRequest": {
@@ -3473,7 +3635,7 @@
         ]
       },
       "put": {
-        "description": "Switch between demo and real. Refused while a chain or trade is running; real also needs\nQUOTEX_ALLOW_REAL=true (decision D-15).",
+        "description": "Switch between demo and real. Refused while a chain or trade is running. REAL also needs the\nowner's permission (`PUT /account/real-trading`, decision D-15) and the owner's password again:\nthis is the one request that makes trades use real money.",
         "operationId": "set_account_api_v1_account_put",
         "requestBody": {
           "content": {
@@ -3558,6 +3720,98 @@
           }
         },
         "summary": "Set Account",
+        "tags": [
+          "control"
+        ]
+      }
+    },
+    "/api/v1/account/real-trading": {
+      "put": {
+        "description": "Allow, or stop allowing, the switch to the REAL account. Needs the owner's password. It is\nwritten to the risk log. Taking it back is refused while REAL is the account in use.",
+        "operationId": "set_real_trading_api_v1_account_real_trading_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RealTradingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Set Real Trading",
         "tags": [
           "control"
         ]
@@ -4425,6 +4679,334 @@
         "summary": "Stop After Current",
         "tags": [
           "chains"
+        ]
+      }
+    },
+    "/api/v1/engine": {
+      "get": {
+        "description": "Whether the engine is running, why it is not, and which logins it has.",
+        "operationId": "get_engine_state_api_v1_engine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Engine State",
+        "tags": [
+          "engine"
+        ]
+      }
+    },
+    "/api/v1/engine/restart": {
+      "post": {
+        "description": "Stop and start again, for example after changing a stored login.",
+        "operationId": "restart_engine_api_v1_engine_restart_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Restart Engine",
+        "tags": [
+          "engine"
+        ]
+      }
+    },
+    "/api/v1/engine/start": {
+      "post": {
+        "description": "Start the engine on the DEMO account: it connects to Quotex and Telegram and begins taking\nsignals. Does nothing if it is running. 409 `engine_start_failed` says why it could not.",
+        "operationId": "start_engine_api_v1_engine_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Engine",
+        "tags": [
+          "engine"
+        ]
+      }
+    },
+    "/api/v1/engine/stop": {
+      "post": {
+        "description": "Stop the engine. Trades that are open stay open on Quotex and run to their expiry; here they\nare marked `unknown` straight away (the application can no longer follow them).",
+        "operationId": "stop_engine_api_v1_engine_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Stop Engine",
+        "tags": [
+          "engine"
         ]
       }
     },

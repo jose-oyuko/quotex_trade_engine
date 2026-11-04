@@ -20,3 +20,15 @@ class TelegramNotConnectedError(ControlError):
 class AccountSwitchRefusedError(ControlError):
     """Switching between demo and real while trades or chains are running is refused: their stakes
     and results belong to the account they started on."""
+
+
+class EngineBusyError(ControlError):
+    """The engine is already being started, stopped or restarted."""
+
+
+class EngineStartError(ControlError):
+    """The engine could not be started; the message says why, in words for the owner."""
+
+
+class RealTradingInUseError(ControlError):
+    """Real-money trading cannot be switched off while the REAL account is the one in use."""

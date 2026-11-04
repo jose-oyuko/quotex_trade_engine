@@ -15,13 +15,14 @@ from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
 from app.domain.enums import AccountType
-from app.domain.records import GroupRecord, GroupSettingsRecord
+from app.domain.ids import new_id
+from app.domain.records import GroupRecord, GroupSettingsRecord, RiskEventRecord
 from app.engine.errors import AccountSwitchRefusedError, TelegramNotConnectedError
 from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
 from app.engine.risk import RiskGuard, RiskLimits
 from app.events.bus import EventBus
-from app.events.types import AccountChanged
+from app.events.types import AccountChanged, RiskTripped
 from app.quotex.base import QuotexAdapter
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, PipelineConfig, SignalPipeline, Sleeper
@@ -105,14 +106,29 @@ class Engine:
 
     async def switch_account(self, account_type: AccountType) -> None:
         """Move between demo and real. Refused while any chain or trade is running (their stakes
-        and results belong to the account they started on); real also needs QUOTEX_ALLOW_REAL."""
+        and results belong to the account they started on); real also needs the owner's
+        permission."""
         if self.manager.active_chains() or self.guard.open_trades:
             raise AccountSwitchRefusedError(
                 f"{len(self.manager.active_chains())} chain(s) and {self.guard.open_trades} "
                 "trade(s) are still running: wait for them or end them first"
             )
         await self.adapter.set_account_type(account_type)
-        self._bus.publish(AccountChanged(occurred_at=self._clock.now(), account_type=account_type))
+        now = self._clock.now()
+        self._bus.publish(AccountChanged(occurred_at=now, account_type=account_type))
+        if account_type is AccountType.REAL:  # the one switch that moves real money: on the record
+            self._bus.publish(
+                RiskTripped(
+                    occurred_at=now,
+                    risk_event=RiskEventRecord(
+                        id=new_id(),
+                        occurred_at=now,
+                        kind="switched_to_real",
+                        message="The account was switched to REAL money: trades now use real funds",
+                        group_id=None,
+                    ),
+                )
+            )
 
     # --- Telegram chats (for the "choose a group" picker) ---
 

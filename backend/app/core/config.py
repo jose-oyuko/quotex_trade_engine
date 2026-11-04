@@ -71,8 +71,9 @@ class Settings(BaseSettings):
     # `npm run key:create` (or `npm start`) writes one here. Without it nothing can be stored.
     secret_key: SecretStr | None = None
 
-    # Starts the trading engine (Quotex + Telegram + chains) with the application. Off by default:
-    # starting the backend must never log in to Quotex or Telegram by surprise.
+    # The starting value for "start the engine with the application", used only until the owner has
+    # started or stopped it on the dashboard (which is remembered in the database, decision D-63).
+    # Off by default: starting the backend must never log in to Quotex or Telegram by surprise.
     engine_enabled: bool = False
 
     # Quotex. Credentials are secrets: SecretStr never shows up in logs or repr().
@@ -80,7 +81,8 @@ class Settings(BaseSettings):
     quotex_password: SecretStr | None = None
     # The broker's domain changes from time to time (the old qxbroker.com stopped resolving).
     quotex_host: str = "quotex.com"
-    # Real-money trading must be switched on explicitly (decision D-15).
+    # The starting value for the real-money permission, used until the owner has decided on the
+    # dashboard (with the password). Real-money trading must be switched on explicitly (D-15).
     quotex_allow_real: bool = False
     # TIME = expire at the next clock-aligned expiry, TIMER = a countdown of the given length.
     quotex_time_mode: Literal["TIME", "TIMER"] = "TIME"

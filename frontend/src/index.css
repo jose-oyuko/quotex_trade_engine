@@ -743,3 +743,12 @@ summary {
 .secret-row small.help {
   display: block;
 }
+
+.login-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}

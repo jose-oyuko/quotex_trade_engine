@@ -106,6 +106,7 @@ class DBWriter:
         self._monotonic = monotonic
         self._stopping = False
         self.retrying = False  # True while waiting for a database that is down
+        self._busy = False  # a batch has been taken from the queue and is not yet stored
         self.stats = WriterStats()
 
     @property
@@ -127,6 +128,17 @@ class DBWriter:
         )
         self._task = self._tasks.spawn(self._run(self._subscription), name="db_writer")
 
+    async def wait_idle(self, timeout_s: float = 10.0) -> bool:
+        """Wait until everything published so far is stored (the queue is empty and no batch is
+        being written). False if that did not happen in time (a database outage, say). Used before
+        the engine is started again: its recovery reads the database, which must be up to date."""
+        deadline = time.monotonic() + timeout_s
+        while self.queue_depth or self._busy:
+            if time.monotonic() >= deadline:
+                return False
+            await asyncio.sleep(0.01)
+        return True
+
     async def stop(self) -> None:
         """Stop accepting events and write everything already queued."""
         if self._subscription is None:
@@ -141,6 +153,7 @@ class DBWriter:
                 batch = [await subscription.get()]
             except SubscriptionClosedError:
                 return
+            self._busy = True
             while len(batch) < self._batch_size:
                 event = subscription.get_nowait()
                 if event is None:
@@ -152,6 +165,8 @@ class DBWriter:
                 # Last line of defence: whatever went wrong, the writer keeps running.
                 self.stats.failed += len(batch)
                 log.error("db_writer_unexpected_error", size=len(batch), exc_info=True)
+            finally:
+                self._busy = False
 
     async def _write(self, batch: list[Event]) -> None:
         error = await self._commit_with_retry(batch)

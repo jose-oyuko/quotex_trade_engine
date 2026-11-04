@@ -7,15 +7,19 @@ from typing import Annotated
 from fastapi import APIRouter, Body
 
 from app.api.deps import (
+    AuthDep,
+    ControllerDep,
+    CurrentUserDep,
     EngineDep,
     LiveDep,
     RiskSettingsDep,
     RunningEngineDep,
     SessionDep,
-    SettingsDep,
     SnapshotsDep,
 )
+from app.api.errors import ApiError
 from app.api.schemas.common import DEFAULT_PAGE_SIZE, LimitParam, OffsetParam, Page
+from app.api.schemas.engine import RealTradingIn
 from app.api.schemas.records import RiskEventOut, risk_event_out
 from app.api.schemas.risk import (
     AccountIn,
@@ -29,6 +33,7 @@ from app.api.schemas.risk import (
 from app.api.schemas.status import SnapshotOut
 from app.api.views import limits_out
 from app.db.repositories import RiskEventRepository
+from app.domain.enums import AccountType
 from app.engine.risk import RiskLimits
 
 router = APIRouter(tags=["control"])
@@ -110,19 +115,43 @@ async def release_kill_switch(engine: RunningEngineDep, snapshots: SnapshotsDep)
 
 
 @router.get("/account", response_model=AccountOut)
-async def get_account(live: LiveDep, settings: SettingsDep) -> AccountOut:
-    return AccountOut(
-        account_type=live.account_type, real_trading_allowed=settings.quotex_allow_real
-    )
+async def get_account(live: LiveDep, controller: ControllerDep) -> AccountOut:
+    return AccountOut(account_type=live.account_type, real_trading_allowed=controller.real_allowed)
 
 
 @router.put("/account", response_model=AccountOut)
 async def set_account(
-    body: AccountIn, engine: RunningEngineDep, settings: SettingsDep
+    body: AccountIn,
+    engine: RunningEngineDep,
+    controller: ControllerDep,
+    user: CurrentUserDep,
+    auth: AuthDep,
 ) -> AccountOut:
-    """Switch between demo and real. Refused while a chain or trade is running; real also needs
-    QUOTEX_ALLOW_REAL=true (decision D-15)."""
+    """Switch between demo and real. Refused while a chain or trade is running. REAL also needs the
+    owner's permission (`PUT /account/real-trading`, decision D-15) and the owner's password again:
+    this is the one request that makes trades use real money."""
+    if body.account_type is AccountType.REAL:
+        if not body.password:
+            raise ApiError(
+                422, "password_required", "Enter your password to switch to the REAL account."
+            )
+        await auth.confirm_password(user, body.password)
     await engine.switch_account(body.account_type)
     return AccountOut(
-        account_type=engine.adapter.account_type, real_trading_allowed=settings.quotex_allow_real
+        account_type=engine.adapter.account_type, real_trading_allowed=controller.real_allowed
     )
+
+
+@router.put("/account/real-trading", response_model=AccountOut)
+async def set_real_trading(
+    body: RealTradingIn,
+    live: LiveDep,
+    controller: ControllerDep,
+    user: CurrentUserDep,
+    auth: AuthDep,
+) -> AccountOut:
+    """Allow, or stop allowing, the switch to the REAL account. Needs the owner's password. It is
+    written to the risk log. Taking it back is refused while REAL is the account in use."""
+    await auth.confirm_password(user, body.password)
+    await controller.set_real_allowed(body.allowed)
+    return AccountOut(account_type=live.account_type, real_trading_allowed=controller.real_allowed)

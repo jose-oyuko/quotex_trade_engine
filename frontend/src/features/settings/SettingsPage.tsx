@@ -1,9 +1,12 @@
-import { useSecrets, useSettings } from '../../api/queries'
+import { useEngine, useSecrets, useSettings, useStatus } from '../../api/queries'
 import { DataState } from '../../components/DataState'
+import { EnginePanel } from './EnginePanel'
 import { SecretsPanel } from './SecretsPanel'
 import { SettingsForm } from './SettingsForm'
 
 export default function SettingsPage() {
+  const engine = useEngine()
+  const status = useStatus()
   const settings = useSettings()
   const secrets = useSecrets()
   return (
@@ -12,6 +15,9 @@ export default function SettingsPage() {
       <p className="lead">
         What used to be edited in <code>backend/.env</code> is changed here.
       </p>
+      <DataState query={engine}>
+        {(info) => <EnginePanel engine={info} account={status.data?.account_type ?? 'demo'} />}
+      </DataState>
       <DataState query={settings}>{(data) => <SettingsForm data={data} />}</DataState>
       <DataState query={secrets}>{(data) => <SecretsPanel data={data} />}</DataState>
     </section>

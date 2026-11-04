@@ -16,6 +16,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.api.schemas.status import ConnectionOut, EngineStatus
+from app.api.snapshot import engine_status
+from app.engine.controller import EngineState
 
 router = APIRouter(tags=["health"])
 log = structlog.get_logger()
@@ -69,6 +71,11 @@ async def health(request: Request) -> HealthResponse:
         engine_running=engine_running,
         telegram=connections.get("telegram"),
         quotex=connections.get("quotex"),
+        engine_failure=(
+            state.controller.error
+            if state.controller is not None and state.controller.state is EngineState.FAILED
+            else None
+        ),
     )
     return HealthResponse(
         status="degraded" if problems else "ok",
@@ -87,9 +94,7 @@ async def health(request: Request) -> HealthResponse:
             dropped=writer.dropped,
             retrying=writer.retrying,
         ),
-        engine=EngineStatus(
-            enabled=state.settings.engine_enabled, running=state.trading is not None
-        ),
+        engine=engine_status(state.controller, running=state.trading is not None),
         telegram=component("telegram"),
         quotex=component("quotex"),
         last_event_at=live.last_event_at if live is not None else None,
@@ -104,8 +109,11 @@ def _problems(
     engine_running: bool,
     telegram: Any,
     quotex: Any,
+    engine_failure: str | None = None,
 ) -> list[str]:
     problems: list[str] = []
+    if engine_failure:
+        problems.append(f"The trading engine could not start: {engine_failure}")
     if database != "ok":
         problems.append("The database cannot be reached: nothing is being stored.")
     if writer is not None:

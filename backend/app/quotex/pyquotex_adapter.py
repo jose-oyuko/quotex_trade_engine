@@ -213,6 +213,9 @@ class PyQuotexAdapter:
 
     # ---- account -----------------------------------------------------------------------------
 
+    def set_real_allowed(self, allowed: bool) -> None:
+        self._allow_real = allowed
+
     async def set_account_type(self, account_type: AccountType) -> None:
         if account_type is AccountType.REAL and not self._allow_real:
             raise RealAccountNotAllowedError("real trading is not enabled")

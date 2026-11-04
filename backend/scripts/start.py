@@ -103,30 +103,15 @@ class Summary:
 
 
 def summarise(settings: Settings, *, env_file_exists: bool) -> Summary:
-    engine_on = settings.engine_enabled
     credentials: list[str] = []
-    if engine_on:
-        missing = [
-            name
-            for name, present in (
-                ("QUOTEX_EMAIL", settings.quotex_email),
-                ("QUOTEX_PASSWORD", settings.quotex_password),
-                ("TELEGRAM_API_ID", settings.telegram_api_id),
-                ("TELEGRAM_API_HASH", settings.telegram_api_hash),
-            )
-            if present is None
-        ]
-        credentials.append(
-            "Logins:       all present in .env"
-            if not missing
-            else f"Logins:       MISSING in .env: {', '.join(missing)} (the engine will not start)"
-        )
-    elif not env_file_exists:
+    if not env_file_exists:
         credentials.append("Settings:     no backend/.env: defaults are used (safe, trading off)")
+    # The engine is started and stopped on the dashboard (decision D-63); what the owner left
+    # running there is remembered, so the summary can only say what `.env` alone would do.
     engine_text = (
-        "ON: signals will be read and trades placed"
-        if engine_on
-        else "OFF (set ENGINE_ENABLED=true in backend/.env to trade)"
+        "starts with the application (ENGINE_ENABLED=true); stop it on the Settings page"
+        if settings.engine_enabled
+        else "start and stop it on the dashboard's Settings page (it starts on the demo account)"
     )
     return Summary(
         url=f"http://{settings.host}:{settings.port}",

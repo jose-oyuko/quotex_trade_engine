@@ -59,7 +59,7 @@ async def test_without_the_engine_it_says_how_to_turn_it_on(tmp_path: Path) -> N
         response = await rig.client.get(URL)
     assert response.status_code == 503
     error = response.json()["error"]
-    assert error["code"] == "engine_not_running" and "ENGINE_ENABLED=true" in error["message"]
+    assert error["code"] == "engine_not_running" and "Settings page" in error["message"]
 
 
 async def test_while_telegram_is_down_it_says_so(tmp_path: Path) -> None:

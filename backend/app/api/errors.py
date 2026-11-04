@@ -25,7 +25,13 @@ from app.auth.service import (
     WrongSetupCodeError,
 )
 from app.core.errors import DomainError
-from app.engine.errors import AccountSwitchRefusedError, UnknownChainError
+from app.engine.errors import (
+    AccountSwitchRefusedError,
+    EngineBusyError,
+    EngineStartError,
+    RealTradingInUseError,
+    UnknownChainError,
+)
 from app.engine.risk import RiskConfigError
 from app.quotex.errors import NotConnectedError, QuotexError, RealAccountNotAllowedError
 from app.services.app_config import InvalidSettingError
@@ -69,6 +75,9 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     InvalidGroupError: (422, "invalid_group"),
     UnknownChainError: (404, "chain_not_running"),
     AccountSwitchRefusedError: (409, "account_switch_refused"),
+    EngineBusyError: (409, "engine_busy"),
+    EngineStartError: (409, "engine_start_failed"),
+    RealTradingInUseError: (409, "real_trading_in_use"),
     RealAccountNotAllowedError: (403, "real_trading_not_allowed"),
     RiskConfigError: (422, "invalid_risk_limits"),
     NotConnectedError: (503, "quotex_not_connected"),

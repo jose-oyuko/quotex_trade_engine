@@ -38,7 +38,7 @@ const HEALTHY = {
   database: 'ok',
   events_published: 0,
   writer: null,
-  engine: { enabled: true, running: true },
+  engine: { enabled: true, running: true, state: 'running', error: null },
 }
 
 const ROUTES = [
@@ -163,7 +163,10 @@ describe('the app shell', () => {
     it('say "not running" when the engine is off', async () => {
       await renderApp(
         '/',
-        makeSnapshot({ engine: { enabled: false, running: false }, connections: {} }),
+        makeSnapshot({
+          engine: { enabled: false, running: false, state: 'stopped', error: null },
+          connections: {},
+        }),
       )
       expect(screen.getByText('Telegram: not running')).toBeInTheDocument()
       expect(screen.getByText('Quotex: not running')).toBeInTheDocument()

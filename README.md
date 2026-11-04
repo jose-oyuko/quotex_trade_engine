@@ -84,10 +84,10 @@ meaning. The defaults are safe and need no file. The main ones:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ENGINE_ENABLED` | `false` | `true` logs in to Quotex and Telegram and acts on signals |
+| `ENGINE_ENABLED` | `false` | Only the starting value: start and stop the engine on the dashboard's Settings page, which remembers it |
 | `QUOTEX_EMAIL`, `QUOTEX_PASSWORD` | unset | Quotex login (secrets) |
 | `QUOTEX_HOST` | `quotex.com` | The broker's domain; changes now and then |
-| `QUOTEX_ALLOW_REAL` | `false` | Real-money trading stays impossible unless `true` *and* switched on in the dashboard |
+| `QUOTEX_ALLOW_REAL` | `false` | Only the starting value: allow real money on the Settings page (asks for your password) |
 | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | unset | From <https://my.telegram.org> (secrets) |
 | `PORT` | `8000` | Port on `127.0.0.1` |
 | `LOG_LEVEL`, `LOG_TO_FILE`, `LOG_MAX_MB`, `LOG_BACKUPS` | `INFO`, `true`, `10`, `5` | Logs, also in `backend/data/logs/engine.log` |

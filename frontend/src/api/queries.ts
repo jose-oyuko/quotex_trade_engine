@@ -30,6 +30,7 @@ export const keys = {
   health: ['health'] as const,
   auth: ['auth'] as const,
   settings: ['settings'] as const,
+  engine: ['engine'] as const,
   secrets: ['secrets'] as const,
 }
 
@@ -39,6 +40,10 @@ export function useStatus() {
     queryFn: ({ signal }) => api.status(signal),
     staleTime: Infinity, // the live feed keeps it current
   })
+}
+
+export function useEngine() {
+  return useQuery({ queryKey: keys.engine, queryFn: ({ signal }) => api.engine.get(signal) })
 }
 
 export function useSettings() {

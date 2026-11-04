@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -18,8 +19,10 @@ class ConnectionOut(BaseModel):
 
 
 class EngineStatus(BaseModel):
-    enabled: bool  # ENGINE_ENABLED in the settings
-    running: bool  # the engine was started with this process
+    enabled: bool  # the owner left it on: it is started again when the application starts
+    running: bool
+    state: Literal["stopped", "starting", "running", "stopping", "failed"] = "stopped"
+    error: str | None = None  # why the last start failed
 
 
 class SnapshotOut(BaseModel):

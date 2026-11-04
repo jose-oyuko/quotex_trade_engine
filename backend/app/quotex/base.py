@@ -102,6 +102,10 @@ class QuotexAdapter(Protocol):
         """Switch between demo and real. REAL needs explicit permission (D-15)."""
         ...
 
+    def set_real_allowed(self, allowed: bool) -> None:
+        """Give or take back the permission for REAL (the owner's choice, made in the dashboard)."""
+        ...
+
     def balance(self) -> BalanceSnapshot | None:
         """The latest known balance of the active account, from memory (None before the first)."""
         ...

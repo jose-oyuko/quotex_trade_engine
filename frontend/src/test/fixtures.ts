@@ -23,7 +23,7 @@ export function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     version: '0.1.0',
     environment: 'development',
-    engine: { enabled: true, running: true },
+    engine: { enabled: true, running: true, state: 'running', error: null },
     account_type: 'demo',
     real_trading_allowed: false,
     connections: {

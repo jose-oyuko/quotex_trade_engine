@@ -44,7 +44,12 @@ async def test_a_dashboard_gets_a_snapshot_then_the_events_in_order(tmp_path: Pa
         async with connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws:
             snapshot = await recv(ws)
             assert snapshot["type"] == "snapshot" and snapshot["reason"] == "connect"
-            assert snapshot["data"]["engine"] == {"enabled": True, "running": True}
+            assert snapshot["data"]["engine"] == {
+                "enabled": True,
+                "running": True,
+                "state": "running",
+                "error": None,
+            }
             assert snapshot["data"]["account_type"] == "demo"
 
             rig.fakes.signal(-1001, "EURUSD CALL 1m")

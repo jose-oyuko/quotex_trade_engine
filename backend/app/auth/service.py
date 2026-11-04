@@ -289,6 +289,19 @@ class AuthService:
             await session.execute(others)
         log.info("password_changed", username=user.username)
 
+    async def confirm_password(self, user: UserInfo, password: str) -> None:
+        """Ask the owner for the password again before something that moves money. Guessing here
+        counts with the other password attempts (the same lock)."""
+        key = f"password:{user.id}"
+        if (locked := self._throttle.seconds_locked(key)) > 0:
+            raise ThrottledError(locked)
+        async with self._sessions() as session:
+            row = await session.get(User, user.id)
+        if row is None or not await verify_password_async(password, row.password_hash):
+            self._throttle.failed(key)
+            raise InvalidLoginError("The password is not right.")
+        self._throttle.succeeded(key)
+
     async def set_owner(self, *, username: str | None, password: str) -> tuple[str, bool]:
         """For the command on the machine (`npm run owner:reset`): create the account if there is
         none, otherwise replace the admin's password. Ends every session. Returns the username and

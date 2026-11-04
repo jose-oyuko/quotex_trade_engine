@@ -191,22 +191,13 @@ def test_the_summary_never_contains_a_secret(tmp_path: Path) -> None:
     )
     text = "\n".join(summarise(settings, env_file_exists=True).lines())
     assert secret_password not in text and secret_hash not in text and "me@example.com" not in text
-    assert "all present in .env" in text and "ON: signals will be read" in text
+    assert "starts with the application" in text
 
 
-def test_the_summary_names_the_logins_that_are_missing_when_trading_is_on(tmp_path: Path) -> None:
-    text = "\n".join(
-        summarise(settings_for(tmp_path, engine_enabled=True), env_file_exists=True).lines()
-    )
-    for name in ("QUOTEX_EMAIL", "QUOTEX_PASSWORD", "TELEGRAM_API_ID", "TELEGRAM_API_HASH"):
-        assert name in text
-    assert "will not start" in text
-
-
-def test_with_trading_off_it_says_so_and_how_to_turn_it_on(tmp_path: Path) -> None:
+def test_with_nothing_decided_it_says_where_the_engine_is_started(tmp_path: Path) -> None:
     summary = summarise(settings_for(tmp_path), env_file_exists=False)
     text = "\n".join(summary.lines())
-    assert "OFF" in text and "ENGINE_ENABLED=true" in text
+    assert "Settings page" in text and "starts with the application" not in text
     assert "demo only" in text and "no backend/.env" in text
     assert "Log file" in text  # where to look when something goes wrong
 

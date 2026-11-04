@@ -12,6 +12,7 @@ from app.api.errors import ApiError
 from app.api.snapshot import SnapshotBuilder
 from app.auth.service import SESSION_COOKIE, AuthService, UserInfo
 from app.core.config import Settings
+from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.services.app_config import ConfigService
 from app.services.groups import GroupService
@@ -30,7 +31,7 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 
 def get_engine(request: Request) -> Engine | None:
-    """The trading engine, or None when it was not started (ENGINE_ENABLED=false)."""
+    """The trading engine, or None when it is not running."""
     engine: Engine | None = request.app.state.trading
     return engine
 
@@ -41,8 +42,7 @@ def require_engine(request: Request) -> Engine:
         raise ApiError(
             503,
             "engine_not_running",
-            "The trading engine is not running. Set ENGINE_ENABLED=true in backend/.env and "
-            "restart the application.",
+            "The trading engine is not running. Start it on the Settings page.",
         )
     return engine
 
@@ -89,6 +89,11 @@ async def current_user(request: Request) -> UserInfo:
     return user
 
 
+def get_controller(request: Request) -> EngineController:
+    controller: EngineController = request.app.state.controller
+    return controller
+
+
 def get_config(request: Request) -> ConfigService:
     config: ConfigService = request.app.state.config
     return config
@@ -109,5 +114,6 @@ RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]
 CurrentUserDep = Annotated[UserInfo, Depends(current_user)]
+ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]
 VaultDep = Annotated[SecretStore, Depends(get_vault)]

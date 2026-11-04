@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useSignals, useStatus } from '../../api/queries'
 import { DataState } from '../../components/DataState'
 import { SignalsTable } from '../signals/SignalsTable'
@@ -16,9 +17,9 @@ export default function LivePage() {
           <>
             {!snapshot.engine.running && (
               <p className="notice" role="status">
-                The trading engine is not running, so nothing is traded and no signals are read. Set{' '}
-                <code>ENGINE_ENABLED=true</code> in <code>backend/.env</code> and restart the
-                backend to start it. You can still set up groups and limits.
+                The trading engine is not running, so nothing is traded and no signals are read.
+                Start it on the <Link to="/settings">Settings</Link> page. You can still set up
+                groups and limits.
               </p>
             )}
             <StatsPanel />

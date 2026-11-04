@@ -14,7 +14,8 @@ def build_telethon_source(settings: Settings, *, clock: Clock) -> TelethonSource
     )
     if settings.telegram_api_id is None or not api_hash:
         raise TelegramNotConfiguredError(
-            "TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in backend/.env "
+            "The Telegram API id and hash are not set. Store the hash under Settings > Stored "
+            "logins and put TELEGRAM_API_ID in backend/.env "
             "(create them at https://my.telegram.org, 'API development tools')"
         )
     return TelethonSource(

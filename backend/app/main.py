@@ -14,7 +14,7 @@ from app.api.deps import current_user
 from app.api.errors import install_error_handlers
 from app.api.hub import Hub
 from app.api.openapi import build_openapi
-from app.api.routers import auth, chains, control, groups, reports, telegram, trades
+from app.api.routers import auth, chains, control, engine, groups, reports, telegram, trades
 from app.api.routers import settings as settings_router
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
@@ -29,8 +29,12 @@ from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import schema_is_current
 from app.db.recovery import load_recovery_state
 from app.db.writer import DBWriter
+from app.engine.controller import EngineController
 from app.engine.engine import Engine
+from app.engine.errors import EngineStartError
 from app.engine.factory import build_engine
+from app.engine.flags import EngineFlags
+from app.engine.logins import resolve_settings
 from app.events.bus import EventBus
 from app.services.app_config import ConfigService
 from app.services.groups import GroupService
@@ -108,11 +112,42 @@ def create_app(
             clock,
         )
 
+        # The engine is started and stopped by the owner from the dashboard (decision D-63). What
+        # the owner decided last time (running or not, real money allowed or not) is remembered in
+        # the database; `.env` only gives the starting value to an installation that never decided.
+        flags = EngineFlags(session_factory, clock)
+        stored_desired = await flags.desired()
+        stored_real = await flags.allow_real()
+
+        async def build_engine_for(real_allowed: bool) -> Engine:
+            resolved = await resolve_settings(cfg, app.state.vault, allow_real=real_allowed)
+            return engine_builder(resolved, app.state.bus, app.state.tasks)
+
+        def set_trading(trading: Engine | None) -> None:
+            app.state.trading = trading
+
+        controller = EngineController(
+            build=build_engine_for,
+            recovery=lambda: load_recovery_state(session_factory),
+            flush=writer.wait_idle,
+            set_trading=set_trading,
+            flags=flags,
+            bus=app.state.bus,
+            clock=clock,
+            desired=cfg.engine_enabled if stored_desired is None else stored_desired,
+            real_allowed=cfg.quotex_allow_real if stored_real is None else stored_real,
+        )
+        app.state.controller = controller
+
         # The live picture and the WebSocket hub listen from before the engine starts, so they see
         # every event it publishes, recovery's included.
         live = LiveState(recovery.app_settings)
         snapshots = SnapshotBuilder(
-            settings=cfg, version=VERSION, live=live, engine=lambda: app.state.trading
+            settings=cfg,
+            version=VERSION,
+            live=live,
+            engine=lambda: app.state.trading,
+            controller=lambda: controller,
         )
         hub = Hub(
             bus=app.state.bus,
@@ -142,32 +177,27 @@ def create_app(
             unsettled_trades=len(recovery.unsettled_trades),
         )
 
-        if cfg.engine_enabled:
+        if controller.desired:
             try:
-                trading = engine_builder(cfg, app.state.bus, app.state.tasks)
-                summary = await trading.start(recovery)
-            except Exception:
-                # e.g. a missing login: leave nothing half-started behind, then say what is wrong
-                await hub.stop()
-                await writer.stop()
-                await app.state.tasks.shutdown()
-                await engine.dispose()
-                raise
-            app.state.trading = trading
-            log.info(
-                "engine_started",
-                chains_marked_unknown=summary.chains_marked_unknown,
-                trades_marked_unknown=summary.trades_marked_unknown,
-            )
+                summary = await controller.start()
+            except EngineStartError:
+                # a missing login, say: the application stays up and the dashboard says why
+                log.warning("engine_not_started", error=controller.error)
+            else:
+                if summary is not None:
+                    log.info(
+                        "engine_started",
+                        chains_marked_unknown=summary.chains_marked_unknown,
+                        trades_marked_unknown=summary.trades_marked_unknown,
+                    )
         else:
-            log.info("engine_disabled", hint="set ENGINE_ENABLED=true in backend/.env to start it")
+            log.info("engine_stopped", hint="start it on the dashboard's Settings page")
 
         yield
 
         # Shutdown runs in reverse order of startup: the engine stops first (it publishes the last
         # events), then the writer drains its queue, so those events still reach the database.
-        if app.state.trading is not None:
-            await app.state.trading.stop()
+        await controller.shutdown()
         await hub.stop()
         await writer.stop()
         await app.state.tasks.shutdown()
@@ -195,6 +225,7 @@ def create_app(
     app.state.auth = None
     app.state.config = None
     app.state.vault = None
+    app.state.controller = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -225,6 +256,7 @@ def create_app(
         reports.router,
         telegram.router,
         settings_router.router,
+        engine.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

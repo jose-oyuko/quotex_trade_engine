@@ -51,7 +51,7 @@ is expected). The message names the setting. A line like `TELEGRAM_API_ID=` with
 `http://127.0.0.1:8000` or `http://localhost:8000`. Other host names are refused on purpose.
 
 **It starts, but nothing happens when signals arrive** — trading is off by default. The start-up summary
-says `Trading: OFF`. Set `ENGINE_ENABLED=true` in `backend/.env` and restart. Also check the group is
+says the engine is stopped. Start it on the dashboard's Settings page. Also check the group is
 added on the **Groups** page, enabled and not paused, and the kill switch is not on.
 
 **"ENGINE_ENABLED is true but ... is missing"** — the summary names the missing settings
@@ -82,7 +82,7 @@ tools". The hash is 32 characters of 0-9 and a-f.
 it stays, check the internet and that Telegram is reachable (some networks block it).
 
 **"Choose from my Telegram chats" says the engine is not running** — the list is fetched through the running
-engine. Set `ENGINE_ENABLED=true` in `backend/.env` and restart, or type the chat id by hand
+engine. Start the engine on the Settings page, or type the chat id by hand
 (`npm run telegram:dialogs` prints them).
 
 **"Telegram is not connected yet" in that list** — wait a few seconds and press "Try again"; if it never

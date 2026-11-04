@@ -103,9 +103,12 @@ and are flagged `unknown` on the next start, like after a crash. Tested:
 
 ## Missing logins
 
-`ENGINE_ENABLED=true` without the Quotex or Telegram credentials makes the application refuse to
-start, naming what is missing, with nothing half-started. `npm start` also prints this before it
-starts. With `ENGINE_ENABLED=false` (the default) the application never touches either service.
+Starting the engine without the Quotex or Telegram logins (or with a stored one that cannot be read)
+fails with the reason, in words; nothing is left half-started and the application keeps running. The
+Settings page shows the reason, `/health` lists it as a problem, and the owner fixes it and presses start
+again. With the engine stopped (the default) the application never touches either service. If the
+application starts with the engine "left running" and a login is then missing, the same happens: it
+stays up, the engine shows as failed. Tested in `test_api_engine.py` and `test_app_lifecycle.py`.
 
 ## Missing or wrong SECRET_KEY
 

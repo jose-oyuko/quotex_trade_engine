@@ -101,10 +101,16 @@ describe('LivePage', () => {
   it('warns when the engine is not running', () => {
     mockApi(routes([['GET', '/risk', risk(null)]]))
     renderWith(<LivePage />, {
-      client: testClient(makeSnapshot({ engine: { enabled: false, running: false } })),
+      client: testClient(
+        makeSnapshot({ engine: { enabled: false, running: false, state: 'stopped', error: null } }),
+      ),
     })
     const notice = screen.getByText(/trading engine is not running/)
-    expect(notice).toHaveTextContent('ENGINE_ENABLED=true')
+    expect(notice).toHaveTextContent('Settings')
+    expect(within(notice).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/settings',
+    )
     expect(notice).toHaveAttribute('role', 'status')
   })
 

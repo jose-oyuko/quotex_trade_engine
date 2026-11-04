@@ -93,9 +93,16 @@ def test_the_engine_never_sleeps_or_waits_a_fixed_time() -> None:
 
 def test_the_engine_has_no_database_access_on_its_hot_path() -> None:
     """Decision D-4: the executor, the chain and the strategies cannot reach the database at all;
-    the manager and engine only need the type of the start-up recovery result."""
+    the manager and engine only need the type of the start-up recovery result. The life-cycle
+    modules (decision D-63: they run only when the engine is started or stopped, from the
+    dashboard) may use the database, and nothing on the signal-to-order path may import them."""
     forbidden = ("sqlalchemy", "app.db")
-    hot = [p for p in (APP / "engine").glob("*.py") if p.name not in {"manager.py", "engine.py"}]
+    lifecycle = {"controller.py", "flags.py", "logins.py"}
+    hot = [
+        p
+        for p in (APP / "engine").glob("*.py")
+        if p.name not in {"manager.py", "engine.py"} | lifecycle
+    ]
     offenders = [
         f"{path.name}: {module}"
         for path in hot
@@ -106,6 +113,14 @@ def test_the_engine_has_no_database_access_on_its_hot_path() -> None:
     for name in ("manager.py", "engine.py"):
         db_imports = {m for m in imported_modules(APP / "engine" / name) if m.startswith(forbidden)}
         assert db_imports <= {"app.db.recovery"}, (name, db_imports)
+    reaching_lifecycle = [
+        f"{path.name}: {module}"
+        for path in (APP / "engine").glob("*.py")
+        if path.name not in lifecycle
+        for module in imported_modules(path)
+        if module in {"app.engine.controller", "app.engine.flags", "app.engine.logins"}
+    ]
+    assert reaching_lifecycle == []
 
 
 def test_the_engine_does_not_know_the_api_or_the_telethon_wrapper() -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import sqlite3
 import time
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
@@ -194,12 +195,13 @@ async def test_a_graceful_shutdown_is_quick_and_flushes_everything_it_knew(tmp_p
     assert shutdown_s < 3.0, f"shutdown took {shutdown_s:.1f}s with a trade open"
     assert time.perf_counter() - started < 15
 
-    async with running_api(tmp_path) as again:  # engine off: just read what was stored
+    # the application was stopped while the trade was open: stored as it was (flagged next start)
+    with sqlite3.connect(tmp_path / "data" / "quotex.db") as db:
+        assert db.execute("SELECT status FROM chains").fetchone()[0] in ("open", "pending")
+
+    async with running_api(tmp_path) as again:  # the engine, left running, comes back by itself
         risk = (await again.client.get(f"{API}/risk")).json()["controls"]
         assert risk["limits"]["max_stake"] == "7.00" and risk["paused_groups"] == [1]
-        chain = (await again.client.get(f"{API}/chains")).json()["items"][0]
-        # the application was stopped while the trade was open: stored as it was, flagged next start
-        assert chain["status"] in ("open", "pending")
 
 
 def _orders(rig: ApiRig, count: int):  # type: ignore[no-untyped-def]

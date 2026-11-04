@@ -98,6 +98,11 @@ class AccountIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     account_type: AccountType
+    password: str | None = Field(
+        default=None,
+        max_length=256,
+        description="The owner's password: required to switch to REAL, not to go back to demo.",
+    )
 
 
 class AccountOut(BaseModel):

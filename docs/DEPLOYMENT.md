@@ -45,7 +45,7 @@ uv sync --directory backend                               # Python 3.12 and ever
 uv run --directory backend alembic upgrade head           # creates the database
 cp .env.example backend/.env
 chmod 600 backend/.env
-nano backend/.env          # logins, ENVIRONMENT=production, ENGINE_ENABLED=false for now
+nano backend/.env          # ENVIRONMENT=production; the logins can be typed on the dashboard instead
 ```
 
 `uv sync` fetches the Quotex library from GitHub, so the server needs `git` and internet access

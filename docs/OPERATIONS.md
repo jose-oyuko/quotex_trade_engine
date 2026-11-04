@@ -49,6 +49,28 @@ and stops working as soon as the account exists. After that the login page is wh
 - The demo (`npm run demo`) has its own account: `demo` / `demo-password`.
 - `npm run api:watch -- --username <name>` asks for the password too.
 
+## The trading engine (the Settings page)
+
+The **Settings** page starts, stops and restarts the engine (Quotex and Telegram together) while the
+application keeps running: no `.env` edit, no restart.
+
+- **Start the engine:** needs the logins (the page lists each one and where it comes from: *stored here*,
+  *from backend/.env*, *missing*). It always starts on the **demo** account. If it cannot start, the page
+  says why in words (and `/health` shows it), and you can fix it and try again.
+- **Stop the engine:** asks first. No new signal is traded. Trades that are open stay open on Quotex and run
+  to their expiry; here they are marked *unknown* at once (the application can no longer follow them), so look
+  at them on Quotex.
+- **Restart:** stop and start again, for example after storing a different login.
+- **It remembers:** an engine you left running starts again by itself when the application starts (also after
+  a crash, with the service restarting it); one you stopped stays stopped. `ENGINE_ENABLED` in `.env` is now
+  only the starting value for an installation that never decided.
+- **A login that is stored but cannot be read** (wrong `SECRET_KEY`) stops the start with a message; the engine
+  never quietly uses an older `.env` password instead.
+- **Real money:** *Allow real-money trading* (needs your password) only makes the switch possible; the account
+  stays DEMO until you press *Switch to the REAL account* (password again, refused while a chain or trade is
+  running). Both are written to the risk log. You cannot stop allowing it while REAL is in use. After a
+  restart the engine is on demo again.
+
 ## Settings and stored logins (the Settings page)
 
 The **Settings** page in the dashboard replaces editing `backend/.env` for these:
@@ -65,8 +87,8 @@ the saved value.
 
 The page also has **Stored logins** (Quotex email, Quotex password, Telegram API hash): type a value,
 **Save**, and it is stored encrypted in the database. It is never shown again; the page only says
-*Stored*, *Not set* or *Stored, cannot be read*. **In this version the trading engine does not use them
-yet** (it still reads `backend/.env`); they become the source of the logins in the next phases.
+*Stored*, *Not set* or *Stored, cannot be read*. **The engine uses them** when it starts (a stored value
+wins over `backend/.env`); after changing one, restart the engine.
 
 **The key.** Stored logins are encrypted with `SECRET_KEY` in `backend/.env`. `npm start` adds one the
 first time (and says so); `npm run key:create` does the same by hand (on a server:
@@ -81,7 +103,7 @@ first time (and says so); `npm run key:create` does the same by hand (on a serve
 
 ## First-time logins
 
-Telegram and Quotex need no login until you set `ENGINE_ENABLED=true`. Do these once, on the demo account.
+Telegram and Quotex need no login until you start the engine (Settings page). Do these once, on the demo account.
 (These logins are still typed into a terminal and `backend/.env`; moving them into the dashboard is the
 next phases, see PHASES.md.)
 
@@ -106,7 +128,7 @@ expires. The diagnostic only ever uses the demo account.
 
 **4. Groups and limits.** Start the app (`npm start`), open the **Groups** page and add each Telegram group
 with its strategy and stakes. Set the risk limits **before** enabling the engine (max stake, daily
-stop-loss and so on). These can be set while `ENGINE_ENABLED=false`.
+stop-loss and so on). These can be set while the engine is stopped.
 
 In the add-group form, **Choose from my Telegram chats** lists the groups and channels your Telegram
 account is in, by name; pick one and its chat id (and name, if you have not typed one) are filled in.
@@ -114,7 +136,7 @@ The list comes through the running engine, so it only works once step 5 is done 
 connected. Before that, type the chat id yourself (`npm run telegram:dialogs` prints them). Chats that
 already have a group are shown greyed out.
 
-**5. Turn it on.** Set `ENGINE_ENABLED=true` in `backend/.env` and restart. The summary printed at
+**5. Turn it on.** Open **Settings** and press **Start the engine** (see "The trading engine" above). The summary printed at
 start-up should say "Logins: all present in .env" and "Account: demo only".
 
 The two session files are as good as your passwords. Keep `backend/data/` private.
@@ -135,7 +157,7 @@ The two session files are as good as your passwords. Keep `backend/data/` privat
 - **Pause a group**, **stop after the current trade**, **end a chain**: on the Groups and Live pages.
 - **Risk limits:** global and per group. The day for the daily limits starts at 00:00 UTC unless
   configured otherwise (D-38).
-- **Account type:** demo unless `QUOTEX_ALLOW_REAL=true` *and* you switch to real on the dashboard.
+- **Account type:** demo unless you allowed real money on the Settings page *and* switched to real there; both ask for your password again and are written to the risk log.
   Real money is never one click or one setting away.
 
 ## Logs

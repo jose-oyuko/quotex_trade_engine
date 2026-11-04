@@ -58,14 +58,17 @@ trust:
 | `PUT /risk/limits` | Set the global limits. **Works without the engine**, so you can set them before ever enabling it. Today's result is kept. |
 | `GET /risk/events` | Every order a limit blocked, and other safety events. |
 | `POST /kill-switch`, `DELETE /kill-switch` | Engage (optionally `{"stop_chains": true}`) or release the kill switch. *Needs the engine.* |
-| `GET /account`, `PUT /account` | Which account is in use; switch between demo and real (refused while anything runs, and real needs `QUOTEX_ALLOW_REAL=true`). *Switching needs the engine.* |
+| `GET /account`, `PUT /account` | Which account is in use; switch between demo and real (refused while anything runs). Switching to REAL needs the real-money permission *and* `"password"` (the owner's, again) in the body: 422 `password_required`, 401 `invalid_login`, 403 `real_trading_not_allowed`. *Switching needs the engine.* |
+| `PUT /account/real-trading` | `{"allowed": bool, "password": text}`: give or take back the permission to switch to REAL (decision D-15). Written to the risk log. Taking it back while REAL is in use: 409 `real_trading_in_use`. Works with the engine stopped. |
+| `GET /engine` | The engine's state (`stopped`, `starting`, `running`, `stopping`, `failed`), why the last start failed, whether it starts with the application, and which logins it has (`dashboard`, `.env`, `missing`, `unreadable`: never their values). |
+| `POST /engine/start`, `POST /engine/stop`, `POST /engine/restart` | Start (always on the demo account), stop, or restart the engine without restarting the application. One at a time: while one runs, another is 409 `engine_busy`; a start that cannot work is 409 `engine_start_failed` with the reason. Stopping marks what was in flight `unknown` at once. |
 | `GET /reports/summary` | Profit, win rate, return on stakes, drawdown, streaks, what is not counted, and how the win rate compares with break-even. |
 | `GET /reports/breakdown?by=group\|asset\|strategy\|hour\|weekday` | The same figures split five ways (hour and weekday always list every hour / day). |
 | `GET /reports/equity` | The result of each day and the running total (the profit curve). |
 | `GET /reports/depth` | How far chains go: per step, how many chains got there, what it staked and earned, and how chains that ended there did overall. |
 | `GET /reports/export/trades.csv`, `GET /reports/export/breakdown.csv?by=…` | Spreadsheet downloads (see below). |
 
-"*Needs the engine*" means the engine was started with the backend (`ENGINE_ENABLED=true`).
+"*Needs the engine*" means the engine is running (start it on the Settings page, or `POST /engine/start`).
 Without it these answer HTTP 503 `engine_not_running`; everything else works, including creating
 groups and setting limits.
 

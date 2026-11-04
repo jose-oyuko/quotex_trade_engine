@@ -10,6 +10,7 @@ import type {
   ChainDetail,
   ChainStatus,
   Controls,
+  EngineInfo,
   Group,
   GroupCreate,
   GroupRiskLimits,
@@ -247,8 +248,23 @@ export const api = {
 
   account: {
     get: (signal?: AbortSignal) => request<Account>('GET', '/account', { signal }),
-    set: (accountType: AccountType) =>
-      request<Account>('PUT', '/account', { body: { account_type: accountType } }),
+    /** `password` is needed to switch to REAL, not to go back to demo. */
+    set: (accountType: AccountType, password?: string) =>
+      request<Account>('PUT', '/account', {
+        body:
+          password === undefined
+            ? { account_type: accountType }
+            : { account_type: accountType, password },
+      }),
+    setRealTrading: (allowed: boolean, password: string) =>
+      request<Account>('PUT', '/account/real-trading', { body: { allowed, password } }),
+  },
+
+  engine: {
+    get: (signal?: AbortSignal) => request<EngineInfo>('GET', '/engine', { signal }),
+    start: () => request<EngineInfo>('POST', '/engine/start'),
+    stop: () => request<EngineInfo>('POST', '/engine/stop'),
+    restart: () => request<EngineInfo>('POST', '/engine/restart'),
   },
 
   reports: {

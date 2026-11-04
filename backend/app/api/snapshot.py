@@ -2,21 +2,42 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.api.schemas.records import balance_out, chain_out, trade_out
 from app.api.schemas.risk import ControlsOut, DayOut
 from app.api.schemas.status import ConnectionOut, EngineStatus, SnapshotOut
 from app.api.views import controls_out
 from app.core.config import Settings
+from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.services.groups import EngineProvider
 from app.services.live import LiveState
 
 
+def engine_status(controller: EngineController | None, *, running: bool) -> EngineStatus:
+    if controller is None:  # the application is still starting
+        return EngineStatus(enabled=False, running=running)
+    return EngineStatus(
+        enabled=controller.desired,
+        running=running,
+        state=controller.state.value,
+        error=controller.error,
+    )
+
+
 class SnapshotBuilder:
     def __init__(
-        self, *, settings: Settings, version: str, live: LiveState, engine: EngineProvider
+        self,
+        *,
+        settings: Settings,
+        version: str,
+        live: LiveState,
+        engine: EngineProvider,
+        controller: Callable[[], EngineController | None] = lambda: None,
     ) -> None:
         self._settings = settings
+        self._controller = controller
         self._version = version
         self._live = live
         self._engine = engine
@@ -48,12 +69,15 @@ class SnapshotBuilder:
         live = self._live
         engine: Engine | None = self._engine()
         balance = live.balance
+        controller = self._controller()
         return SnapshotOut(
             version=self._version,
             environment=self._settings.environment,
-            engine=EngineStatus(enabled=self._settings.engine_enabled, running=engine is not None),
+            engine=engine_status(controller, running=engine is not None),
             account_type=live.account_type,
-            real_trading_allowed=self._settings.quotex_allow_real,
+            real_trading_allowed=(
+                self._settings.quotex_allow_real if controller is None else controller.real_allowed
+            ),
             connections={
                 name: ConnectionOut(
                     connected=status.connected, detail=status.detail, since=status.since

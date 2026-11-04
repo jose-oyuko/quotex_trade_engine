@@ -9,7 +9,7 @@ from uuid import uuid4
 from app.db.engine import create_engine, create_session_factory
 from app.db.repositories import AppSettingsRepository
 from app.quotex.base import TradeOutcome
-from tests.api_support import ApiRig, running_api
+from tests.api_support import OWNER_PASSWORD, ApiRig, running_api
 
 API = "/api/v1"
 LIMITS: dict[str, Any] = {
@@ -303,7 +303,9 @@ async def test_the_account_can_be_read_and_switched_when_nothing_is_running(
             "account_type": "demo",
             "real_trading_allowed": True,
         }
-        response = await rig.client.put(f"{API}/account", json={"account_type": "real"})
+        response = await rig.client.put(
+            f"{API}/account", json={"account_type": "real", "password": OWNER_PASSWORD}
+        )
         assert response.status_code == 200 and response.json()["account_type"] == "real"
         assert (await rig.client.get(f"{API}/status")).json()["account_type"] == "real"
         back = await rig.client.put(f"{API}/account", json={"account_type": "demo"})
@@ -317,7 +319,9 @@ async def test_switching_to_real_is_refused_unless_it_was_switched_on_in_the_set
     tmp_path: Path,
 ) -> None:
     async with running_api(tmp_path, with_engine=True) as rig:
-        response = await rig.client.put(f"{API}/account", json={"account_type": "real"})
+        response = await rig.client.put(
+            f"{API}/account", json={"account_type": "real", "password": OWNER_PASSWORD}
+        )
         assert response.status_code == 403
         assert response.json()["error"]["code"] == "real_trading_not_allowed"
         assert (await rig.client.get(f"{API}/account")).json()["account_type"] == "demo"
@@ -329,7 +333,9 @@ async def test_the_account_cannot_be_switched_while_a_chain_is_running(tmp_path:
     ) as rig:
         await rig.create_group()
         await start_running_chain(rig)
-        response = await rig.client.put(f"{API}/account", json={"account_type": "real"})
+        response = await rig.client.put(
+            f"{API}/account", json={"account_type": "real", "password": OWNER_PASSWORD}
+        )
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "account_switch_refused"
         assert (await rig.client.get(f"{API}/account")).json()["account_type"] == "demo"
@@ -341,7 +347,12 @@ async def test_the_account_cannot_be_switched_while_a_chain_is_running(tmp_path:
 async def test_status_without_an_engine_is_an_honest_empty_picture(tmp_path: Path) -> None:
     async with running_api(tmp_path) as rig:
         status = (await rig.client.get(f"{API}/status")).json()
-        assert status["engine"] == {"enabled": False, "running": False}
+        assert status["engine"] == {
+            "enabled": False,
+            "running": False,
+            "state": "stopped",
+            "error": None,
+        }
         assert status["account_type"] == "demo" and status["real_trading_allowed"] is False
         assert status["connections"] == {} and status["balance"] is None
         assert status["open_chains"] == [] and status["open_trades"] == []
@@ -367,7 +378,12 @@ async def test_status_with_an_engine_shows_connections_balance_and_what_is_open(
 
         await rig.eventually(complete)
         status = (await rig.client.get(f"{API}/status")).json()
-        assert status["engine"] == {"enabled": True, "running": True}
+        assert status["engine"] == {
+            "enabled": True,
+            "running": True,
+            "state": "running",
+            "error": None,
+        }
         assert status["connections"]["quotex"]["connected"] is True
         assert status["connections"]["telegram"]["connected"] is True
         assert status["balance"]["account_type"] == "demo"
@@ -389,7 +405,12 @@ async def test_health_reports_the_engine_and_the_connections(tmp_path: Path) -> 
     async with running_api(tmp_path) as rig:
         health = (await rig.client.get(f"{API}/health")).json()
         assert health["status"] == "ok" and health["database"] == "ok"
-        assert health["engine"] == {"enabled": False, "running": False}
+        assert health["engine"] == {
+            "enabled": False,
+            "running": False,
+            "state": "stopped",
+            "error": None,
+        }
         assert health["telegram"] is None and health["quotex"] is None
         assert health["ws_clients"] == 0
     async with running_api(tmp_path / "second", with_engine=True) as rig:
@@ -400,5 +421,10 @@ async def test_health_reports_the_engine_and_the_connections(tmp_path: Path) -> 
 
         await rig.eventually(reported)
         health = (await rig.client.get(f"{API}/health")).json()
-        assert health["engine"] == {"enabled": True, "running": True}
+        assert health["engine"] == {
+            "enabled": True,
+            "running": True,
+            "state": "running",
+            "error": None,
+        }
         assert health["quotex"]["connected"] is True

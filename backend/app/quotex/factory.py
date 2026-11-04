@@ -25,7 +25,10 @@ def build_pyquotex_adapter(
     email = settings.quotex_email.get_secret_value().strip() if settings.quotex_email else ""
     password = settings.quotex_password.get_secret_value() if settings.quotex_password else ""
     if not email or not password:  # a blank value in .env counts as missing
-        raise QuotexError("QUOTEX_EMAIL and QUOTEX_PASSWORD must be set (in backend/.env)")
+        raise QuotexError(
+            "The Quotex email and password are not set. Store them under Settings > Stored logins "
+            "(or as QUOTEX_EMAIL and QUOTEX_PASSWORD in backend/.env)."
+        )
 
     def make_client() -> PyQuotexClient:
         return PyQuotexClient(

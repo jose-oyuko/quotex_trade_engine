@@ -481,6 +481,29 @@ Phase 12's job (restart the engine without restarting the application). A stored
 passes its check is ignored with a log line, never a reason to refuse to start. `engine_enabled`,
 `quotex_allow_real`, the logins and the other settings are deliberately not editable yet.
 
+**D-63. The owner starts and stops the engine from the dashboard; the application remembers.** One class,
+`EngineController`, builds, starts, stops and restarts the engine while the application runs. One request
+at a time (a second is refused with 409, never queued), always the same order, always ending in a state the
+dashboard can describe (`stopped`, `starting`, `running`, `stopping`, `failed` with the reason). Every
+start builds a **new** engine, so nothing of the old one (guard, chains, connections) is reused, and it is
+rebuilt from the database like after a restart (D-35) once the writer has stored everything the old one
+said. Stopping marks what was in flight `unknown` at once, which is what the next start would have done.
+A failed start never stops the application (before, a missing login did): the reason is shown. What the
+owner left (running or not) is stored in the database and decides at the next start of the application;
+`ENGINE_ENABLED` in `.env` is only the starting value for an installation that never decided, and
+`QUOTEX_ALLOW_REAL` likewise (both are removed in Phase 15). The engine is built with the stored logins
+first, `.env` second; a stored login that cannot be read stops the start instead of being replaced by an
+older `.env` one. The path from a signal to an order is unchanged: this is all about the engine's life
+cycle, not what it does.
+
+**D-64. Real money: permission and the switch each need the password; both are on the record.** Switching
+to the REAL account needs (1) the owner's permission, given on the dashboard with the password and stored
+(`PUT /account/real-trading`), and (2) the password again with the switch itself. Both write a risk event
+(`real_trading_allowed`, `switched_to_real`, and `real_trading_disallowed` when taken back). Guessing the
+password here shares the lock with the login's other password attempts. The permission cannot be taken
+away while REAL is in use. The engine always starts on DEMO (D-15), also after a restart. Why: a stolen
+session cookie alone must not be enough to make trades use real money.
+
 ---
 
 ## Decisions to be made later (record here when decided)

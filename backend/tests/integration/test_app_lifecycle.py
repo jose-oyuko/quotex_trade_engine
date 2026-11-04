@@ -18,7 +18,6 @@ from app.events.bus import EventBus
 from app.events.types import SignalReceived
 from app.main import DatabaseNotMigratedError, EngineBuilder, create_app
 from app.quotex.base import ConnectionState
-from app.quotex.errors import QuotexError
 from app.quotex.fake import FakeQuotexAdapter
 from app.telegram import FakeTelegramSource
 from tests.factories import NOW, make_group, make_signal
@@ -140,14 +139,16 @@ async def test_an_enabled_engine_starts_with_the_app_and_stops_before_the_writer
     assert engine.adapter.state is ConnectionState.DISCONNECTED
 
 
-async def test_a_missing_login_stops_start_up_with_a_clear_error(
+async def test_a_missing_login_leaves_the_application_up_and_the_engine_failed_with_the_reason(
     migrated_settings: Settings,
 ) -> None:
     enabled = migrated_settings.model_copy(update={"engine_enabled": True})
     app = create_app(enabled)  # the real builder, no credentials in these settings
-    with pytest.raises(QuotexError, match="QUOTEX_EMAIL"):
-        async with app.router.lifespan_context(app):
-            pass
+    async with app.router.lifespan_context(app):
+        assert app.state.trading is None
+        controller = app.state.controller
+        assert controller.state.value == "failed"
+        assert "Quotex email and password are not set" in (controller.error or "")
 
 
 async def wait_for(condition: Callable[[], bool]) -> None:

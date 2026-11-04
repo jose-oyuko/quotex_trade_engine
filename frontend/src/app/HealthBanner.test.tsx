@@ -16,7 +16,7 @@ function health(overrides: Partial<Health> = {}): Health {
     database: 'ok',
     events_published: 0,
     writer: { queue_depth: 0, written: 0, failed: 0, dropped: 0, retrying: false },
-    engine: { enabled: true, running: true },
+    engine: { enabled: true, running: true, state: 'running', error: null },
     telegram: null,
     quotex: null,
     last_event_at: null,

@@ -3,12 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SecretItem, SecretsOut, SettingsOut } from '../../api/types'
+import { makeSnapshot } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
+import { engineInfo } from './engineFixtures'
 import SettingsPage from './SettingsPage'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+const BASE = [
+  ['GET', '/engine', json(engineInfo())],
+  ['GET', '/status', json(makeSnapshot())],
+] as const
 
 const NOTE = 'A saved setting is used from the next start of the application.'
 
@@ -80,10 +87,7 @@ function setup() {
 
 describe('application settings', () => {
   it('shows each setting with where its value comes from', async () => {
-    mockApi([
-      ['GET', '/settings', json(settings())],
-      ['GET', '/secrets', json(secrets())],
-    ])
+    mockApi([...BASE, ['GET', '/settings', json(settings())], ['GET', '/secrets', json(secrets())]])
     setup()
     expect(await screen.findByLabelText('Log detail')).toHaveValue('INFO')
     expect(screen.getByLabelText('Quotex address')).toHaveValue('quotex.com')
@@ -94,6 +98,7 @@ describe('application settings', () => {
   it('saves only what was changed and says when it applies', async () => {
     let saved = false
     const api = mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets())],
       [
@@ -118,6 +123,7 @@ describe('application settings', () => {
 
   it('shows the server’s reason when a value is refused', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets())],
       [
@@ -136,6 +142,7 @@ describe('application settings', () => {
 
   it('goes back to the default by removing the stored value', async () => {
     const api = mockApi([
+      ...BASE,
       [
         'GET',
         '/settings',
@@ -154,6 +161,7 @@ describe('application settings', () => {
 describe('stored logins', () => {
   it('lists what is stored without ever showing a value', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       [
         'GET',
@@ -179,6 +187,7 @@ describe('stored logins', () => {
   it('stores a value, hides the box again and keeps no copy on the page', async () => {
     let stored = false
     const api = mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       [
         'GET',
@@ -223,6 +232,7 @@ describe('stored logins', () => {
 
   it('can be cancelled without sending anything', async () => {
     const api = mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets())],
     ])
@@ -238,6 +248,7 @@ describe('stored logins', () => {
 
   it('asks before removing, and removes only when confirmed', async () => {
     const api = mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       [
         'GET',
@@ -263,6 +274,7 @@ describe('stored logins', () => {
 
   it('explains a missing key, and does not let anything be stored without it', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets({ key: 'missing' }))],
     ])
@@ -273,6 +285,7 @@ describe('stored logins', () => {
 
   it('explains an invalid key', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets({ key: 'invalid' }))],
     ])
@@ -282,6 +295,7 @@ describe('stored logins', () => {
 
   it('lets a value that cannot be read be typed again', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       [
         'GET',
@@ -300,6 +314,7 @@ describe('stored logins', () => {
 
   it('shows the server’s reason when storing fails', async () => {
     mockApi([
+      ...BASE,
       ['GET', '/settings', json(settings())],
       ['GET', '/secrets', json(secrets())],
       [

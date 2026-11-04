@@ -17,14 +17,14 @@ agent to start the next phase.
 | 9 | Hardening and packaging | Done — committed; live checks pending |
 | 10 | Owner account and login | Done — awaiting owner approval (not committed) |
 | 11 | Encrypted store and settings in the database | Done — awaiting owner approval (not committed) |
-| 12 | Engine control from the dashboard | Not started |
+| 12 | Engine control from the dashboard | Done — committed; live checks pending |
 | 13 | Telegram login in the dashboard | Not started |
 | 14 | Quotex login in the dashboard | Not started |
 | 15 | Clean-up and documentation | Not started |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** Phases 10 and 11 are done and waiting for the owner (reports: [phase-10](reports/phase-10.md), [phase-11](reports/phase-11.md)). Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; the next is Phase 12, to start only when the owner says "go on". Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
+**Current phase:** Phases 10-12 are done and committed (reports: [phase-10](reports/phase-10.md), [phase-11](reports/phase-11.md), [phase-12](reports/phase-12.md)). The owner asked the agent to carry on through Phase 15, testing and committing after each phase. Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; the next is Phase 13. Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
 carry on through the remaining phases in order, committing after each finished and tested phase; that is
 complete. Phases 2-9 are only verified on fakes; their live checks are in each report's "could not be
 verified" section (for Phase 9: the real signal-to-order latency with `npm run latency`, real reconnects,
@@ -38,9 +38,9 @@ sessions. Nothing has been pushed by the agent in this session.
 
 ## Open questions for the owner
 
-- Phase 11: the key in `backend/.env` is created by `npm start`: please keep a copy of that file somewhere safe. And Phases 10-11 are uncommitted: say "commit" if you want them committed.
+- Phase 11: the key in `backend/.env` is created by `npm start`: please keep a copy of that file somewhere safe.
 
-- Phase 10: `test_reports_performance` fails on this PC for speed only (section 5 of the report); and nothing from Phase 10 is committed yet: say "commit" if you want it committed.
+- Phase 10: `test_reports_performance` fails on this PC for speed only (section 5 of the report).
 
 - Phase 3 §10: please send real messages from your groups (signals and non-signals) to add to the parser
   tests; and say whether a message without a stated expiry should be traded (as 60 s, the old behaviour)

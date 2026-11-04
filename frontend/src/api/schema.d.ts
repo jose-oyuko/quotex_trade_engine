@@ -12,10 +12,32 @@ export interface paths {
         get: operations["get_account_api_v1_account_get"];
         /**
          * Set Account
-         * @description Switch between demo and real. Refused while a chain or trade is running; real also needs
-         *     QUOTEX_ALLOW_REAL=true (decision D-15).
+         * @description Switch between demo and real. Refused while a chain or trade is running. REAL also needs the
+         *     owner's permission (`PUT /account/real-trading`, decision D-15) and the owner's password again:
+         *     this is the one request that makes trades use real money.
          */
         put: operations["set_account_api_v1_account_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/real-trading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Real Trading
+         * @description Allow, or stop allowing, the switch to the REAL account. Needs the owner's password. It is
+         *     written to the risk log. Taking it back is refused while REAL is the account in use.
+         */
+        put: operations["set_real_trading_api_v1_account_real_trading_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -194,6 +216,88 @@ export interface paths {
          *     harmless.
          */
         post: operations["stop_after_current_api_v1_chains__chain_id__stop_after_current_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Engine State
+         * @description Whether the engine is running, why it is not, and which logins it has.
+         */
+        get: operations["get_engine_state_api_v1_engine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engine/restart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restart Engine
+         * @description Stop and start again, for example after changing a stored login.
+         */
+        post: operations["restart_engine_api_v1_engine_restart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engine/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Engine
+         * @description Start the engine on the DEMO account: it connects to Quotex and Telegram and begins taking
+         *     signals. Does nothing if it is running. 409 `engine_start_failed` says why it could not.
+         */
+        post: operations["start_engine_api_v1_engine_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engine/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Engine
+         * @description Stop the engine. Trades that are open stay open on Quotex and run to their expiry; here they
+         *     are marked `unknown` straight away (the application can no longer follow them).
+         */
+        post: operations["stop_engine_api_v1_engine_stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -735,6 +839,11 @@ export interface components {
         /** AccountIn */
         AccountIn: {
             account_type: components["schemas"]["AccountType"];
+            /**
+             * Password
+             * @description The owner's password: required to switch to REAL, not to go back to demo.
+             */
+            password?: string | null;
         };
         /** AccountOut */
         AccountOut: {
@@ -1118,12 +1227,52 @@ export interface components {
             /** Trough Day */
             trough_day: string | null;
         };
+        /** EngineOut */
+        EngineOut: {
+            /**
+             * Desired
+             * @description It is started again when the application starts.
+             */
+            desired: boolean;
+            /**
+             * Error
+             * @description Why the last start failed, in words.
+             */
+            error: string | null;
+            /**
+             * Logins
+             * @description The logins it would use, never their values.
+             */
+            logins: components["schemas"]["LoginItemOut"][];
+            /** Missing Logins */
+            missing_logins: string[];
+            /** Real Trading Allowed */
+            real_trading_allowed: boolean;
+            /** Since */
+            since: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "stopped" | "starting" | "running" | "stopping" | "failed";
+        };
         /** EngineStatus */
         EngineStatus: {
             /** Enabled */
             enabled: boolean;
+            /**
+             * Error
+             * @default null
+             */
+            error: string | null;
             /** Running */
             running: boolean;
+            /**
+             * State
+             * @default stopped
+             * @enum {string}
+             */
+            state: "stopped" | "starting" | "running" | "stopping" | "failed";
         };
         /** EquityOut */
         EquityOut: {
@@ -1398,6 +1547,18 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** LoginItemOut */
+        LoginItemOut: {
+            /** Label */
+            label: string;
+            /** Present */
+            present: boolean;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "dashboard" | ".env" | "missing" | "unreadable";
+        };
         /** MetricsOut */
         MetricsOut: {
             /** Avg Payout Pct */
@@ -1512,6 +1673,16 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** RealTradingIn */
+        RealTradingIn: {
+            /** Allowed */
+            allowed: boolean;
+            /**
+             * Password
+             * @description The owner's own password.
+             */
+            password: string;
         };
         /**
          * ResyncRequest
@@ -2084,6 +2255,84 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AccountIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_real_trading_api_v1_account_real_trading_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RealTradingIn"];
             };
         };
         responses: {
@@ -2782,6 +3031,302 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChainControlOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_engine_state_api_v1_engine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    restart_engine_api_v1_engine_restart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    start_engine_api_v1_engine_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stop_engine_api_v1_engine_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineOut"];
                 };
             };
             /** @description Not Found */
