@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiError
 from app.api.snapshot import SnapshotBuilder
+from app.auth.service import SESSION_COOKIE, AuthService, UserInfo
 from app.core.config import Settings
 from app.engine.engine import Engine
 from app.services.groups import GroupService
@@ -69,6 +70,23 @@ def get_snapshots(request: Request) -> SnapshotBuilder:
     return snapshots
 
 
+def get_auth(request: Request) -> AuthService:
+    auth: AuthService = request.app.state.auth
+    return auth
+
+
+async def current_user(request: Request) -> UserInfo:
+    """The logged-in user, or a 401. Every route except `/health` and `/auth/*` depends on this
+    (it is attached where the routers are included, in `app/main.py`)."""
+    auth: AuthService | None = request.app.state.auth
+    if auth is None:
+        raise ApiError(503, "unavailable", "The application is still starting.")
+    user = await auth.authenticate(request.cookies.get(SESSION_COOKIE))
+    if user is None:
+        raise ApiError(401, "not_authenticated", "Log in to continue.")
+    return user
+
+
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 EngineDep = Annotated[Engine | None, Depends(get_engine)]
 RunningEngineDep = Annotated[Engine, Depends(require_engine)]
@@ -77,3 +95,5 @@ LiveDep = Annotated[LiveState, Depends(get_live)]
 GroupsDep = Annotated[GroupService, Depends(get_groups)]
 RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
+AuthDep = Annotated[AuthService, Depends(get_auth)]
+CurrentUserDep = Annotated[UserInfo, Depends(current_user)]

@@ -6,9 +6,10 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from websockets.exceptions import WebSocketException
 
-from scripts.ws_watch import describe, watch
-from tests.api_support import running_api, serve
+from scripts.ws_watch import describe, login_cookie, watch
+from tests.api_support import OWNER_NAME, OWNER_PASSWORD, running_api, serve
 
 
 def test_a_snapshot_is_summarised() -> None:
@@ -51,8 +52,21 @@ async def test_it_prints_what_a_real_server_sends(
 ) -> None:
     async with running_api(tmp_path, ws_heartbeat_s=0.05) as rig, serve(rig.app) as address:
         with pytest.raises(TimeoutError):
-            await asyncio.wait_for(watch(f"ws://{address}/ws"), 0.5)
+            await asyncio.wait_for(watch(f"ws://{address}/ws", rig.ws_headers()["Cookie"]), 0.5)
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == f"connected to ws://{address}/ws"
     assert lines[1].startswith("#0 snapshot reason=connect account=demo")
     assert "#0 heartbeat" in lines
+
+
+async def test_it_logs_in_like_the_dashboard_and_the_feed_refuses_it_without(
+    tmp_path: Path,
+) -> None:
+    async with running_api(tmp_path, logged_in=False) as rig, serve(rig.app) as address:
+        await rig.app.state.auth.set_owner(username=OWNER_NAME, password=OWNER_PASSWORD)
+        with pytest.raises(WebSocketException):
+            await asyncio.wait_for(watch(f"ws://{address}/ws"), 2)
+        cookie = await login_cookie(f"ws://{address}/ws", OWNER_NAME, OWNER_PASSWORD)
+        assert cookie.startswith("qte_session=")
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(watch(f"ws://{address}/ws", cookie), 0.3)

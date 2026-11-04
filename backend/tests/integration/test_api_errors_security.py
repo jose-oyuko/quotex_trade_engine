@@ -162,7 +162,11 @@ async def test_a_large_body_without_a_length_is_cut_off_too(tmp_path: Path) -> N
 
 async def test_commands_are_rate_limited_but_reading_is_not(tmp_path: Path) -> None:
     async with running_api(
-        tmp_path, with_engine=True, api_command_burst=3, api_command_rate_per_s=0.001
+        # the test's own login takes one of the commands, so the burst is one more than is used
+        tmp_path,
+        with_engine=True,
+        api_command_burst=4,
+        api_command_rate_per_s=0.001,
     ) as rig:
         statuses = [(await rig.client.post(f"{API}/kill-switch")).status_code for _ in range(5)]
         assert statuses == [200, 200, 200, 429, 429]

@@ -38,6 +38,7 @@ from app.domain.enums import (
     SignalStatus,
     Strategy,
     TradeStatus,
+    UserRole,
 )
 
 
@@ -204,3 +205,30 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[object] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class User(Base):
+    """A person who can log in. One admin for now (decision D-59)."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[UserRole] = mapped_column(_enum(UserRole))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    password_changed_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class AuthSession(Base):
+    """A logged-in browser. Only the SHA-256 of the cookie's token is stored (decision D-60)."""
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (Index("ix_auth_sessions_user_id", "user_id"),)
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)

@@ -25,9 +25,35 @@ configured (never the passwords), starts the server and opens <http://127.0.0.1:
 Stopping is safe at any time. Open trades stay open on Quotex and run to their expiry; the next start
 marks them `unknown` in the application (it cannot see Quotex's history), so look at them on Quotex.
 
+## The owner account (first start)
+
+The dashboard is behind a login. The first time the application starts with an empty database it has no
+account, so it prints a **setup code** in its log (in the `npm start` window; on a server, in
+`journalctl -u quotex-engine`), on the line `owner_setup_required`:
+
+```
+[warning ] owner_setup_required  setup_code=4GPA-P5Q4-EACW ...
+```
+
+Open the dashboard: it shows "Create the owner account". Type the code, choose a username and a password
+(at least 10 characters) and you are in. The code works once, changes every time the application starts
+and stops working as soon as the account exists. After that the login page is what you see; the
+**Account** link at the top changes the password (which logs every other browser out) and logs out.
+
+- **Forgot the password?** On the computer that runs the application: `npm run owner:reset` (on a
+  server: `uv run --directory backend python -m scripts.owner`). It asks for a new password, ends every
+  session, and works whether or not the application is running. It also creates the account if there is
+  none, without the setup code.
+- **Locked out after typing it wrong?** Five failures lock that name for 15 minutes. Wait, or restart
+  the application (the lock is in memory).
+- The demo (`npm run demo`) has its own account: `demo` / `demo-password`.
+- `npm run api:watch -- --username <name>` asks for the password too.
+
 ## First-time logins
 
-Nothing needs a login until you set `ENGINE_ENABLED=true`. Do these once, on the demo account.
+Telegram and Quotex need no login until you set `ENGINE_ENABLED=true`. Do these once, on the demo account.
+(These logins are still typed into a terminal and `backend/.env`; moving them into the dashboard is the
+next phases, see PHASES.md.)
 
 **1. Settings file.** Copy `.env.example` to `backend/.env`. It is git-ignored. Fill in:
 

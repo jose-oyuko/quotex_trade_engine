@@ -15,10 +15,16 @@ agent to start the next phase.
 | 7 | Dashboard v1 | Done — committed; live checks pending |
 | 8 | Reports | Done — committed; live checks pending |
 | 9 | Hardening and packaging | Done — committed; live checks pending |
+| 10 | Owner account and login | Done — awaiting owner approval (not committed) |
+| 11 | Encrypted store and settings in the database | Not started |
+| 12 | Engine control from the dashboard | Not started |
+| 13 | Telegram login in the dashboard | Not started |
+| 14 | Quotex login in the dashboard | Not started |
+| 15 | Clean-up and documentation | Not started |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
-**Current phase:** none: all nine phases are built. Phase 9 is committed. The owner asked the agent to
+**Current phase:** Phase 10 is done and waiting for the owner (report: [reports/phase-10.md](reports/phase-10.md)). Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; the next is Phase 11, to start only when the owner says "go on". Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
 carry on through the remaining phases in order, committing after each finished and tested phase; that is
 complete. Phases 2-9 are only verified on fakes; their live checks are in each report's "could not be
 verified" section (for Phase 9: the real signal-to-order latency with `npm run latency`, real reconnects,
@@ -31,6 +37,8 @@ permission (this session) to commit after every finished phase; it is not a stan
 sessions. Nothing has been pushed by the agent in this session.
 
 ## Open questions for the owner
+
+- Phase 10: `test_reports_performance` fails on this PC for speed only (section 5 of the report); and nothing from Phase 10 is committed yet: say "commit" if you want it committed.
 
 - Phase 3 §10: please send real messages from your groups (signals and non-signals) to add to the parser
   tests; and say whether a message without a stated expiry should be traded (as 60 s, the old behaviour)

@@ -36,6 +36,10 @@ trust:
 | Method and path | What it does |
 |---|---|
 | `GET /health` | Is the backend alive: database, writer queue, engine, Telegram/Quotex connection, number of dashboards connected. No secrets. |
+| `GET /auth/state` | *No login needed.* Is an owner account still to be created, and is this browser logged in (and as whom). |
+| `POST /auth/setup` | *No login needed.* Create the owner account, once: needs the setup code from the application's log. Logs the browser in. 403 `wrong_setup_code`, 409 `setup_closed`, 422 `invalid_account`. |
+| `POST /auth/login`, `POST /auth/logout` | *No login needed.* Log in with username and password (sets the session cookie); end this browser's session. Wrong login: 401 `invalid_login` (never says which part was wrong); too many failures: 429 `too_many_attempts`. |
+| `POST /auth/password` | Change the password (needs the current one). Every other logged-in browser is logged out. |
 | `GET /status` | The whole picture now: account (demo/real), connections, balance, controls, today's result, open chains and open trades. Same data as the WebSocket's first message. |
 | `GET /groups`, `POST /groups` | List the groups; add one (chat id, title, strategy settings). |
 | `GET /groups/{id}`, `PUT /groups/{id}`, `DELETE /groups/{id}` | Read one; replace its title, enabled flag and settings; delete one (only if it has no history — otherwise disable it). |
@@ -129,11 +133,21 @@ engine or the other dashboards.**
 The frontend's `LiveSocket` (`frontend/src/api/live.ts`) implements all of this, including
 reconnecting with a growing delay and treating 40 seconds of silence as a dead connection.
 
-To watch the feed from a terminal: `npm run api:watch`.
+To watch the feed from a terminal: `npm run api:watch -- --username <owner>` (it asks for the password).
+The socket needs the login cookie like any other request.
 
 ## Safety of the API itself
 
-The API can place trades and has no login (decision D-16), so on top of binding to `127.0.0.1`:
+The API can place trades, so on top of binding to `127.0.0.1` (decisions D-16, D-59, D-60):
+
+- **Everything needs a login except `/health` and `/auth/*`** (and the dashboard's own files). The
+  session is a random token in an HttpOnly, SameSite=Strict cookie named `qte_session`; the database
+  keeps only its hash. Without a valid session every route answers 401 `not_authenticated` and `/ws` is
+  refused (HTTP 403 on the handshake). A session ends after 30 days, or after 7 days without use, or
+  when the password is changed elsewhere. A test walks the whole API and fails if a route is added
+  without this protection.
+- **Passwords** are hashed with scrypt and checked in a worker thread. After 5 failed attempts for a
+  name (or from an address) it is locked for 15 minutes (429); a restart clears the lock.
 
 - **Only localhost host names are served** (`localhost`, `127.0.0.1`, `::1`), which defeats
   "DNS rebinding" tricks. This check is off only if you set `ALLOW_PUBLIC_BIND=true`.

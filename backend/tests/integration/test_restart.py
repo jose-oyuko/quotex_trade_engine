@@ -68,6 +68,7 @@ async def test_a_hard_crash_leaves_work_in_flight_and_the_restart_flags_it_unkno
     await lifespan.__aenter__()
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL)
     rig = ApiRig(app, client, config, parts)
+    await rig.log_in()
     assert await parts[0].engine.listener.wait_until_connected(2)
 
     await rig.create_group()
@@ -130,6 +131,7 @@ async def test_the_kill_switch_and_the_days_loss_survive_a_crash(tmp_path: Path)
     await lifespan.__aenter__()
     client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=BASE_URL)
     rig = ApiRig(app, client, config, parts)
+    await rig.log_in()
     assert await parts[0].engine.listener.wait_until_connected(2)
 
     await rig.create_group(

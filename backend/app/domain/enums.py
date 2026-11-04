@@ -10,6 +10,10 @@ class AccountType(StrEnum):
     REAL = "real"
 
 
+class UserRole(StrEnum):
+    ADMIN = "admin"  # the owner; invited users (a later phase) get their own roles
+
+
 class Direction(StrEnum):
     CALL = "call"
     PUT = "put"

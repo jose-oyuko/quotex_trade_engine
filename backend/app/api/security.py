@@ -1,4 +1,4 @@
-"""Guards that protect an API which can place trades and has no login.
+"""Guards that protect an API which can place trades (the login itself is `app/auth`).
 
 Binding to loopback keeps other computers out, but not the owner's *browser*: any web page the
 owner opens can make the browser send requests to `127.0.0.1`. So, on top of the bind rule

@@ -6,18 +6,20 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health, ws
+from app.api.deps import current_user
 from app.api.errors import install_error_handlers
 from app.api.hub import Hub
 from app.api.openapi import build_openapi
-from app.api.routers import chains, control, groups, reports, telegram, trades
+from app.api.routers import auth, chains, control, groups, reports, telegram, trades
 from app.api.schemas.common import ErrorBody
 from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
 from app.api.static import mount_frontend
+from app.auth.service import AuthService
 from app.core.clock import SystemClock
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -104,6 +106,8 @@ def create_app(
         app.state.groups = GroupService(
             session_factory, clock, lambda: app.state.trading, ParserRegistry().names
         )
+        app.state.auth = AuthService(session_factory, clock)
+        await app.state.auth.prepare()
         app.state.risk_settings = RiskSettingsService(
             app.state.bus, clock, live, lambda: app.state.trading
         )
@@ -164,6 +168,7 @@ def create_app(
     app.state.hub = None
     app.state.groups = None
     app.state.risk_settings = None
+    app.state.auth = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -181,8 +186,11 @@ def create_app(
         )
 
     install_error_handlers(app)
+    # Public: the health check and the login routes. Everything else needs a logged-in owner, and
+    # `tests/integration/test_api_auth.py` fails if a route is added without that protection.
+    for public in (health.router, auth.router):
+        app.include_router(public, prefix="/api/v1")
     for router in (
-        health.router,
         groups.router,
         chains.router,
         trades.trades_router,
@@ -191,8 +199,8 @@ def create_app(
         reports.router,
         telegram.router,
     ):
-        app.include_router(router, prefix="/api/v1")
-    app.include_router(ws.router)
+        app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
+    app.include_router(ws.router)  # checks the session itself, before accepting
     mount_frontend(app, settings.frontend_dir)  # last: it answers every other path
     app.openapi = lambda: build_openapi(app)  # type: ignore[method-assign]
     return app

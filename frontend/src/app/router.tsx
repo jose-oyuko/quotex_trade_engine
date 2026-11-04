@@ -47,6 +47,10 @@ export const routes: RouteObject[] = [
           Component: (await import('../features/reports/ReportsPage')).default,
         }),
       },
+      {
+        path: 'account',
+        lazy: async () => ({ Component: (await import('../features/auth/AccountPage')).default }),
+      },
       { path: '*', element: <NotFound /> },
     ],
   },

@@ -41,7 +41,7 @@ async def recv_until(
 async def test_a_dashboard_gets_a_snapshot_then_the_events_in_order(tmp_path: Path) -> None:
     async with running_api(tmp_path, with_engine=True) as rig, serve(rig.app) as address:
         await rig.create_group()
-        async with connect(f"ws://{address}/ws") as ws:
+        async with connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws:
             snapshot = await recv(ws)
             assert snapshot["type"] == "snapshot" and snapshot["reason"] == "connect"
             assert snapshot["data"]["engine"] == {"enabled": True, "running": True}
@@ -77,7 +77,7 @@ async def test_a_dashboard_that_connects_later_sees_the_chain_that_is_already_ru
             return (await rig.client.get("/api/v1/status")).json()["open_trades"] != []
 
         await rig.eventually(running)
-        async with connect(f"ws://{address}/ws") as ws:
+        async with connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws:
             snapshot = await recv(ws)
             [chain] = snapshot["data"]["open_chains"]
             [trade] = snapshot["data"]["open_trades"]
@@ -91,7 +91,7 @@ async def test_asking_for_a_resync_gets_a_fresh_snapshot(tmp_path: Path) -> None
     async with (
         running_api(tmp_path, with_engine=True) as rig,
         serve(rig.app) as address,
-        connect(f"ws://{address}/ws") as ws,
+        connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws,
     ):
         first = await recv(ws)
         await ws.send(json.dumps({"type": "resync"}))
@@ -103,7 +103,10 @@ async def test_asking_for_a_resync_gets_a_fresh_snapshot(tmp_path: Path) -> None
 async def test_two_dashboards_see_the_same_numbers(tmp_path: Path) -> None:
     async with running_api(tmp_path, with_engine=True) as rig, serve(rig.app) as address:
         await rig.create_group()
-        async with connect(f"ws://{address}/ws") as one, connect(f"ws://{address}/ws") as two:
+        async with (
+            connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as one,
+            connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as two,
+        ):
             await recv(one), await recv(two)
             rig.fakes.signal(-1001, "EURUSD CALL 1m")
             a = await recv_until(one, lambda m: m["type"] == "chain.ended")
@@ -115,7 +118,7 @@ async def test_a_quiet_connection_gets_heartbeats(tmp_path: Path) -> None:
     async with (
         running_api(tmp_path, ws_heartbeat_s=0.1) as rig,
         serve(rig.app) as address,
-        connect(f"ws://{address}/ws") as ws,
+        connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws,
     ):
         snapshot = await recv(ws)
         beat = await recv(ws)
@@ -125,7 +128,7 @@ async def test_a_quiet_connection_gets_heartbeats(tmp_path: Path) -> None:
 async def test_changes_made_through_the_api_reach_the_dashboard(tmp_path: Path) -> None:
     async with running_api(tmp_path, with_engine=True) as rig, serve(rig.app) as address:
         await rig.create_group()
-        async with connect(f"ws://{address}/ws") as ws:
+        async with connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws:
             await recv(ws)
             assert (await rig.client.post("/api/v1/kill-switch")).status_code == 200
             changed = await recv_until(ws, lambda m: m["type"] == "controls.changed")
@@ -144,7 +147,7 @@ async def test_nonsense_from_a_client_is_ignored_and_a_huge_message_ends_the_con
     async with (
         running_api(tmp_path) as rig,
         serve(rig.app) as address,
-        connect(f"ws://{address}/ws") as ws,
+        connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws,
     ):
         await recv(ws)
         for junk in ("not json", '{"type": "shout"}', "[]", '{"type": 5}'):
@@ -160,7 +163,7 @@ async def test_nonsense_from_a_client_is_ignored_and_a_huge_message_ends_the_con
 
 async def test_a_closed_connection_is_forgotten(tmp_path: Path) -> None:
     async with running_api(tmp_path) as rig, serve(rig.app) as address:
-        async with connect(f"ws://{address}/ws") as ws:
+        async with connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as ws:
             await recv(ws)
             assert rig.app.state.hub.clients == 1
         await _until(lambda: rig.app.state.hub.clients == 0)
@@ -179,9 +182,15 @@ async def test_pages_from_other_sites_and_other_host_names_cannot_connect(tmp_pa
                 pass
         assert rebinding.value.response.status_code == 403
         # the dashboard's own origin (same host:port) and the dev server's are fine
-        async with connect(f"ws://{address}/ws", origin=f"http://{address}") as ws:
+        async with connect(
+            f"ws://{address}/ws", origin=f"http://{address}", additional_headers=rig.ws_headers()
+        ) as ws:
             assert (await recv(ws))["type"] == "snapshot"
-        async with connect(f"ws://{address}/ws", origin="http://127.0.0.1:5173") as ws:
+        async with connect(
+            f"ws://{address}/ws",
+            origin="http://127.0.0.1:5173",
+            additional_headers=rig.ws_headers(),
+        ) as ws:
             assert (await recv(ws))["type"] == "snapshot"
 
 
@@ -196,7 +205,10 @@ async def test_a_dashboard_that_reads_too_slowly_loses_events_not_the_engine(
         await rig.create_group(
             settings={"strategy": "no_martingale", "max_steps": 0, "multipliers": []}
         )
-        async with connect(f"ws://{address}/ws") as lazy, connect(f"ws://{address}/ws") as busy:
+        async with (
+            connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as lazy,
+            connect(f"ws://{address}/ws", additional_headers=rig.ws_headers()) as busy,
+        ):
             await recv(lazy), await recv(busy)
             for asset in ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD"):
                 rig.fakes.signal(-1001, f"{asset} CALL 1m")

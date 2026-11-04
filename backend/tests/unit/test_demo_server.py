@@ -15,7 +15,7 @@ from app.quotex.fake import FakeQuotexAdapter
 from app.signals.parsers.registry import ParserRegistry
 from app.telegram import FakeTelegramSource
 from scripts import demo_server
-from scripts.demo_server import CHAT_TALK, GROUPS, DemoFeed, seed_groups
+from scripts.demo_server import CHAT_TALK, GROUPS, DemoFeed, log_in_demo, seed_groups
 from tests.api_support import BASE_URL, migrate, running_api, settings_for
 
 FORBIDDEN_IMPORTS = (
@@ -83,6 +83,7 @@ async def test_the_feed_drives_the_real_engine_to_settled_trades(tmp_path: Path)
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client,
     ):
+        await log_in_demo(app, client)
         await seed_groups(client)
         fakes = holder[0]
         assert await fakes.engine.listener.wait_until_connected(2)

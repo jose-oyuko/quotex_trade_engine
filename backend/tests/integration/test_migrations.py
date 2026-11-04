@@ -10,6 +10,7 @@ from app.db.migrations import alembic_config, head_revision, schema_is_current
 
 EXPECTED_TABLES = {
     "app_settings",
+    "auth_sessions",
     "balance_snapshots",
     "chains",
     "group_settings",
@@ -17,6 +18,7 @@ EXPECTED_TABLES = {
     "risk_events",
     "signals",
     "trades",
+    "users",
 }
 
 
@@ -114,4 +116,4 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0001"
+    assert head_revision() == "0002"

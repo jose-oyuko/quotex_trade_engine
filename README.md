@@ -13,9 +13,10 @@ and shows it on a live dashboard with reports.
 - **Quotex has no official API.** This project uses an unofficial library (`pyquotex`) that imitates
   the Quotex website. It can break at any time, and automated trading may break Quotex's rules and
   get an account restricted. Keep real balances small. The app defaults to the **demo** account.
-- **There is no login.** Whoever can reach the server can control trading. The server therefore listens
-  on `127.0.0.1` only and **refuses to start on any other address** unless you set
-  `ALLOW_PUBLIC_BIND=true`. Do not do that on an open network. For a server, use an SSH tunnel
+- **The dashboard has an owner login**, created on the first start with a one-time setup code printed in
+  the application's log (see [docs/OPERATIONS.md](docs/OPERATIONS.md)). It still listens on `127.0.0.1`
+  only and **refuses to start on any other address** unless you set `ALLOW_PUBLIC_BIND=true`: a login
+  over plain HTTP on an open network is not safe. For a server, use an SSH tunnel
   ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 - **Credentials stay on your machine.** Telegram keys, Quotex password and session files live in
   `backend/.env` and `backend/data/`, both git-ignored. They are stored unencrypted for now, so protect
@@ -56,7 +57,7 @@ With no settings file it runs safely: demo only, **trading off**. You can look a
 set limits. To trade, follow the first-time logins in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 **To see everything working with no accounts at all:** `npm run build`, then `npm run demo`, and open
-<http://127.0.0.1:8000>. The demo runs on a simulated Quotex and simulated Telegram groups, posts a
+<http://127.0.0.1:8000>, logging in as `demo` with the password `demo-password`. The demo runs on a simulated Quotex and simulated Telegram groups, posts a
 made-up signal every few seconds, and uses its own database (`backend/data/demo`). It cannot touch your
 real accounts or data.
 

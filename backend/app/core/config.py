@@ -34,7 +34,8 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: int = 8000
-    # The API can place trades and has no login, so a public bind must be a deliberate choice.
+    # The API can place trades. It has a login (decision D-59), but a login alone is not enough on
+    # an open network (no HTTPS), so a public bind must still be a deliberate choice.
     allow_public_bind: bool = False
 
     environment: Literal["development", "production"] = "development"
@@ -118,8 +119,8 @@ class Settings(BaseSettings):
     def _refuse_public_bind(self) -> Settings:
         if not self.allow_public_bind and not is_loopback_host(self.host):
             raise PublicBindRefusedError(
-                f"Refusing to listen on {self.host!r}: the API can place trades and has no login. "
-                "Use HOST=127.0.0.1, or set ALLOW_PUBLIC_BIND=true if you really mean it."
+                f"Refusing to listen on {self.host!r}: the API can place trades and is meant for "
+                "loopback. Use HOST=127.0.0.1, or set ALLOW_PUBLIC_BIND=true if you really mean it."
             )
         return self
 

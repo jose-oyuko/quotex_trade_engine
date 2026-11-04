@@ -16,6 +16,14 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.schemas.common import ErrorBody, ErrorDetail, FieldProblem
+from app.auth.service import (
+    InvalidAccountError,
+    InvalidLoginError,
+    NotLoggedInError,
+    SetupClosedError,
+    ThrottledError,
+    WrongSetupCodeError,
+)
 from app.core.errors import DomainError
 from app.engine.errors import AccountSwitchRefusedError, UnknownChainError
 from app.engine.risk import RiskConfigError
@@ -57,6 +65,12 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     RiskConfigError: (422, "invalid_risk_limits"),
     NotConnectedError: (503, "quotex_not_connected"),
     QuotexError: (502, "quotex_error"),
+    NotLoggedInError: (401, "not_authenticated"),
+    InvalidLoginError: (401, "invalid_login"),
+    ThrottledError: (429, "too_many_attempts"),
+    SetupClosedError: (409, "setup_closed"),
+    WrongSetupCodeError: (403, "wrong_setup_code"),
+    InvalidAccountError: (422, "invalid_account"),
 }
 
 HTTP_CODES = {

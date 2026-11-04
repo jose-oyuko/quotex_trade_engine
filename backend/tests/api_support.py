@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import httpx
 import uvicorn
@@ -17,6 +18,7 @@ from alembic import command
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.auth import passwords
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
@@ -30,6 +32,8 @@ from app.quotex.fake import FakeQuotexAdapter
 from app.telegram import FakeTelegramSource
 
 BASE_URL = "http://127.0.0.1"
+OWNER_NAME = "owner"
+OWNER_PASSWORD = "correct horse battery staple"
 ASSETS = ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD")
 
 GROUP_BODY: dict[str, Any] = {
@@ -83,6 +87,19 @@ class ApiRig:
     def fakes(self) -> FakeParts:
         return self.parts[0]
 
+    async def log_in(self) -> None:
+        """Create the owner account and log the client in (its cookie is kept)."""
+        await self.app.state.auth.set_owner(username=OWNER_NAME, password=OWNER_PASSWORD)
+        response = await self.client.post(
+            "/api/v1/auth/login", json={"username": OWNER_NAME, "password": OWNER_PASSWORD}
+        )
+        assert response.status_code == 200, response.text
+
+    def ws_headers(self) -> dict[str, str]:
+        """The login cookie, for a WebSocket opened outside `client` (which holds it)."""
+        cookies = "; ".join(f"{c.name}={c.value}" for c in self.client.cookies.jar)
+        return {"Cookie": cookies} if cookies else {}
+
     async def create_group(self, **overrides: Any) -> dict[str, Any]:
         response = await self.client.post("/api/v1/groups", json=group_body(**overrides))
         assert response.status_code == 201, response.text
@@ -135,10 +152,35 @@ async def running_api(
     with_engine: bool = False,
     hold_results: bool = False,
     seed: Callable[[async_sessionmaker[AsyncSession]], Awaitable[None]] | None = None,
+    logged_in: bool = True,
     **settings: Any,
 ) -> AsyncIterator[ApiRig]:
     """The application inside its lifespan, with an HTTP client for it. `seed` fills the database
-    before the application starts (reports need history to report on)."""
+    before the application starts (reports need history to report on). The client is logged in as
+    the owner unless `logged_in=False`. Password hashing is made cheap here (the real cost is tested
+    in test_auth_passwords.py): a test must not spend 100 ms of CPU on every login."""
+    with patch.object(passwords, "N", 2**4):
+        async with _running_api(
+            tmp_path,
+            with_engine=with_engine,
+            hold_results=hold_results,
+            seed=seed,
+            logged_in=logged_in,
+            settings=settings,
+        ) as rig:
+            yield rig
+
+
+@asynccontextmanager
+async def _running_api(
+    tmp_path: Path,
+    *,
+    with_engine: bool,
+    hold_results: bool,
+    seed: Callable[[async_sessionmaker[AsyncSession]], Awaitable[None]] | None,
+    logged_in: bool,
+    settings: dict[str, Any],
+) -> AsyncIterator[ApiRig]:
     config = settings_for(tmp_path, engine_enabled=with_engine, **settings)
     await migrate(config)
     if seed is not None:
@@ -155,6 +197,8 @@ async def running_api(
         httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client,
     ):
         rig = ApiRig(app, client, config, parts)
+        if logged_in:
+            await rig.log_in()
         if with_engine:
             engine = rig.fakes.engine
             assert await engine.listener.wait_until_connected(2)

@@ -28,6 +28,7 @@ export const keys = {
   riskEvents: ['risk-events'] as const,
   reports: ['reports'] as const,
   health: ['health'] as const,
+  auth: ['auth'] as const,
 }
 
 export function useStatus() {

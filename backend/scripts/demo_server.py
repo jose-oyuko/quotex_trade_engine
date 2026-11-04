@@ -138,6 +138,20 @@ def fake_builder(holder: list[Fakes]) -> Any:
     return build
 
 
+DEMO_USER = "demo"
+DEMO_PASSWORD = "demo-password"  # noqa: S105 - the demo database is separate and holds nothing real
+
+
+async def log_in_demo(app: Any, client: httpx.AsyncClient) -> None:
+    """The demo has a login like the real application. Its account is made here, with a known
+    password, and the client is logged in with it (the cookie stays in the client)."""
+    await app.state.auth.set_owner(username=DEMO_USER, password=DEMO_PASSWORD)
+    response = await client.post(
+        "/api/v1/auth/login", json={"username": DEMO_USER, "password": DEMO_PASSWORD}
+    )
+    response.raise_for_status()
+
+
 async def seed_groups(client: httpx.AsyncClient) -> int:
     """Create the demo groups through the real API, if there are none yet."""
     existing = (await client.get("/api/v1/groups")).json()["total"]
@@ -175,9 +189,11 @@ async def run(port: int, interval: float, win_rate: float, reset: bool) -> int:
     sys.stdout.write(
         f"\nDEMO MODE (fake Quotex, fake Telegram, separate database)\n"
         f"Dashboard: http://127.0.0.1:{port}   (run `npm run build` first if it is blank)\n"
+        f"Log in with username {DEMO_USER!r} and password {DEMO_PASSWORD!r}.\n"
         f"A made-up signal every {interval:g}s; trades settle after {EXPIRY_S}s. Ctrl+C stops.\n\n"
     )
     async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as client:
+        await log_in_demo(app, client)
         created = await seed_groups(client)
     if created:
         sys.stdout.write(f"created {created} demo groups\n")

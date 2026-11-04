@@ -20,6 +20,11 @@ from scripts.export_openapi import OUTPUT, render
 # the API tests and docs/API.md), not something that slips in.
 EXPECTED_OPERATIONS = {
     ("GET", "/api/v1/health"),
+    ("GET", "/api/v1/auth/state"),
+    ("POST", "/api/v1/auth/setup"),
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/logout"),
+    ("POST", "/api/v1/auth/password"),
     ("GET", "/api/v1/status"),
     ("GET", "/api/v1/telegram/chats"),
     ("GET", "/api/v1/groups"),

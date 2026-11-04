@@ -7,8 +7,10 @@
 
 ## The one thing to understand first
 
-**The application has no login.** Anyone who can reach its port can use the dashboard and the API,
-which can place trades. That is why it refuses to listen on anything but loopback (`127.0.0.1`) unless
+**The dashboard has a login, but it is served over plain HTTP.** The owner account (created on the first
+start, see [OPERATIONS.md](OPERATIONS.md)) keeps strangers out of the dashboard, but on an open network
+the password and the session cookie would travel unencrypted, and the login page would be exposed to
+guessing. That is why the application refuses to listen on anything but loopback (`127.0.0.1`) unless
 told otherwise. On a VPS the safe design is therefore:
 
 ```
@@ -20,7 +22,8 @@ can open. Nothing is exposed to the internet except SSH. This is the recommended
 change to the application's settings.
 
 Do **not** set `HOST=0.0.0.0` and open the port. The application will refuse unless you also set
-`ALLOW_PUBLIC_BIND=true`, and then anyone on the internet can trade on your account.
+`ALLOW_PUBLIC_BIND=true`, and then the only thing between the internet and your trading account is a
+password sent in clear text.
 
 ## Setup
 

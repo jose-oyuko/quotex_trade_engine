@@ -13,7 +13,7 @@ dashboard** with **reports**.
 - Frontend: **React + Vite + TypeScript**
 - Database: **SQLite (WAL)**, designed so it can move to PostgreSQL later
 - Telegram: **Telethon**. Quotex: **pyquotex** (unofficial, pinned git dependency), always behind one adapter
-- Runs on the owner's Windows PC first, a VPS later. Single user, **no user accounts** for now.
+- Runs on the owner's Windows PC first, a VPS later. Single user for now: **one owner (admin) account** protects the dashboard (D-58, D-59); more users by invitation come later.
 
 The owner is learning the system as it is built. Explain what you did and why, in plain language.
 

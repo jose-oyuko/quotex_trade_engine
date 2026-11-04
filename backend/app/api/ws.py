@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from app.api.hub import ClientClosedError, Hub, HubClient
 from app.api.schemas.ws import ResyncRequest
+from app.auth.service import SESSION_COOKIE, AuthService
 
 router = APIRouter()
 log = structlog.get_logger()
@@ -19,12 +20,17 @@ log = structlog.get_logger()
 SEND_TIMEOUT_S = 10.0  # a client that cannot take one frame in this long is gone
 MAX_CLIENT_MESSAGE = 1024  # the only thing a client may say is {"type": "resync"}
 CLOSE_TOO_BIG = 1009
+CLOSE_POLICY = 1008
 CLOSE_SLOW = 1013  # "try again later"
 
 
 @router.websocket("/ws")
 async def live_socket(websocket: WebSocket) -> None:
     hub: Hub = websocket.app.state.hub
+    auth: AuthService = websocket.app.state.auth
+    if await auth.authenticate(websocket.cookies.get(SESSION_COOKIE)) is None:
+        await websocket.close(code=CLOSE_POLICY)  # before accept: the handshake is answered 403
+        return
     await websocket.accept()
     client = hub.register()
     try:

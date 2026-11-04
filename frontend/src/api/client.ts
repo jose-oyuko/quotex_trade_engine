@@ -2,6 +2,8 @@
 // handling; the `api` object below names every endpoint with its input and output types.
 import type {
   Account,
+  AuthState,
+  AuthUser,
   AccountType,
   Chain,
   ChainControl,
@@ -47,6 +49,20 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
     this.details = details
+  }
+}
+
+let unauthorizedHandler: (() => void) | null = null
+
+/**
+ * Called when the server says the session is gone (it expired, or the password was changed
+ * elsewhere): the app then asks who is logged in and shows the login page. Returns a function that
+ * removes the handler.
+ */
+export function onUnauthorized(handler: () => void): () => void {
+  unauthorizedHandler = handler
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null
   }
 }
 
@@ -112,7 +128,12 @@ export async function request<T>(method: string, path: string, options: Options 
     if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new Error('Cannot reach the backend. Is it running?', { cause: error })
   }
-  if (!response.ok) throw await errorFrom(response)
+  if (!response.ok) {
+    const error = await errorFrom(response)
+    // A wrong password is also a 401, but with another code: only a lost session ends the visit.
+    if (error.status === 401 && error.code === 'not_authenticated') unauthorizedHandler?.()
+    throw error
+  }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
@@ -141,6 +162,17 @@ export const api = {
       request<GroupRiskLimits>('GET', `/groups/${String(id)}/risk`, { signal }),
     setRisk: (id: number, body: GroupRiskLimitsInput) =>
       request<GroupRiskLimits>('PUT', `/groups/${String(id)}/risk`, { body }),
+  },
+
+  auth: {
+    state: (signal?: AbortSignal) => request<AuthState>('GET', '/auth/state', { signal }),
+    setup: (body: { setup_code: string; username: string; password: string }) =>
+      request<AuthUser>('POST', '/auth/setup', { body }),
+    login: (body: { username: string; password: string }) =>
+      request<AuthUser>('POST', '/auth/login', { body }),
+    logout: () => request<undefined>('POST', '/auth/logout'),
+    changePassword: (body: { current_password: string; new_password: string }) =>
+      request<undefined>('POST', '/auth/password', { body }),
   },
 
   telegram: {

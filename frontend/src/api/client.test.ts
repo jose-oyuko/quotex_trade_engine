@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, reportCsvUrl, request } from './client'
+import { api, ApiError, onUnauthorized, reportCsvUrl, request } from './client'
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn<typeof fetch>(() =>
@@ -95,6 +95,52 @@ describe('request', () => {
   it('lets an abort through unchanged', async () => {
     mockFetch(new DOMException('aborted', 'AbortError'))
     await expect(request('GET', '/status')).rejects.toMatchObject({ name: 'AbortError' })
+  })
+})
+
+describe('a lost session', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const refusal = (code: string) =>
+    Response.json({ error: { code, message: 'no', details: null } }, { status: 401 })
+
+  it('is reported once so the app can show the login page', async () => {
+    mockFetch(refusal('not_authenticated'))
+    const handler = vi.fn()
+    const stop = onUnauthorized(handler)
+    await expect(request('GET', '/status')).rejects.toBeInstanceOf(ApiError)
+    expect(handler).toHaveBeenCalledTimes(1)
+    stop()
+  })
+
+  it('is not what a wrong password looks like', async () => {
+    mockFetch(refusal('invalid_login'))
+    const handler = vi.fn()
+    const stop = onUnauthorized(handler)
+    await expect(api.auth.login({ username: 'a', password: 'b' })).rejects.toMatchObject({
+      code: 'invalid_login',
+    })
+    expect(handler).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it('stops being reported once the handler is removed', async () => {
+    mockFetch(refusal('not_authenticated'))
+    const handler = vi.fn()
+    onUnauthorized(handler)()
+    await expect(request('GET', '/status')).rejects.toBeInstanceOf(ApiError)
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('sends the login to the right endpoints', async () => {
+    const fetchMock = mockFetch(Response.json({ username: 'a', role: 'admin' }))
+    await api.auth.login({ username: 'a', password: 'b' })
+    expect(lastCall(fetchMock).url).toBe('/api/v1/auth/login')
+    expect(lastCall(fetchMock).init.method).toBe('POST')
+    await api.auth.state()
+    expect(lastCall(fetchMock).url).toBe('/api/v1/auth/state')
   })
 })
 

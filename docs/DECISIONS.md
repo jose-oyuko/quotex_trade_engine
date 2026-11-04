@@ -401,7 +401,7 @@ loopback bind and the owner reaches the dashboard through an SSH tunnel, so noth
 A systemd unit runs it with an orderly stop. Docker is not provided: the application needs interactive
 logins and a persistent data folder, and on a single-user setup a container adds volumes and terminal
 handling for nothing. A reverse proxy is documented only with authentication in front of every path.
-Adding a dashboard login stays in the "Later" backlog. Not verified on a real server.
+Adding a dashboard login stayed in the "Later" backlog then; D-58 and D-59 brought it forward and replace the "no login" part of this decision (the loopback bind and the tunnel stay). Not verified on a real server.
 
 **D-54. Chain events reach the bus in order.** The chain manager used to be able to publish `chain.ended`
 before `chain.started` when a chain was stopped in the very moment it was created (kill switch or "skip
@@ -431,6 +431,34 @@ two programs sharing one `.session` file can lock each other out or log the acco
 that the picker needs `ENGINE_ENABLED=true` and a connected Telegram; otherwise it says why and the
 owner types the id as before. The list is fetched only when the owner presses the button (never when
 the form opens), with a 30 s limit, and nothing it returns is stored.
+
+**D-58. What the owner types moves from `.env` into the dashboard (Phases 10-15).** Telegram and Quotex
+logins are entered on the dashboard and stored encrypted in the database; settings such as "engine on"
+live in the database. `.env` keeps only the bootstrap values (bind address, data folder, environment,
+log files) and the master key that encrypts the logins. The key stays in `.env` (owner's choice): that
+protects database copies and backups, not a machine that is itself compromised. The command-line logins
+stay as a fallback. Why: the owner is not meant to edit files or run commands to change a setting.
+This supersedes D-53's "no login" and the "Later" item "encrypted credential storage and dashboard login".
+
+**D-59. Login before secrets; one owner now, room for more later.** The dashboard can place trades and,
+from Phase 11, will hold the logins, so Phase 10 puts a login in front of everything first. There is one
+account, the admin. `users` has a role and every session belongs to a user, so invitations can be added
+later without redoing the login. An owner column on groups, chains, trades and the stored logins is
+**not** added now: it would touch every table and query for a feature that does not exist yet; adding it
+when invitations are built is a known, bounded job. The first account is created with a one-time setup
+code printed in the log (a stranger who finds the page first cannot claim it), and a command on the
+machine resets the password (there is no email to send a reset link).
+
+**D-60. Passwords: scrypt from the standard library; sessions: random tokens, stored hashed.** Parameters
+N=2^14, r=8, p=1 (RFC 7914's interactive-login setting, 16 MB), run in a worker thread so a login
+never stalls the event loop. OWASP's table lists costlier settings; they measured 2 s and more on the
+owner's PC and would hold a one-core server for seconds on every login, which the execution path
+must not feel. The cost is stored in each hash, so it can be raised later without locking anyone out;
+the password minimum (10 characters), the throttle and the command rate limit make up for the rest. No new dependency: the
+standard library's scrypt is memory-hard and already installed on Windows and Linux. A session is 32
+random bytes in an HttpOnly, SameSite=Strict cookie; the database holds only its SHA-256, so a copied
+database cannot be turned into logged-in sessions. Failed logins are throttled in memory (per username
+and overall), and an unknown user costs the same time as a wrong password.
 
 ---
 

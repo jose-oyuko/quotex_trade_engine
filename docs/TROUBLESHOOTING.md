@@ -33,7 +33,7 @@ folder path of about 190 characters.)
 **"The database is missing or out of date"** — run `npm run db:upgrade` (or just `npm start`, which does
 it).
 
-**"Refusing to listen on ... the API can place trades and has no login"** — `HOST` in `backend/.env` is
+**"Refusing to listen on ... the API can place trades and is meant for loopback"** — `HOST` in `backend/.env` is
 not a loopback address. Use `HOST=127.0.0.1`. Read [DEPLOYMENT.md](DEPLOYMENT.md) before changing it.
 
 **"Invalid configuration in backend/.env"** — a value has the wrong form (for example text where a number
