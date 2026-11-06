@@ -66,7 +66,11 @@ An 8-step chain (N = 8) simply needs eight multipliers; the setup UI collects on
 - A follow-up is placed **immediately** when the loss is known.
 - Chains are keyed by `(group_id, asset)`; unrelated chains never share counters.
 - While a `flip_*` chain is active for a group, **new signals from that group are ignored** and recorded
-  as `ignored: chain active` (D-9). `martingale` and `no_martingale` open independent chains.
+  as `ignored: chain active` (D-9). `martingale` and `no_martingale` open independent chains. (The check
+  is per group, not per `(group, asset)`.)
+- **Opposite pair (D-70).** A flip group with `allow_opposite_pair` on also accepts a second signal while one
+  chain runs, if it is the **opposite direction on the same asset**: it becomes its own chain, so the two never
+  share a step or a counter. At most two chains run together; any other signal is ignored as above.
 - Chain statuses: `pending`, `open`, `completed` (won), `exhausted` (all steps lost), `stopped`
   (owner action), `failed` (could not place an order), `unknown` (could not determine the result).
 - Owner controls: **stop after current trade** (no further steps), **skip to base / end chain**,
@@ -114,6 +118,7 @@ base_stake: decimal > 0,
 max_steps: int >= 0,
 multipliers: [decimal > 0] with len == max_steps,
 min_payout_pct: 0–100,
+allow_opposite_pair: bool (flip strategies only; default false),
 ```
 Global: `account_type` (demo/real), max stake, max concurrent trades, exposure cap, daily stop-loss,
 daily profit target, kill-switch state.

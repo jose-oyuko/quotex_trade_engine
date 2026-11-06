@@ -1743,6 +1743,12 @@ export interface components {
          * @description docs/DOMAIN.md section 5. There must be exactly one multiplier per step.
          */
         GroupSettingsIn: {
+            /**
+             * Allow Opposite Pair
+             * @description Flip strategies only: while one chain runs, accept one more for the opposite direction on the same asset (two chains at most).
+             * @default false
+             */
+            allow_opposite_pair: boolean;
             asset_suffix_mode: components["schemas"]["AssetSuffixMode"];
             /** Base Stake */
             base_stake: number | string;
@@ -1769,6 +1775,8 @@ export interface components {
         };
         /** GroupSettingsOut */
         GroupSettingsOut: {
+            /** Allow Opposite Pair */
+            allow_opposite_pair: boolean;
             asset_suffix_mode: components["schemas"]["AssetSuffixMode"];
             /** Base Stake */
             base_stake: string;

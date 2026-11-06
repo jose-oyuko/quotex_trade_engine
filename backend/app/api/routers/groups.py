@@ -32,6 +32,7 @@ def _settings_values(settings: GroupSettingsIn) -> SettingsValues:
         max_steps=settings.max_steps,
         multipliers=tuple(settings.multipliers),
         min_payout_pct=settings.min_payout_pct,
+        allow_opposite_pair=settings.allow_opposite_pair,
     )
 
 

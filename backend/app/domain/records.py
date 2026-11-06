@@ -51,6 +51,9 @@ class GroupSettingsRecord:
     multipliers: tuple[Decimal, ...]
     min_payout_pct: int
     updated_at: datetime
+    # Flip strategies only: while one chain runs, accept one more, for the opposite direction on
+    # the same asset (at most two chains). Off = one chain at a time (decision D-9, D-70).
+    allow_opposite_pair: bool = False
 
     def __post_init__(self) -> None:
         if self.base_stake <= 0:

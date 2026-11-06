@@ -25,6 +25,7 @@ from sqlalchemy import (
     String,
     Text,
     Uuid,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -84,6 +85,9 @@ class GroupSettings(Base):
     multipliers: Mapped[tuple[Decimal, ...]] = mapped_column(DecimalList)
     min_payout_pct: Mapped[int] = mapped_column(SmallInteger)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    allow_opposite_pair: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
 
 
 class Signal(Base):

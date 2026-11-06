@@ -53,6 +53,7 @@ def settings_out(settings: GroupSettingsRecord) -> GroupSettingsOut:
         max_steps=settings.max_steps,
         multipliers=list(settings.multipliers),
         min_payout_pct=settings.min_payout_pct,
+        allow_opposite_pair=settings.allow_opposite_pair,
         updated_at=settings.updated_at,
     )
 

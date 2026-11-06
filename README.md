@@ -124,7 +124,8 @@ started on the dashboard, and an old line in `.env` can neither start it nor all
 - **Logins on the dashboard.** Telegram (phone, code, two-step password) and Quotex (email, password and the
   e-mailed PIN), stored encrypted; no terminal, no `.env` editing.
 - **Strategies.** Per group: no martingale, martingale, flip every loss, two-step flip, as chains of steps. Orders
-  go out on a short path with no database wait (the result is stored in the background).
+  go out on a short path with no database wait (the result is stored in the background). A flip group can
+  optionally run an opposite pair: a second chain for the opposite direction on the same asset (two at most).
 - **Safety.** Limits before every order (max stake, exposure, concurrent trades, chain length, minimum
   payout, daily stop-loss and profit target, globally and per group), a kill switch, group pausing, "stop
   after current trade" and "end chain". Kill switch, pauses and limits survive restarts. If the app

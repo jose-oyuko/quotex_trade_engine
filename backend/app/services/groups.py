@@ -22,6 +22,7 @@ from app.db.repositories import GroupRepository
 from app.domain.enums import AssetSuffixMode, Strategy
 from app.domain.records import GroupRecord, GroupSettingsRecord
 from app.engine.engine import Engine
+from app.engine.strategies import FLIP_STRATEGIES
 from app.signals.timezones import InvalidTimezoneError, parse_timezone
 
 log = structlog.get_logger()
@@ -59,6 +60,7 @@ class SettingsValues:
     max_steps: int
     multipliers: tuple[Decimal, ...]
     min_payout_pct: int
+    allow_opposite_pair: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -167,6 +169,11 @@ class GroupService:
         if values.parser not in self._parser_names:
             known = ", ".join(self._parser_names)
             raise InvalidGroupError(f"unknown parser {values.parser!r} (known: {known})")
+        if values.allow_opposite_pair and values.strategy not in FLIP_STRATEGIES:
+            raise InvalidGroupError(
+                "the opposite pair applies to the flip strategies only: "
+                f"{values.strategy.value} already runs every signal as its own chain"
+            )
         try:
             parse_timezone(values.timezone)
             return GroupSettingsRecord(
@@ -180,6 +187,7 @@ class GroupService:
                 multipliers=values.multipliers,
                 min_payout_pct=values.min_payout_pct,
                 updated_at=now,
+                allow_opposite_pair=values.allow_opposite_pair,
             )
         except (InvalidTimezoneError, ValueError) as exc:
             raise InvalidGroupError(str(exc)) from exc

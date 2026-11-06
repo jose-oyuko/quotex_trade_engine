@@ -4,6 +4,7 @@ import { useFieldArray, useForm, useWatch, type FieldError } from 'react-hook-fo
 import { Button } from '../../components/Button'
 import {
   DEFAULT_MULTIPLIER,
+  FLIP_STRATEGIES,
   MAX_STEPS,
   STRATEGIES,
   SUFFIX_MODES,
@@ -81,6 +82,7 @@ export function GroupForm({
   const strategy = useWatch({ control, name: 'strategy' })
   const steps = useWatch({ control, name: 'max_steps' })
   const noFollowUps = strategy === 'no_martingale'
+  const isFlip = FLIP_STRATEGIES.includes(strategy)
 
   // "No martingale" has no follow-ups: it always has 0 steps.
   useEffect(() => {
@@ -258,6 +260,21 @@ export function GroupForm({
             />
           )}
         </Field>
+        {isFlip && (
+          <div className="field">
+            <label className="check">
+              <input type="checkbox" {...register('allow_opposite_pair')} />
+              Allow an opposite pair
+            </label>
+            <p className="help">
+              Normally a new signal waits until the running chain ends. With this on, a second
+              signal for the <strong>opposite direction on the same asset</strong> starts at once,
+              as its own chain with its own steps and stakes. At most two chains run together, so
+              the most you can have at stake is twice a single chain’s. Any other signal is still
+              ignored.
+            </p>
+          </div>
+        )}
       </fieldset>
 
       <fieldset>

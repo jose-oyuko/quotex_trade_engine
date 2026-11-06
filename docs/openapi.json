@@ -1587,6 +1587,12 @@
         "additionalProperties": false,
         "description": "docs/DOMAIN.md section 5. There must be exactly one multiplier per step.",
         "properties": {
+          "allow_opposite_pair": {
+            "default": false,
+            "description": "Flip strategies only: while one chain runs, accept one more for the opposite direction on the same asset (two chains at most).",
+            "title": "Allow Opposite Pair",
+            "type": "boolean"
+          },
           "asset_suffix_mode": {
             "$ref": "#/components/schemas/AssetSuffixMode"
           },
@@ -1663,6 +1669,10 @@
       },
       "GroupSettingsOut": {
         "properties": {
+          "allow_opposite_pair": {
+            "title": "Allow Opposite Pair",
+            "type": "boolean"
+          },
           "asset_suffix_mode": {
             "$ref": "#/components/schemas/AssetSuffixMode"
           },
@@ -1711,6 +1721,7 @@
           "max_steps",
           "multipliers",
           "min_payout_pct",
+          "allow_opposite_pair",
           "updated_at"
         ],
         "title": "GroupSettingsOut",

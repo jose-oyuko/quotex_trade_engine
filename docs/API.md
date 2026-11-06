@@ -95,7 +95,8 @@ groups and setting limits.
     "base_stake": "1.00",
     "max_steps": 3,
     "multipliers": ["2.0", "2.5", "3.0"],
-    "min_payout_pct": 80
+    "min_payout_pct": 80,
+    "allow_opposite_pair": false
   }
 }
 ```
@@ -103,6 +104,8 @@ groups and setting limits.
 `multipliers` must have exactly `max_steps` entries (one per step) and each must be above 0;
 `base_stake` has at most 2 decimals; `max_steps` is at most 20. Editing a group applies to chains
 started from then on; a chain already running keeps the settings it started with.
+`allow_opposite_pair` (default `false`) is for the flip strategies only (422 otherwise): it lets a second chain
+start for the opposite direction on the same asset while one runs, two chains at most (decision D-70).
 
 ## Reports
 

@@ -41,6 +41,11 @@ class GroupSettingsIn(BaseModel):
     max_steps: int = Field(ge=0, le=MAX_STEPS)
     multipliers: list[Multiplier] = Field(default_factory=list, max_length=MAX_STEPS)
     min_payout_pct: int = Field(default=0, ge=0, le=100)
+    allow_opposite_pair: bool = Field(
+        default=False,
+        description="Flip strategies only: while one chain runs, accept one more for the opposite "
+        "direction on the same asset (two chains at most).",
+    )
 
     @model_validator(mode="after")
     def _one_multiplier_per_step(self) -> Self:
@@ -88,6 +93,7 @@ class GroupSettingsOut(BaseModel):
     max_steps: int
     multipliers: list[Decimal]
     min_payout_pct: int
+    allow_opposite_pair: bool
     updated_at: datetime
 
 

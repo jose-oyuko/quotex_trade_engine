@@ -22,14 +22,17 @@ export const STRATEGIES = [
   {
     value: 'flip_every_loss',
     label: 'Flip every loss',
-    help: 'After a loss the opposite direction is traded, then the original, and so on. New signals are ignored while a chain runs.',
+    help: 'After a loss the opposite direction is traded, then the original, and so on. New signals are ignored while a chain runs (unless the opposite pair below is allowed).',
   },
   {
     value: 'two_step_flip',
     label: 'Two-step flip',
-    help: 'The direction changes after every second loss. New signals are ignored while a chain runs.',
+    help: 'The direction changes after every second loss. New signals are ignored while a chain runs (unless the opposite pair below is allowed).',
   },
 ] as const
+
+/** The strategies that run one chain at a time, and so may allow the opposite pair. */
+export const FLIP_STRATEGIES: readonly string[] = ['flip_every_loss', 'two_step_flip']
 
 export const SUFFIX_MODES = [
   { value: 'otc', label: 'Always OTC (EURUSD becomes EURUSD_otc)' },
@@ -77,6 +80,7 @@ export const groupSchema = z
       .int('Enter a whole number from 0 to 100')
       .min(0, 'At least 0')
       .max(100, 'At most 100'),
+    allow_opposite_pair: z.boolean(),
   })
   .superRefine((values, context) => {
     if (values.multipliers.length !== values.max_steps) {
@@ -102,6 +106,7 @@ export const EMPTY_GROUP: GroupFormValues = {
   max_steps: 3,
   multipliers: [{ value: '2.0' }, { value: '2.5' }, { value: '3.0' }],
   min_payout_pct: 80,
+  allow_opposite_pair: false,
 }
 
 export function fromGroup(group: Group): GroupFormValues {
@@ -119,6 +124,7 @@ export function fromGroup(group: Group): GroupFormValues {
     max_steps: settings.max_steps,
     multipliers: settings.multipliers.map((value) => ({ value })),
     min_payout_pct: settings.min_payout_pct,
+    allow_opposite_pair: settings.allow_opposite_pair,
   }
 }
 
@@ -132,6 +138,8 @@ function settingsOf(values: GroupFormValues) {
     max_steps: values.max_steps,
     multipliers: values.multipliers.map((m) => m.value),
     min_payout_pct: values.min_payout_pct,
+    // only the flip strategies have the setting; the server refuses it for the others
+    allow_opposite_pair: values.allow_opposite_pair && FLIP_STRATEGIES.includes(values.strategy),
   }
 }
 

@@ -137,6 +137,7 @@ export function makeGroup(overrides: Partial<Group> = {}): Group {
       max_steps: 3,
       multipliers: ['2.0', '2.5', '3.0'],
       min_payout_pct: 80,
+      allow_opposite_pair: false,
       updated_at: NOW,
     },
     paused: false,

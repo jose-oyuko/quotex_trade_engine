@@ -96,6 +96,17 @@ class TestGroups:
         async with session_factory() as session:
             assert await GroupRepository(session).get_settings(group.id) == settings
 
+    async def test_the_opposite_pair_flag_is_stored(self, session_factory: Factory) -> None:
+        group = await add_group(session_factory)
+        assert group.id is not None
+        async with session_factory.begin() as session:
+            await GroupRepository(session).save_settings(
+                make_settings(group.id, allow_opposite_pair=True)
+            )
+        async with session_factory() as session:
+            stored = await GroupRepository(session).get_settings(group.id)
+        assert stored is not None and stored.allow_opposite_pair is True
+
     async def test_saving_settings_again_updates_them(self, session_factory: Factory) -> None:
         group = await add_group(session_factory)
         assert group.id is not None

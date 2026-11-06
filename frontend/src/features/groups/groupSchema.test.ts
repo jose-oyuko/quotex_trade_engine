@@ -111,8 +111,25 @@ describe('turning the form into requests and back', () => {
         max_steps: 3,
         multipliers: ['2.0', '2.5', '3.0'],
         min_payout_pct: 80,
+        allow_opposite_pair: false,
       },
     })
+  })
+
+  it('sends the opposite pair only for a flip strategy', () => {
+    const flip = valid({ strategy: 'flip_every_loss', allow_opposite_pair: true })
+    expect(toCreate(flip).settings.allow_opposite_pair).toBe(true)
+    expect(
+      toUpdate(valid({ strategy: 'martingale', allow_opposite_pair: true })).settings,
+    ).toMatchObject({
+      allow_opposite_pair: false,
+    })
+    const settings = makeGroup().settings
+    if (settings === null) throw new Error('the fixture group has settings')
+    const stored = makeGroup({
+      settings: { ...settings, strategy: 'two_step_flip', allow_opposite_pair: true },
+    })
+    expect(fromGroup(stored).allow_opposite_pair).toBe(true)
   })
 
   it('builds an update request without a chat id', () => {

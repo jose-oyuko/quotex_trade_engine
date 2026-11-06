@@ -117,4 +117,30 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0003"
+    assert head_revision() == "0004"
+
+
+def test_the_opposite_pair_column_arrives_switched_off_for_existing_groups(db_file: Path) -> None:
+    config = alembic_config(url_of(db_file))
+    command.upgrade(config, "0003")
+    with sqlite3.connect(db_file) as connection:
+        connection.execute(
+            "INSERT INTO groups (id, telegram_chat_id, title, enabled, created_at, updated_at) "
+            "VALUES (1, -1001, 'old', 1, '2026-11-01 00:00:00', '2026-11-01 00:00:00')"
+        )
+        connection.execute(
+            "INSERT INTO group_settings (group_id, parser, asset_suffix_mode, timezone, strategy, "
+            "base_stake, max_steps, multipliers, min_payout_pct, updated_at) VALUES "
+            "(1, 'legacy_v1', 'none', 'UTC', 'flip_every_loss', '1.00', 0, '[]', 0, "
+            "'2026-11-01 00:00:00')"
+        )
+    command.upgrade(config, "head")
+    with sqlite3.connect(db_file) as connection:
+        (value,) = connection.execute(
+            "SELECT allow_opposite_pair FROM group_settings WHERE group_id = 1"
+        ).fetchone()
+    assert value == 0  # the old behaviour: one chain at a time
+    command.downgrade(config, "0003")
+    with sqlite3.connect(db_file) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(group_settings)")]
+    assert "allow_opposite_pair" not in columns

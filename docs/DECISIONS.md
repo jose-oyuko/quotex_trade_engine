@@ -53,7 +53,7 @@ Exact rules in `docs/DOMAIN.md`.
 
 **D-9. New signals are ignored while a flip-strategy chain is running for that group.** Why: stakes
 must not stack. Other strategies open independent chains. The signal inbox still records the ignored
-signal with the reason.
+signal with the reason. (Amended by D-70: a group may now allow one opposite pair.)
 
 **D-10. Concurrent chains.** State is per chain (`group_id`, `asset`), never global. Why: the old bot's
 single global loss counter made parallel trades impossible.
@@ -587,6 +587,33 @@ and, by default, the key to the stored logins). Choices and why:
   the script's Unix line endings on a Windows checkout and the Dockerfile also strips a stray carriage return.
 - Not changed: `npm start` and the systemd guide stay (Windows; the leanest 1 GB setup). Not verified: a real
   Mac (including Apple Silicon) or a real server; the Docker service's memory cost on the 1 GB VPS is an estimate.
+
+**D-70. An opposite pair for the flip strategies (amends D-9).** The owner wanted two opposite signals on one
+asset, arriving together, to run as two separate chains: the one that loses recovers by flipping, the other ends
+on its win. D-9 refused the second signal. Now each flip group has a switch, `allow_opposite_pair` (off by
+default, so every existing group behaves as before; a migration adds it switched off). Rules:
+- With the switch on and **one** chain running, a new signal is accepted only if it is the **opposite direction
+  on the same asset** (compared with the running chain's *original* signal direction). Anything else, and any
+  signal while two chains run, is ignored as before, and the inbox says which rule refused it (every reason
+  still starts with "chain active").
+- **Two chains at most** in the group. When one ends, the survivor can be paired again.
+- The two are plain chains: own step, own loss counter, own stakes, own controls (*stop after current*, *end
+  chain*); nothing is shared, and nothing in the engine's fast path changed (the check is the same in-memory,
+  synchronous test in `on_signal`). The setting is refused (422) for martingale and no-martingale groups, which
+  already run every signal as its own chain. Expiry is not compared: an opposite signal on the same asset joins
+  even with a different expiry (then it is not a hedge).
+- **Orders still go out one at a time (D-27).** The library keeps one shared slot for "order confirmed", so two
+  orders cannot be in flight together without being able to tell their confirmations apart; that could not be
+  checked against the live service here, so it was not attempted. The second order goes out the moment the
+  first is confirmed. The gap is logged (`opposite_pair_sent`, `gap_ms`) so it can be measured on the demo
+  account. In the default `TIME` mode the library picks the expiry from the clock when each order is built
+  (`get_expiration_time_quotex`): an order built in the first half of the period expires at the next
+  boundary, one built in the second half at the boundary after it. For a 1-minute trade the dividing line is
+  second :30 of each minute, so a pair split by that second (a few in a thousand, at a gap of ~0.2 s) gets
+  expiries a minute apart and is not a hedge. `QUOTEX_TIME_MODE=TIMER` (a countdown of the exact length from
+  each order) has no such line, but it was not verified live either; try it on the demo account first.
+- **Risk:** the exposure limit counts open trades only, so two chains each climbing the steps can stake up to
+  twice a single chain's maximum; the group's max stake and daily stop-loss still apply to each order.
 
 ---
 

@@ -52,6 +52,7 @@ class GroupSpec:
     base: str = "1.00"
     multipliers: tuple[str, ...] = ()
     min_payout_pct: int = 0
+    allow_opposite_pair: bool = False
 
 
 @dataclass
@@ -82,6 +83,7 @@ class EngineRig:
             asset_suffix_mode=AssetSuffixMode.NONE,
             timezone="UTC",
             min_payout_pct=spec.min_payout_pct,
+            allow_opposite_pair=spec.allow_opposite_pair,
         )
         self.engine.set_group(group, settings)
 

@@ -53,8 +53,49 @@ describe('adding a group', () => {
         max_steps: 3,
         multipliers: ['2.0', '2.5', '3.0'],
         min_payout_pct: 80,
+        allow_opposite_pair: false,
       },
     })
+  })
+
+  it('offers the opposite pair for flip strategies only, and sends what was chosen', async () => {
+    const api = mockApi([
+      ['POST', '/groups', json(makeGroup(), 201)],
+      ['GET', '/groups', json(page([makeGroup()]))],
+    ])
+    const user = setup('/groups/new')
+    expect(screen.queryByLabelText('Allow an opposite pair')).not.toBeInTheDocument() // martingale
+
+    await user.selectOptions(screen.getByLabelText('Strategy'), 'flip_every_loss')
+    const pair = screen.getByLabelText('Allow an opposite pair')
+    expect(pair).not.toBeChecked() // off unless the owner turns it on
+    await user.click(pair)
+    await user.type(screen.getByLabelText('Name'), 'Alpha')
+    await user.type(screen.getByLabelText('Telegram chat id'), '-1001')
+    await user.click(screen.getByRole('button', { name: 'Create group' }))
+
+    expect(await screen.findByText('the groups list')).toBeInTheDocument()
+    const body = api.to('POST', '/groups')[0]?.body as { settings: Record<string, unknown> }
+    expect(body.settings).toMatchObject({ strategy: 'flip_every_loss', allow_opposite_pair: true })
+  })
+
+  it('does not send the pair for a strategy that cannot use it, even if it was ticked first', async () => {
+    const api = mockApi([
+      ['POST', '/groups', json(makeGroup(), 201)],
+      ['GET', '/groups', json(page([makeGroup()]))],
+    ])
+    const user = setup('/groups/new')
+    await user.selectOptions(screen.getByLabelText('Strategy'), 'two_step_flip')
+    await user.click(screen.getByLabelText('Allow an opposite pair'))
+    await user.selectOptions(screen.getByLabelText('Strategy'), 'martingale')
+    expect(screen.queryByLabelText('Allow an opposite pair')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Name'), 'Alpha')
+    await user.type(screen.getByLabelText('Telegram chat id'), '-1001')
+    await user.click(screen.getByRole('button', { name: 'Create group' }))
+
+    expect(await screen.findByText('the groups list')).toBeInTheDocument()
+    const body = api.to('POST', '/groups')[0]?.body as { settings: Record<string, unknown> }
+    expect(body.settings).toMatchObject({ strategy: 'martingale', allow_opposite_pair: false })
   })
 
   it('stays on the form and marks the chat id when that chat already has a group', async () => {

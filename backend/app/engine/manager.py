@@ -4,6 +4,9 @@ Each chain runs in its own supervised task, so a slow chain never delays another
 nothing: the loss counter, step and direction live in the chain (decision D-10). The manager only
 owns the registry of running chains, the group settings in memory, and decision D-9.
 
+A flip group runs one chain at a time (decision D-9), or, when its owner allows the opposite pair
+(D-70), two: the second must be the opposite direction on the same asset, and nothing more.
+
 A signal is handled synchronously (`on_signal` never waits): it creates the chain in memory,
 publishes `chain.started` and starts the task. The task's first act is the order. Nothing here
 touches the database; every change is an event for the DB writer.
@@ -28,7 +31,7 @@ from app.engine.chain import Chain, ChainSpec
 from app.engine.errors import UnknownChainError
 from app.engine.executor import Executor, PlacedTrade, Stamps, StepKind, StepOutcome
 from app.engine.risk import RiskGuard
-from app.engine.strategies import FLIP_STRATEGIES, StepPlan
+from app.engine.strategies import FLIP_STRATEGIES, StepPlan, flipped
 from app.events.bus import EventBus
 from app.events.types import (
     ChainAdvanced,
@@ -60,6 +63,29 @@ _KIND_OUTCOME = {
 }
 
 
+def _pair_refusal(
+    settings: GroupSettingsRecord, signal: Signal, running: list[Chain]
+) -> str | None:
+    """Why a flip group may not start another chain for `signal` while `running` is going, or None
+    when it may (the opposite direction on the same asset, next to a single running chain)."""
+    strategy, first = settings.strategy.value, running[0]
+    if not settings.allow_opposite_pair:
+        return f"chain active: {strategy} ignores new signals until chain {first.id} ends"
+    if len(running) > 1:
+        return (
+            f"chain active: {strategy} already runs a pair of chains; new signals wait until "
+            "one of them ends"
+        )
+    origin = first.spec
+    if origin.asset != signal.asset or origin.origin_direction is not flipped(signal.direction):
+        return (
+            f"chain active: {strategy} takes a second signal only for the opposite direction on "
+            f"the same asset ({origin.asset} {origin.origin_direction.value} is running); it "
+            f"waits until chain {first.id} ends"
+        )
+    return None
+
+
 class ChainManager:
     def __init__(
         self,
@@ -79,6 +105,10 @@ class ChainManager:
         self._chains: dict[UUID, Chain] = {}
         self._by_group: defaultdict[int, set[UUID]] = defaultdict(set)
         self._drivers: dict[UUID, asyncio.Task[None]] = {}
+        # The chain each pair member started next to, and when its first order was sent (only used
+        # to log how far apart the two orders of a pair went out)
+        self._partner: dict[UUID, UUID] = {}
+        self._first_sent_ns: dict[UUID, int] = {}
         # `chain.started` events waiting for the signal's inbox row to be published first
         self._unannounced: dict[UUID, ChainStarted] = {}
 
@@ -124,15 +154,14 @@ class ChainManager:
         if settings is None:
             self._ignore(signal, "group has no strategy settings")
             return
+        partner: Chain | None = None
         if settings.strategy in FLIP_STRATEGIES and (
             running := self.active_chains(signal.group_id)
         ):
-            self._ignore(
-                signal,
-                f"chain active: {settings.strategy.value} ignores new signals until chain "
-                f"{running[0].id} ends",
-            )
-            return
+            if (refusal := _pair_refusal(settings, signal, running)) is not None:
+                self._ignore(signal, refusal)
+                return
+            partner = running[0]
         decided_ns = self._clock.monotonic_ns()
         now = self._clock.now()
         chain = Chain(
@@ -158,6 +187,8 @@ class ChainManager:
             self._ignore(signal, f"cannot plan the first trade: {exc}")
             return
         self._register(chain)
+        if partner is not None:
+            self._partner[chain.id] = partner.id
         # Not published here: the chain row points at the signal's inbox row, which the pipeline
         # publishes only after handing the signal over (see `_publish_after_inbox_row`). If
         # anything else is about to be said about the chain first (the owner ends it in the same
@@ -215,6 +246,7 @@ class ChainManager:
             while chain.active:
                 placed = await self._executor.place(chain, plan, stamps)
                 if isinstance(placed, PlacedTrade):
+                    self._note_order_sent(chain, placed)
                     if chain.status is ChainStatus.PENDING:
                         chain.mark_open(self._clock.now())
                         self._bus.publish(
@@ -245,6 +277,23 @@ class ChainManager:
                 )
         finally:
             self._release(chain)
+
+    def _note_order_sent(self, chain: Chain, placed: PlacedTrade) -> None:
+        """Log how far apart the two first orders of an opposite pair were sent. Orders go out one
+        at a time (D-27), so the gap is at least the first order's confirmation round trip."""
+        sent = placed.trade.t_order_sent_ns
+        if chain.step != 0 or sent is None:
+            return
+        self._first_sent_ns[chain.id] = sent
+        partner = self._partner.get(chain.id)
+        other = self._first_sent_ns.get(partner) if partner is not None else None
+        if other is not None:
+            log.info(
+                "opposite_pair_sent",
+                group_id=chain.group_id,
+                asset=chain.spec.asset,
+                gap_ms=round(abs(sent - other) / 1_000_000, 1),
+            )
 
     def _apply(self, chain: Chain, outcome: StepOutcome) -> StepPlan | None:
         now = self._clock.now()
@@ -320,6 +369,8 @@ class ChainManager:
     def _release(self, chain: Chain) -> None:
         self._unregister(chain)
         self._drivers.pop(chain.id, None)
+        self._partner.pop(chain.id, None)
+        self._first_sent_ns.pop(chain.id, None)
 
     # --- startup recovery ---
 

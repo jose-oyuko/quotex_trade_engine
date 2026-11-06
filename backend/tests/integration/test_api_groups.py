@@ -217,6 +217,61 @@ async def test_editing_a_group_does_not_change_a_chain_that_is_already_running(
         assert [str(o.amount) for o in rig.fakes.adapter.orders] == ["1.00", "9.00"]
 
 
+# --- the opposite pair (D-70) ---
+
+FLIP_PAIR = {
+    "strategy": "flip_every_loss",
+    "allow_opposite_pair": True,
+    "max_steps": 1,
+    "multipliers": ["2.0"],
+}
+
+
+async def test_the_opposite_pair_is_off_by_default_and_can_be_switched_on_and_off(
+    tmp_path: Path,
+) -> None:
+    async with running_api(tmp_path) as rig:
+        created = await rig.create_group(settings={"strategy": "flip_every_loss"})
+        assert created["settings"]["allow_opposite_pair"] is False
+
+        edit = {
+            "title": "Signals A",
+            "enabled": True,
+            "settings": group_body(settings=FLIP_PAIR)["settings"],
+        }
+        edited = (await rig.client.put(f"{API}/1", json=edit)).json()
+        assert edited["settings"]["allow_opposite_pair"] is True
+        assert (await rig.client.get(f"{API}/1")).json()["settings"]["allow_opposite_pair"] is True
+
+        edit["settings"]["allow_opposite_pair"] = False
+        edited = (await rig.client.put(f"{API}/1", json=edit)).json()
+        assert edited["settings"]["allow_opposite_pair"] is False
+
+
+@pytest.mark.parametrize("strategy", ["martingale", "no_martingale"])
+async def test_the_opposite_pair_is_refused_for_strategies_that_do_not_need_it(
+    tmp_path: Path, strategy: str
+) -> None:
+    async with running_api(tmp_path) as rig:
+        body = group_body(settings={"strategy": strategy, "allow_opposite_pair": True})
+        response = await rig.client.post(API, json=body)
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_group"
+        assert "flip strategies only" in response.json()["error"]["message"]
+        assert (await rig.client.get(API)).json()["total"] == 0
+
+
+async def test_a_group_set_up_for_the_pair_places_both_opposite_orders(tmp_path: Path) -> None:
+    async with running_api(tmp_path, with_engine=True, hold_results=True) as rig:
+        await rig.create_group(settings=FLIP_PAIR)
+        rig.fakes.signal(-1001, "EURUSD CALL 1m")
+        rig.fakes.signal(-1001, "EURUSD PUT 1m")
+        await rig.eventually(_order_count(rig, 2))
+        assert [o.direction.value for o in rig.fakes.adapter.orders] == ["call", "put"]
+        assert len(rig.fakes.engine.manager.active_chains(1)) == 2
+        assert (await rig.client.get(f"{API}/1")).json()["active_chains"] == 2
+
+
 # --- pause and resume ---
 
 
