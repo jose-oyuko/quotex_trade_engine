@@ -135,6 +135,28 @@ def test_the_engine_does_not_know_the_api_or_the_telethon_wrapper() -> None:
     assert offenders == []
 
 
+def test_the_session_scheduler_works_before_the_order_path_and_never_touches_the_database() -> None:
+    """Decision D-71: the scheduler decides *when* on a timer and hands plain signals to the chain
+    manager. It has no database access (its runs reach the database as events, like everything
+    else), and nothing on the signal-to-order path imports it."""
+    forbidden = ("sqlalchemy", "app.db", "app.api", "app.services", "app.telegram", "pyquotex")
+    offenders = [
+        f"{path.name}: {module}"
+        for path in (APP / "sessions").rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(forbidden)
+    ]
+    assert offenders == []
+    on_the_path = [
+        f"{path.name}: {module}"
+        for name in ("executor.py", "chain.py", "strategies.py", "manager.py", "risk.py")
+        for path in [APP / "engine" / name]
+        for module in imported_modules(path)
+        if module.startswith("app.sessions")
+    ]
+    assert on_the_path == []
+
+
 def test_no_blocking_calls_in_the_application() -> None:
     """Decisions D-13/D-14: no time.sleep, no requests, no input() anywhere in app/."""
     problems: list[str] = []
@@ -174,6 +196,7 @@ def test_lower_layers_never_import_the_layers_above_them() -> None:
         "db": ("app.api", "app.services", "app.engine"),
         "quotex": ("app.api", "app.services", "app.engine"),
         "engine": ("app.api", "app.services"),
+        "sessions": ("app.api", "app.services"),
         "services": ("app.api",),
     }
     offenders = [

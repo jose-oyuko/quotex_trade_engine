@@ -20,6 +20,7 @@ from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
+from app.services.sessions import SessionService
 from app.services.telegram_login import TelegramLoginService
 from app.vault.store import SecretStore
 
@@ -63,6 +64,11 @@ def get_live(request: Request) -> LiveState:
 def get_groups(request: Request) -> GroupService:
     groups: GroupService = request.app.state.groups
     return groups
+
+
+def get_sessions(request: Request) -> SessionService:
+    service: SessionService = request.app.state.sessions
+    return service
 
 
 def get_risk_settings(request: Request) -> RiskSettingsService:
@@ -128,6 +134,7 @@ RunningEngineDep = Annotated[Engine, Depends(require_engine)]
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 LiveDep = Annotated[LiveState, Depends(get_live)]
 GroupsDep = Annotated[GroupService, Depends(get_groups)]
+SessionsDep = Annotated[SessionService, Depends(get_sessions)]
 RiskSettingsDep = Annotated[RiskSettingsService, Depends(get_risk_settings)]
 SnapshotsDep = Annotated[SnapshotBuilder, Depends(get_snapshots)]
 AuthDep = Annotated[AuthService, Depends(get_auth)]

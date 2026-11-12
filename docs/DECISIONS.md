@@ -677,8 +677,9 @@ the chains already running finish** their steps. The run is `ended` when the las
   - *Every candle* (Phase 17): a pair at every boundary, whatever is still running, up to a chosen **maximum of
     open pairs** (a pair is open while at least one of its chains runs). At a boundary with the maximum already
     open, that boundary is skipped and the skip is recorded.
-- **Restart (D-35 applies).** A run that was in progress when the application stopped ends as `interrupted` (its
-  chains are already marked `unknown` by recovery) and is **not resumed**. A session whose window is open at start
+- **Restart (D-35 applies).** A run that was still going when the application died is found at the next start and
+  ends as `interrupted` (its chains are already marked `unknown` by recovery) and is **not resumed**. (A run that
+  is open when the engine is stopped normally, the application's shutdown included, ends as `engine_stopped`.) A session whose window is open at start
   is **not started on its own** (that would be a resume); the next scheduled window starts normally, and *Start
   now* is available. A *once* session whose only run was interrupted is finished, not rescheduled.
 - **Missed windows are skipped.** If the application, or the engine, was off when a window opened, that run does

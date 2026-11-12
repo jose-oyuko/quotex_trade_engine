@@ -22,6 +22,7 @@ from app.api.routers import (
     groups,
     quotex,
     reports,
+    sessions,
     telegram,
     trades,
 )
@@ -54,6 +55,7 @@ from app.services.groups import GroupService
 from app.services.live import LiveState
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
+from app.services.sessions import SessionService
 from app.services.telegram_login import TelegramLoginService
 from app.signals.parsers.registry import ParserRegistry
 from app.telegram.factory import new_login_source
@@ -188,6 +190,7 @@ def create_app(
         app.state.groups = GroupService(
             session_factory, clock, lambda: app.state.trading, ParserRegistry().names
         )
+        app.state.sessions = SessionService(session_factory, clock, lambda: app.state.trading)
         app.state.auth = AuthService(session_factory, clock)
         app.state.env_import = EnvImportService(app.state.vault, lambda: cfg)
         app.state.quotex_login = QuotexLoginService(
@@ -265,6 +268,7 @@ def create_app(
     app.state.snapshots = None
     app.state.hub = None
     app.state.groups = None
+    app.state.sessions = None
     app.state.risk_settings = None
     app.state.auth = None
     app.state.config = None
@@ -296,6 +300,7 @@ def create_app(
         app.include_router(public, prefix="/api/v1")
     for router in (
         groups.router,
+        sessions.router,
         chains.router,
         trades.trades_router,
         trades.signals_router,

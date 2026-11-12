@@ -16,8 +16,10 @@ EXPECTED_TABLES = {
     "group_settings",
     "groups",
     "risk_events",
+    "session_runs",
     "secrets",
     "signals",
+    "trading_sessions",
     "trades",
     "users",
 }
@@ -94,6 +96,7 @@ def test_schema_uses_only_portable_column_types(db_file: Path) -> None:
         "JSON",
         "TEXT",
         "CHAR(32)",
+        "TIME",
     }
     with sqlite3.connect(db_file) as connection:
         found: set[str] = set()
@@ -117,7 +120,7 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0004"
+    assert head_revision() == "0005"
 
 
 def test_the_opposite_pair_column_arrives_switched_off_for_existing_groups(db_file: Path) -> None:
@@ -144,3 +147,45 @@ def test_the_opposite_pair_column_arrives_switched_off_for_existing_groups(db_fi
     with sqlite3.connect(db_file) as connection:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(group_settings)")]
     assert "allow_opposite_pair" not in columns
+
+
+def test_trading_sessions_keep_existing_groups_and_history(db_file: Path) -> None:
+    config = alembic_config(url_of(db_file))
+    command.upgrade(config, "0004")
+    with sqlite3.connect(db_file) as connection:
+        connection.execute(
+            "INSERT INTO groups (id, telegram_chat_id, title, enabled, created_at, updated_at) "
+            "VALUES (1, -1001, 'old', 1, '2026-11-01 00:00:00', '2026-11-01 00:00:00')"
+        )
+        connection.execute(
+            "INSERT INTO chains (id, group_id, asset, origin_direction, duration_s, account_type, "
+            "strategy, status, step, consecutive_losses, max_steps, base_stake, multipliers, "
+            "created_at, updated_at) VALUES ('00000000000000000000000000000001', 1, 'EURUSD', "
+            "'call', 60, 'demo', 'martingale', 'completed', 0, 0, 0, 100, '[]', "
+            "'2026-11-01 00:00:00', '2026-11-01 00:00:00')"
+        )
+    command.upgrade(config, "head")
+    with sqlite3.connect(db_file) as connection:
+        assert connection.execute("SELECT source, telegram_chat_id FROM groups").fetchall() == [
+            ("telegram", -1001)
+        ]
+        # the chain is still there, and belongs to no run
+        assert connection.execute("SELECT session_run_id, pair_no FROM chains").fetchall() == [
+            (None, None)
+        ]
+        # a session's hidden group has no chat, and there can be several
+        for group_id in (2, 3):
+            connection.execute(
+                "INSERT INTO groups (id, telegram_chat_id, title, enabled, created_at, "
+                "updated_at, source) VALUES (?, NULL, 'hidden', 1, '2026-11-01 00:00:00', "
+                "'2026-11-01 00:00:00', 'session')",
+                (group_id,),
+            )
+    command.downgrade(config, "0004")
+    with sqlite3.connect(db_file) as connection:
+        assert connection.execute("SELECT id, telegram_chat_id FROM groups").fetchall() == [
+            (1, -1001)
+        ]
+        assert connection.execute("SELECT count(*) FROM chains").fetchone() == (1,)
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(chains)")]
+    assert "session_run_id" not in columns and "pair_no" not in columns

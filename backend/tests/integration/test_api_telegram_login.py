@@ -460,10 +460,16 @@ async def test_the_engine_is_built_with_the_stored_api_id_and_session(tmp_path: 
         assert used.telegram_session.get_secret_value() == SESSION_TEXT
 
 
-async def test_without_a_login_the_engine_page_says_so(tmp_path: Path) -> None:
+async def test_without_a_login_the_engine_page_says_so_but_does_not_need_it(
+    tmp_path: Path,
+) -> None:
+    """Telegram is optional (decision D-71): without it the engine starts with signals off."""
     async with running_api(tmp_path, secret_key=KEY, login_source=Fakes()) as rig:
         body = (await rig.client.get(f"{API}/engine")).json()
-        assert "Telegram login" in body["missing_logins"]
+        item = next(i for i in body["logins"] if i["label"] == "Telegram login")
+        assert item["present"] is False and item["source"] == "missing"
+        assert item["required"] is False
+        assert "Telegram login" not in body["missing_logins"]
 
 
 async def test_a_stored_login_that_cannot_be_read_is_reported_and_stops_the_engine_start(

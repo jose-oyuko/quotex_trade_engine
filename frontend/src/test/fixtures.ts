@@ -74,6 +74,8 @@ export function makeChain(overrides: Partial<Chain> = {}): Chain {
     updated_at: NOW,
     ended_at: null,
     end_reason: null,
+    session_run_id: null,
+    pair_no: null,
     ...overrides,
   }
 }

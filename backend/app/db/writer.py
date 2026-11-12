@@ -42,6 +42,7 @@ from app.db.repositories import (
     BalanceSnapshotRepository,
     ChainRepository,
     RiskEventRepository,
+    SessionRepository,
     SignalRepository,
     TradeRepository,
 )
@@ -54,6 +55,7 @@ from app.events.types import (
     ChainStarted,
     Event,
     RiskTripped,
+    SessionRunChanged,
     SettingChanged,
     SignalReceived,
     TradeOpened,
@@ -238,6 +240,8 @@ async def _apply(session: AsyncSession, event: Event) -> None:
             await RiskEventRepository(session).add(risk_event)
         case BalanceUpdated(snapshot=snapshot):
             await BalanceSnapshotRepository(session).add(snapshot)
+        case SessionRunChanged(run=run):
+            await SessionRepository(session).upsert_run(run)
         case SettingChanged(setting=setting):
             await AppSettingsRepository(session).set(
                 setting.key, setting.value, now=setting.updated_at

@@ -13,6 +13,7 @@ from app.domain.records import (
     BalanceSnapshotRecord,
     ChainRecord,
     RiskEventRecord,
+    SessionRunRecord,
     SignalRecord,
     TradeRecord,
 )
@@ -81,6 +82,14 @@ class SettingChanged(Event):
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
+class SessionRunChanged(Event):
+    """A trading session's run started, moved on (a pair opened, a target was hit) or ended."""
+
+    name: ClassVar[str] = "session.run"
+    run: SessionRunRecord
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
 class AccountChanged(Event):
     """The engine moved between demo and real. Shown live; not stored (the adapter starts on demo
     at every launch, decision D-15)."""
@@ -110,4 +119,5 @@ PERSISTED_EVENTS: tuple[type[Event], ...] = (
     RiskTripped,
     BalanceUpdated,
     SettingChanged,
+    SessionRunChanged,
 )

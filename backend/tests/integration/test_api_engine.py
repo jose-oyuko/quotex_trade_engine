@@ -62,6 +62,10 @@ async def test_a_new_installation_has_the_engine_stopped_and_says_what_it_would_
         assert body["state"] == "stopped" and body["desired"] is False and body["error"] is None
         assert body["real_trading_allowed"] is False
         assert "Quotex email" in body["missing_logins"]
+        # Telegram is optional: without it the engine starts with signals off (decision D-71)
+        telegram = [i for i in body["logins"] if i["label"].startswith("Telegram")]
+        assert len(telegram) == 3 and not any(i["required"] for i in telegram)
+        assert not any(label.startswith("Telegram") for label in body["missing_logins"])
         assert {i["label"] for i in body["logins"]} == {
             "Quotex email",
             "Quotex password",

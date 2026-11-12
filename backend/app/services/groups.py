@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.db.repositories import GroupRepository
-from app.domain.enums import AssetSuffixMode, Strategy
+from app.domain.enums import AssetSuffixMode, GroupSource, Strategy
 from app.domain.records import GroupRecord, GroupSettingsRecord
 from app.engine.engine import Engine
 from app.engine.strategies import FLIP_STRATEGIES
@@ -89,13 +89,14 @@ class GroupService:
         async with self._factory() as session:
             repo = GroupRepository(session)
             settings = {s.group_id: s for s in await repo.list_settings()}
-            return [GroupView(g, settings.get(g.id or 0)) for g in await repo.list_all()]
+            groups = await repo.list_all(source=GroupSource.TELEGRAM)
+            return [GroupView(g, settings.get(g.id or 0)) for g in groups]
 
     async def get(self, group_id: int) -> GroupView:
         async with self._factory() as session:
             repo = GroupRepository(session)
             group = await repo.get(group_id)
-            if group is None:
+            if group is None or group.source is not GroupSource.TELEGRAM:
                 raise GroupNotFoundError(f"no group {group_id}")
             return GroupView(group, await repo.get_settings(group_id))
 
@@ -133,7 +134,7 @@ class GroupService:
         async with self._factory.begin() as session:
             repo = GroupRepository(session)
             existing = await repo.get(group_id)
-            if existing is None:
+            if existing is None or existing.source is not GroupSource.TELEGRAM:
                 raise GroupNotFoundError(f"no group {group_id}")
             group = replace(existing, title=title, enabled=enabled, updated_at=now)
             record = self._settings_record(group_id, settings, now)
@@ -150,7 +151,7 @@ class GroupService:
             async with self._factory.begin() as session:
                 repo = GroupRepository(session)
                 group = await repo.get(group_id)
-                if group is None:
+                if group is None or group.source is not GroupSource.TELEGRAM:
                     raise GroupNotFoundError(f"no group {group_id}")
                 await repo.delete(group_id)
         except IntegrityError as exc:

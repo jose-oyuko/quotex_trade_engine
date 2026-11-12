@@ -7,7 +7,7 @@ constructs. The only dialect-minded detail is the integer primary key of `groups
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -24,18 +24,23 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    Time,
     Uuid,
     false,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.db.types import DecimalList, Money, UTCDateTime
+from app.db.types import DecimalList, IntList, Money, UTCDateTime
 from app.domain.enums import (
     AccountType,
     AssetSuffixMode,
     ChainStatus,
     Direction,
+    GroupSource,
+    RepeatKind,
+    RunEndReason,
+    RunState,
     SignalStatus,
     Strategy,
     TradeStatus,
@@ -58,11 +63,15 @@ class Group(Base):
     __tablename__ = "groups"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    # None for the hidden group of a trading session (many NULLs are allowed by the unique index)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     title: Mapped[str] = mapped_column(String(255))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    source: Mapped[GroupSource] = mapped_column(
+        _enum(GroupSource), default=GroupSource.TELEGRAM, server_default=GroupSource.TELEGRAM.value
+    )
 
 
 class GroupSettings(Base):
@@ -139,6 +148,8 @@ class Chain(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
     ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     end_reason: Mapped[str | None] = mapped_column(String(255))
+    session_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("session_runs.id"))
+    pair_no: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class Trade(Base):
@@ -201,6 +212,62 @@ class BalanceSnapshot(Base):
     taken_at: Mapped[datetime] = mapped_column(UTCDateTime)
     account_type: Mapped[AccountType] = mapped_column(_enum(AccountType))
     balance: Mapped[Decimal] = mapped_column(Money)
+
+
+class TradingSession(Base):
+    """A saved trading session (decision D-71). Its strategy settings are the `group_settings` row
+    of its hidden group."""
+
+    __tablename__ = "trading_sessions"
+    __table_args__ = (
+        CheckConstraint("duration_s > 0", name="duration_positive"),
+        CheckConstraint("pause_s >= 0", name="pause_not_negative"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id"), unique=True)
+    asset: Mapped[str] = mapped_column(String(32))
+    duration_s: Mapped[int] = mapped_column(Integer)
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+    timezone: Mapped[str] = mapped_column(String(64))
+    repeat: Mapped[RepeatKind] = mapped_column(_enum(RepeatKind))
+    weekdays: Mapped[tuple[int, ...]] = mapped_column(IntList)
+    pause_s: Mapped[int] = mapped_column(Integer)
+    profit_target: Mapped[Decimal | None] = mapped_column(Money)
+    loss_limit: Mapped[Decimal | None] = mapped_column(Money)
+    max_pairs: Mapped[int | None] = mapped_column(Integer)
+    once_after: Mapped[datetime] = mapped_column(UTCDateTime)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class SessionRun(Base):
+    """One occurrence of a trading session: what it did and why it ended."""
+
+    __tablename__ = "session_runs"
+    __table_args__ = (
+        Index("ix_session_runs_session_id_started_at", "session_id", "started_at"),
+        Index("ix_session_runs_state", "state"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("trading_sessions.id"))
+    started_by: Mapped[str] = mapped_column(String(16))
+    account_type: Mapped[AccountType] = mapped_column(_enum(AccountType))
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    window_end: Mapped[datetime] = mapped_column(UTCDateTime)
+    state: Mapped[RunState] = mapped_column(_enum(RunState))
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    pairs_opened: Mapped[int] = mapped_column(Integer, default=0)
+    rounds_skipped: Mapped[int] = mapped_column(Integer, default=0)
+    lopsided_pairs: Mapped[int] = mapped_column(Integer, default=0)
+    profit: Mapped[Decimal] = mapped_column(Money, default=Decimal(0))
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    end_reason: Mapped[RunEndReason | None] = mapped_column(_enum(RunEndReason))
+    note: Mapped[str | None] = mapped_column(String(500))
 
 
 class AppSetting(Base):

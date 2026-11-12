@@ -48,6 +48,10 @@ trust:
 | `GET /groups/{id}`, `PUT /groups/{id}`, `DELETE /groups/{id}` | Read one; replace its title, enabled flag and settings; delete one (only if it has no history — otherwise disable it). |
 | `POST /groups/{id}/pause`, `POST /groups/{id}/resume` | New signals of the group are ignored (and say so) while it is paused; its running chains finish. *Needs the engine.* |
 | `GET /groups/{id}/risk`, `PUT /groups/{id}/risk` | The group's own limits (max stake, daily stop-loss, daily profit target). |
+| `GET /sessions`, `POST /sessions` | List the trading sessions; save one (decision D-71): asset, trade length, window and time zone, repeat rule, strategy, targets. 409 `session_overlap` if its window overlaps another enabled session's, 422 `invalid_session`. Each session shows when it will start next, its warnings and its run in progress. |
+| `GET /sessions/{id}`, `PUT /sessions/{id}`, `DELETE /sessions/{id}` | Read one; replace it (saving a *once* session arms it again); delete it (only with no runs on record, otherwise disable it). Edits and deletes are refused while it runs: 409 `session_in_use`. |
+| `POST /sessions/{id}/start`, `POST /sessions/{id}/stop` | Begin a run now (the first pair at once, for a window of the session's usual length; 409 `session_run_active` if another run is going, 422 if the session is switched off); stop the run: no new pairs, the chains already running finish (409 `no_active_run`). *Needs the engine.* |
+| `GET /sessions/runs` | The runs of every session (filter `session_id`), newest first: state, pairs opened, rounds skipped, profit, why it ended. |
 | `GET /telegram/chats` | The groups and channels the logged-in Telegram account is in (name, chat id, and whether a group for it already exists), for the "Choose from my Telegram chats" picker. Private chats are left out. Read-only. *Needs the engine* and a connected Telegram: otherwise 503 `engine_not_running`, `telegram_not_connected` or `telegram_unavailable`. |
 | `GET /quotex/login` | Where the Quotex login is: `logged_out`, `working` (talking to Quotex), `pin_needed` (with Quotex's own wording of what it wants) or `logged_in`; whether an email and password are stored; the reason the last login did not work; whether the engine is running. Safe after a page reload. |
 | `POST /quotex/login/start` | Log in with the stored email and password (demo). Returns when the login needs the PIN, has finished, or is still going (ask again). A refused login is `logged_out` with the reason in `message`, not an HTTP error. 409 `quotex_not_configured`, 409 `engine_running`. |
@@ -106,6 +110,37 @@ groups and setting limits.
 started from then on; a chain already running keeps the settings it started with.
 `allow_opposite_pair` (default `false`) is for the flip strategies only (422 otherwise): it lets a second chain
 start for the opposite direction on the same asset while one runs, two chains at most (decision D-70).
+
+### Trading session
+
+```json
+{
+  "name": "London open",
+  "enabled": true,
+  "asset": "EURUSD",
+  "duration_s": 300,
+  "start_time": "11:00",
+  "end_time": "12:00",
+  "timezone": "UTC",
+  "repeat": "weekdays",
+  "weekdays": [0, 1, 2, 3, 4],
+  "pause_s": 0,
+  "profit_target": "10.00",
+  "loss_limit": "20.00",
+  "max_pairs": null,
+  "strategy": {
+    "strategy": "flip_every_loss",
+    "base_stake": "1.00",
+    "max_steps": 2,
+    "multipliers": ["2.0", "3.0"],
+    "min_payout_pct": 80
+  }
+}
+```
+
+`repeat: "once"` needs no `weekdays`. The strategy part follows the group rules (one multiplier per step).
+The `loss_limit` stops new pairs; chains already running finish, so it does not cap the loss (decision D-72).
+Chains and trades opened by a session carry `session_run_id` and `pair_no` (`GET /chains`).
 
 ## Reports
 

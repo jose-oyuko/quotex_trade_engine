@@ -133,6 +133,34 @@ describe('applyEvent', () => {
     expect(state.controls.paused_groups).toEqual([2])
   })
 
+  it('leaves the status alone when a trading session’s run moves on', () => {
+    const base = makeSnapshot()
+    const state = applyEvent(
+      base,
+      message({
+        type: 'session.run',
+        data: {
+          id: 'run-1',
+          session_id: 1,
+          started_by: 'schedule',
+          account_type: 'demo',
+          started_at: at,
+          window_end: at,
+          updated_at: at,
+          state: 'running',
+          pairs_opened: 1,
+          rounds_skipped: 0,
+          lopsided_pairs: 0,
+          profit: '0.00',
+          ended_at: null,
+          end_reason: null,
+          note: null,
+        },
+      }),
+    )
+    expect(state).toBe(base) // the sessions page reads its own list, not the status
+  })
+
   it('applies a batch in order', () => {
     const start = makeChain({ status: 'pending' })
     const state = applyEvents(makeSnapshot(), [

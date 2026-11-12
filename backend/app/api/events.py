@@ -26,11 +26,13 @@ from app.api.schemas.ws import (
     ConnectionEventOut,
     ControlsChangedMessage,
     RiskTrippedMessage,
+    SessionRunMessage,
     SignalReceivedMessage,
     TradeOpenedMessage,
     TradeSettledMessage,
 )
 from app.api.snapshot import SnapshotBuilder
+from app.api.views import run_out
 from app.events.types import (
     AccountChanged,
     BalanceUpdated,
@@ -40,6 +42,7 @@ from app.events.types import (
     ConnectionChanged,
     Event,
     RiskTripped,
+    SessionRunChanged,
     SettingChanged,
     SignalReceived,
     TradeOpened,
@@ -56,6 +59,7 @@ type EventMessage = (
     | ConnectionChangedMessage
     | ControlsChangedMessage
     | RiskTrippedMessage
+    | SessionRunMessage
     | SignalReceivedMessage
     | TradeOpenedMessage
     | TradeSettledMessage
@@ -93,6 +97,8 @@ def to_message(event: Event, seq: int, snapshots: SnapshotBuilder) -> EventMessa
             return AccountChangedMessage(
                 seq=seq, at=at, data=AccountEventOut(account_type=account_type)
             )
+        case SessionRunChanged(run=run):
+            return SessionRunMessage(seq=seq, at=at, data=run_out(run))
         case SettingChanged(setting=setting) if is_control_setting(setting.key):
             return ControlsChangedMessage(seq=seq, at=at, data=snapshots.controls())
         case _:

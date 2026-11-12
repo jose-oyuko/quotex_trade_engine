@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Group, GroupSettings
 from app.db.repositories._mapping import to_record, to_values
+from app.domain.enums import GroupSource
 from app.domain.records import GroupRecord, GroupSettingsRecord
 
 
@@ -31,10 +32,14 @@ class GroupRepository:
         )
         return to_record(GroupRecord, row) if row else None
 
-    async def list_all(self, *, enabled_only: bool = False) -> list[GroupRecord]:
+    async def list_all(
+        self, *, enabled_only: bool = False, source: GroupSource | None = None
+    ) -> list[GroupRecord]:
         stmt = select(Group).order_by(Group.id)
         if enabled_only:
             stmt = stmt.where(Group.enabled.is_(True))
+        if source is not None:
+            stmt = stmt.where(Group.source == source)
         return [to_record(GroupRecord, row) for row in await self._session.scalars(stmt)]
 
     async def update(self, group: GroupRecord) -> None:

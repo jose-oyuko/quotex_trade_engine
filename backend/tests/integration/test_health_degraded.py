@@ -101,3 +101,30 @@ async def test_lost_history_is_reported_so_it_is_never_silent(tmp_path: Path) ->
     assert body["status"] == "degraded"
     assert any("7 events were dropped" in p for p in body["problems"])
     assert any("2 records could not be stored" in p for p in body["problems"])
+
+
+async def test_an_engine_without_telegram_is_healthy_with_quotex_alone(tmp_path: Path) -> None:
+    """Signals are off on purpose (no Telegram login): that is not a problem, sessions still run."""
+    from app.core.clock import SystemClock
+    from app.core.config import Settings
+    from app.core.tasks import TaskSupervisor
+    from app.engine.engine import Engine
+    from app.events.bus import EventBus
+    from app.quotex.fake import FakeQuotexAdapter
+
+    def build(settings: Settings, bus: EventBus, tasks: TaskSupervisor) -> Engine:
+        clock = SystemClock()
+        adapter = FakeQuotexAdapter(clock=clock, bus=bus)
+        adapter.add_asset("EURUSD", payout=80)
+        return Engine(adapter=adapter, source=None, bus=bus, clock=clock, tasks=tasks)
+
+    async with running_api(tmp_path, with_engine=True, builder=build) as rig:
+
+        async def connected() -> bool:
+            quotex = (await health(rig))["quotex"]
+            return quotex is not None and quotex["connected"]
+
+        await rig.eventually(connected)
+        body = await health(rig)
+    assert body["status"] == "ok" and body["problems"] == []
+    assert body["telegram"] is None

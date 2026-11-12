@@ -43,6 +43,7 @@ function staleKeys(message: LiveMessage): (readonly unknown[])[] {
     case 'balance.updated':
     case 'connection.changed':
     case 'account.changed':
+    case 'session.run':
       return []
   }
 }

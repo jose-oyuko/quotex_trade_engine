@@ -376,7 +376,7 @@ stops by the rules of D-72, and is controlled by the API. Tested on the fake Quo
   start and end differ, at least one weekday for a repeating session, **no overlap with another enabled
   session** (D-73), a warning (not an error) when the start is not on a candle boundary of the trade length.
   Saving the strategy part writes the hidden group's settings (the existing rules for stakes and multipliers).
-- **Scheduler** (`engine/sessions.py`): finds the next window of each enabled session from the clock and time
+- **Scheduler** (`sessions/scheduler.py`): finds the next window of each enabled session from the clock and time
   zone; a minute before it, checks engine, connection, asset and payout; at the start time opens the first pair;
   runs the sequential mode (wait, then the first boundary at or after it); skips and records a round whose
   checks fail; ends the run for every reason in D-72; does not open a pair at or after the window end.

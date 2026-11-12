@@ -29,7 +29,10 @@ from app.engine.errors import (
     AccountSwitchRefusedError,
     EngineBusyError,
     EngineStartError,
+    NoActiveRunError,
     RealTradingInUseError,
+    SessionNotLoadedError,
+    SessionRunActiveError,
     UnknownChainError,
 )
 from app.engine.risk import RiskConfigError
@@ -43,6 +46,12 @@ from app.services.groups import (
 )
 from app.services.login_errors import EngineRunningError, WrongStepError
 from app.services.quotex_login import NoPinWantedError, PinInvalidError, QuotexNotConfiguredError
+from app.services.sessions import (
+    InvalidSessionError,
+    SessionInUseError,
+    SessionNotFoundError,
+    SessionOverlapError,
+)
 from app.services.telegram_login import (
     CodeStaleError,
     CodeWrongError,
@@ -83,6 +92,13 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     GroupExistsError: (409, "group_exists"),
     GroupInUseError: (409, "group_in_use"),
     InvalidGroupError: (422, "invalid_group"),
+    SessionNotFoundError: (404, "session_not_found"),
+    InvalidSessionError: (422, "invalid_session"),
+    SessionOverlapError: (409, "session_overlap"),
+    SessionInUseError: (409, "session_in_use"),
+    SessionRunActiveError: (409, "session_run_active"),
+    NoActiveRunError: (409, "no_active_run"),
+    SessionNotLoadedError: (409, "session_not_loaded"),
     UnknownChainError: (404, "chain_not_running"),
     AccountSwitchRefusedError: (409, "account_switch_refused"),
     EngineBusyError: (409, "engine_busy"),

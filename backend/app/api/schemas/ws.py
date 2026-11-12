@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.api.schemas.records import BalanceOut, ChainOut, RiskEventOut, SignalOut, TradeOut
 from app.api.schemas.risk import ControlsOut
+from app.api.schemas.sessions import SessionRunOut
 from app.api.schemas.status import SnapshotOut
 from app.domain.enums import AccountType
 
@@ -69,6 +70,13 @@ class ChainAdvancedMessage(_Message):
 class ChainEndedMessage(_Message):
     type: Literal["chain.ended"] = "chain.ended"
     data: ChainOut
+
+
+class SessionRunMessage(_Message):
+    """A trading session's run started, moved on (a pair opened, a target was hit) or ended."""
+
+    type: Literal["session.run"] = "session.run"
+    data: SessionRunOut
 
 
 class TradeOpenedMessage(_Message):
@@ -137,6 +145,7 @@ SERVER_MESSAGE_MODELS: tuple[type[BaseModel], ...] = (
     ConnectionChangedMessage,
     AccountChangedMessage,
     ControlsChangedMessage,
+    SessionRunMessage,
 )
 
 

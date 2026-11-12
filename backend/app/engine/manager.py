@@ -5,7 +5,9 @@ nothing: the loss counter, step and direction live in the chain (decision D-10).
 owns the registry of running chains, the group settings in memory, and decision D-9.
 
 A flip group runs one chain at a time (decision D-9), or, when its owner allows the opposite pair
-(D-70), two: the second must be the opposite direction on the same asset, and nothing more.
+(D-70), two: the second must be the opposite direction on the same asset, and nothing more. The
+chains of a trading session (D-71) come in through `open_session_chain` instead: the session
+scheduler decides how many pairs run, so D-9 is not applied to them.
 
 A signal is handled synchronously (`on_signal` never waits): it creates the chain in memory,
 publishes `chain.started` and starts the task. The task's first act is the order. Nothing here
@@ -162,6 +164,30 @@ class ChainManager:
                 self._ignore(signal, refusal)
                 return
             partner = running[0]
+        self._start_chain(signal, settings, partner=partner)
+
+    def open_session_chain(self, signal: Signal, *, run_id: UUID, pair_no: int) -> UUID | None:
+        """Start one leg of a trading session's pair (decision D-71). The session scheduler is the
+        gatekeeper, so decision D-9 is not applied. Returns the chain's id, or None if nothing was
+        started (the kill switch, a paused group, no settings: the inbox row says why)."""
+        if (blocked := self._guard.signal_block_reason(signal.group_id)) is not None:
+            self._ignore(signal, blocked)
+            return None
+        settings = self._settings.get(signal.group_id)
+        if settings is None:
+            self._ignore(signal, "the session has no strategy settings")
+            return None
+        chain = self._start_chain(signal, settings, session=(run_id, pair_no))
+        return None if chain is None else chain.id
+
+    def _start_chain(
+        self,
+        signal: Signal,
+        settings: GroupSettingsRecord,
+        *,
+        partner: Chain | None = None,
+        session: tuple[UUID, int] | None = None,
+    ) -> Chain | None:
         decided_ns = self._clock.monotonic_ns()
         now = self._clock.now()
         chain = Chain(
@@ -178,6 +204,8 @@ class ChainManager:
                 multipliers=settings.multipliers,
                 max_steps=settings.max_steps,
                 min_payout_pct=settings.min_payout_pct,
+                session_run_id=session[0] if session else None,
+                pair_no=session[1] if session else None,
             ),
             now,
         )
@@ -185,7 +213,7 @@ class ChainManager:
             plan = chain.plan()
         except ValueError as exc:
             self._ignore(signal, f"cannot plan the first trade: {exc}")
-            return
+            return None
         self._register(chain)
         if partner is not None:
             self._partner[chain.id] = partner.id
@@ -201,6 +229,7 @@ class ChainManager:
         self._drivers[chain.id] = self._tasks.spawn(
             self._drive(chain, plan, stamps), name=f"chain-{chain.id}"
         )
+        return chain
 
     def _ignore(self, signal: Signal, reason: str) -> None:
         """Replace the signal's inbox row (same id) with an 'ignored' one that says why."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
@@ -162,6 +162,9 @@ def make_rig(
     result_margin_s: float = 60.0,
     limits: RiskLimits | None = None,
     telegram_backoff: BackoffPolicy | None = None,
+    session_sleep: Callable[[float], Awaitable[None]] | None = None,
+    session_tick_s: float = 30.0,
+    with_telegram: bool = True,
 ) -> EngineRig:
     clock = clock or ManualClock()
     bus, tasks = EventBus(), TaskSupervisor()
@@ -171,13 +174,15 @@ def make_rig(
     source = FakeTelegramSource(clock)
     engine = Engine(
         adapter=adapter,
-        source=source,
+        source=source if with_telegram else None,
         bus=bus,
         clock=clock,
         tasks=tasks,
         result_margin_s=result_margin_s,
         risk_limits=limits,
         telegram_backoff=telegram_backoff,
+        session_sleep=session_sleep,
+        session_tick_s=session_tick_s,
     )
     feed = bus.subscribe(name="test-feed", maxsize=1_000_000)
     return EngineRig(clock, bus, tasks, adapter, source, engine, feed)

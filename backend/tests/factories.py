@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -12,6 +12,8 @@ from app.domain.enums import (
     AssetSuffixMode,
     ChainStatus,
     Direction,
+    RepeatKind,
+    RunState,
     SignalStatus,
     Strategy,
     TradeStatus,
@@ -23,6 +25,8 @@ from app.domain.records import (
     GroupRecord,
     GroupSettingsRecord,
     RiskEventRecord,
+    SessionRecord,
+    SessionRunRecord,
     SignalRecord,
     TradeRecord,
 )
@@ -129,3 +133,39 @@ def make_balance(**overrides: Any) -> BalanceSnapshotRecord:
         "balance": Decimal("10000.00"),
     }
     return BalanceSnapshotRecord(**{**fields, **overrides})
+
+
+def make_session(**overrides: Any) -> SessionRecord:
+    """A daily 11:00-12:00 UTC session on EURUSD with M5 trades (the group is 50)."""
+    fields: dict[str, Any] = {
+        "id": 1,
+        "name": "Test session",
+        "enabled": True,
+        "group_id": 50,
+        "asset": "EURUSD",
+        "duration_s": 300,
+        "start_time": time(11, 0),
+        "end_time": time(12, 0),
+        "timezone": "UTC",
+        "repeat": RepeatKind.WEEKDAYS,
+        "weekdays": (0, 1, 2, 3, 4, 5, 6),
+        "pause_s": 0,
+        "created_at": NOW,
+        "updated_at": NOW,
+        "once_after": NOW,
+    }
+    return SessionRecord(**{**fields, **overrides})
+
+
+def make_session_run(session_id: int = 1, **overrides: Any) -> SessionRunRecord:
+    fields: dict[str, Any] = {
+        "id": new_id(),
+        "session_id": session_id,
+        "started_by": "schedule",
+        "account_type": AccountType.DEMO,
+        "started_at": NOW,
+        "window_end": NOW + timedelta(hours=1),
+        "state": RunState.RUNNING,
+        "updated_at": NOW,
+    }
+    return SessionRunRecord(**{**fields, **overrides})

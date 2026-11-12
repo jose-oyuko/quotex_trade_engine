@@ -59,6 +59,8 @@ class GroupRoute:
         """Raises `InvalidTimezoneError` if the group's time zone text is not valid."""
         if group.id is None:
             raise ValueError("the group has not been stored yet (no id)")
+        if group.telegram_chat_id is None:
+            raise ValueError("the group has no Telegram chat (it belongs to a trading session)")
         return cls(
             group_id=group.id,
             chat_id=group.telegram_chat_id,

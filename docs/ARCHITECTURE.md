@@ -35,6 +35,7 @@ Non-goals for now: user accounts, multi-tenant hosting, mobile app, other broker
 | `TelegramListener` | One Telethon client; subscribes to the chats of all enabled groups; emits raw messages with a receive timestamp. |
 | `SignalPipeline` | Parses messages (pluggable parsers), applies filters (payout, duplicates, entry time), resolves the group, emits `Signal`. Persists every message (signal inbox) off the hot path. |
 | `ChainManager` | Owns all open **chains**. A chain = the original signal trade plus its follow-ups. Keyed by `(group_id, asset)`. Applies the group's strategy to decide the next step (direction, stake). |
+| `SessionScheduler` | Trading sessions (D-71 to D-73): on a timer, opens a pair of opposite chains (CALL and PUT) on the session's asset and hands them to the `ChainManager` as signals of the session's hidden group, with no Telegram message. It works *before* the hot path (a timer and in-memory checks) and ends a run by the soft-stop rules. Lives in its own package, `sessions/` (`scheduler.py`, and the pure schedule rules in `schedule.py`), because the engine package never waits on a timer (D-13). |
 | `Executor` | The hot path: take a decided trade, check limits, send the order through the adapter, then await the result and hand it back to the `ChainManager`. |
 | `QuotexAdapter` | The only module that imports `pyquotex`. Interface in `app/quotex/base.py`; real implementation and a `FakeQuotexAdapter` for tests/demos. |
 | `RiskGuard` | Global and per-group limits (max stake, max concurrent trades, exposure cap, daily stop-loss / profit target, kill switch). Consulted synchronously and from memory only. |
@@ -183,6 +184,8 @@ quotex_trade_engine/
 │   │   │                      #   hot path), manager.py (chains, D-9, recovery), engine.py (wiring),
 │   │   │                      #   risk.py (RiskGuard, limits, kill switch), errors.py,
 │   │   │                      #   factory.py (real components)
+│   │   ├── sessions/          # scheduler.py (SessionScheduler: opens the pairs of trading sessions on a
+│   │   │                      #   timer, D-71), schedule.py (window and candle maths; pure)
 │   │   ├── events/            # bus.py, event types
 │   │   ├── services/          # live.py (LiveState, rebuilt from events), groups.py, risk_settings.py
 │   │   ├── api/               # routers/, schemas/, hub.py + ws.py (/ws), errors.py, security.py,

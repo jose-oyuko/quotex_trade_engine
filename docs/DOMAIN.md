@@ -12,6 +12,10 @@ Terms and exact rules. Tests must be named after the examples here.
 - **Base stake** — the amount of step 0. **Multiplier list** — `m1…mN`, one value per follow-up step.
 - **Max steps (N)** — number of follow-ups allowed. A chain has at most `N + 1` trades.
 - **Direction** — `call` (BUY/UP) or `put` (SELL/DOWN).
+- **Trading session** — a schedule saved on the dashboard (D-71): one asset, a time window, a strategy and
+  optional profit and loss targets. While its window is open it opens **pairs** by itself, with no Telegram
+  signal. **Run** — one occurrence of a session (one window). **Pair** — a CALL and a PUT on the session's
+  asset, opened together; each is an ordinary chain. **Round** — one attempt to open a pair (it can be skipped).
 
 ## 2. Strategies (per group)
 
@@ -78,6 +82,37 @@ An 8-step chain (N = 8) simply needs eight multipliers; the setup UI collects on
 - If a follow-up order cannot be placed, the chain becomes `failed`, the group is released, and the
   event is surfaced — signals are never ignored forever because of a broken chain.
 
+### Trading sessions (D-71 to D-73)
+
+A session is saved with a hidden group of its own (`groups.source = 'session'`, no Telegram chat) that carries
+the strategy settings, so chains, trades, reports and limits work as for any group. Its chains come from the
+**session scheduler**, not from the signal pipeline, and decision D-9 does not apply to them (the scheduler
+decides how many pairs run). Telegram signals and groups are not affected.
+
+- **Window:** `[start, end)` in the session's own time zone, on the days chosen (`once`: the next window only;
+  `weekdays`: any selection). It may cross midnight and belongs to the day it starts. A start time that does not
+  exist that day (clocks going forward) means no window that day.
+- **One session at a time:** windows of enabled sessions may not overlap (checked on save, over two weeks);
+  *Start now* is refused while a run is going. A window open when the engine starts is **not** started by
+  itself, and a window missed while the engine was off is skipped.
+- **First pair** at the start time (a *Start now* run: at once). **Sequential mode:** one pair at a time. When
+  both chains have ended, wait `pause_s`, then open the next pair on the first candle boundary at or after that
+  (candles are multiples of the trade length from 00:00 UTC; within 5 s after a boundary counts as on it). No pair
+  opens at or after the window end.
+- **Before a pair** (both legs are checked before either is sent): the kill switch is off, Quotex is connected,
+  the asset is open and pays at least the minimum. Otherwise the round is **skipped**, the reason is recorded
+  on the run, nothing is sent, and the next candle tries again.
+- **Stopping is soft (D-72):** the window ends, the profit target or loss limit is reached, the maximum number of
+  pairs is out, the owner presses *Stop*, or the kill switch is engaged: no new pair opens and **the chains
+  already running finish**. A run's profit is the sum of the profits of its settled trades; a target is checked
+  when a trade settles. The loss limit therefore stops new pairs but **does not cap the loss**.
+- **Run states:** `running`, `stopping`, `ended`; end reasons `window_ended`, `profit_target`, `loss_limit`,
+  `max_pairs`, `stopped`, `kill_switch`, `engine_stopped` (the engine was stopped normally),
+  `interrupted` (the run was still going when the application died: found at the next start), `error`.
+- **A lopsided pair:** the second order of a pair refused after the first went out (for example by a limit):
+  the run counts it, because only one leg is then exposed.
+- The account cannot be switched while a run is going, and a session cannot be edited or deleted while it runs.
+
 ## 4. Signal formats and parser notes
 
 Formats handled by the old parser (to be ported, then tested on real messages):
@@ -120,6 +155,18 @@ multipliers: [decimal > 0] with len == max_steps,
 min_payout_pct: 0–100,
 allow_opposite_pair: bool (flip strategies only; default false),
 ```
+Trading session (stored in `trading_sessions`; its strategy fields are the group settings of its hidden group):
+
+```
+name, enabled, asset: "EURUSD" | "EURUSD_otc", duration_s: 60|120|180|300|600|900|1800|3600|14400,
+start_time, end_time: wall-clock "HH:MM" in `timezone` (end before start = crosses midnight),
+timezone: "UTC-3" | IANA name,
+repeat: "once" | "weekdays", weekdays: [0..6] (0 = Monday),
+pause_s: seconds to wait after a pair is over (sequential mode),
+profit_target, loss_limit: decimal > 0 or none, max_pairs: int >= 1 or none,
+strategy: { strategy, base_stake, max_steps, multipliers, min_payout_pct }
+```
+
 Global: `account_type` (demo/real), max stake, max concurrent trades, exposure cap, daily stop-loss,
 daily profit target, kill-switch state.
 

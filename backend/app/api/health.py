@@ -76,6 +76,7 @@ async def health(request: Request) -> HealthResponse:
             if state.controller is not None and state.controller.state is EngineState.FAILED
             else None
         ),
+        telegram_enabled=state.trading is None or state.trading.telegram_enabled,
     )
     return HealthResponse(
         status="degraded" if problems else "ok",
@@ -110,6 +111,7 @@ def _problems(
     telegram: Any,
     quotex: Any,
     engine_failure: str | None = None,
+    telegram_enabled: bool = True,
 ) -> list[str]:
     problems: list[str] = []
     if engine_failure:
@@ -134,7 +136,7 @@ def _problems(
     if engine_running:
         if quotex is None or not quotex.connected:
             problems.append("Quotex is not connected: no trade can be placed until it is.")
-        if telegram is None or not telegram.connected:
+        if telegram_enabled and (telegram is None or not telegram.connected):
             problems.append("Telegram is not connected: signals are not being read.")
     return problems
 

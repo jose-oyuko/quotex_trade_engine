@@ -32,6 +32,37 @@ class AssetSuffixMode(StrEnum):
     AUTO = "auto"
 
 
+class GroupSource(StrEnum):
+    """Where a group's trades come from: a Telegram chat, or the hidden group of a trading
+    session (decision D-71)."""
+
+    TELEGRAM = "telegram"
+    SESSION = "session"
+
+
+class RepeatKind(StrEnum):
+    ONCE = "once"  # the next window only, never again
+    WEEKDAYS = "weekdays"  # on the chosen days of the week
+
+
+class RunState(StrEnum):
+    RUNNING = "running"  # opening pairs
+    STOPPING = "stopping"  # no more pairs; the chains already running finish (decision D-72)
+    ENDED = "ended"
+
+
+class RunEndReason(StrEnum):
+    WINDOW_ENDED = "window_ended"
+    PROFIT_TARGET = "profit_target"
+    LOSS_LIMIT = "loss_limit"
+    MAX_PAIRS = "max_pairs"
+    STOPPED = "stopped"  # the owner pressed Stop
+    KILL_SWITCH = "kill_switch"
+    ENGINE_STOPPED = "engine_stopped"
+    INTERRUPTED = "interrupted"  # the application stopped while it ran (decision D-35)
+    ERROR = "error"
+
+
 class SignalStatus(StrEnum):
     PARSED = "parsed"
     NOT_PARSED = "not_parsed"

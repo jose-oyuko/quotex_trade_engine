@@ -69,6 +69,8 @@ class ChainOut(BaseModel):
     updated_at: datetime
     ended_at: datetime | None
     end_reason: str | None
+    session_run_id: UUID | None
+    pair_no: int | None
 
 
 class TradeLatency(BaseModel):

@@ -1,5 +1,6 @@
 from app.db.repositories.chains import ChainRepository
 from app.db.repositories.groups import GroupRepository
+from app.db.repositories.sessions import SessionRepository
 from app.db.repositories.signals import SignalRepository
 from app.db.repositories.system import (
     AppSettingsRepository,
@@ -14,6 +15,7 @@ __all__ = [
     "ChainRepository",
     "GroupRepository",
     "RiskEventRepository",
+    "SessionRepository",
     "SignalRepository",
     "TradeRepository",
 ]

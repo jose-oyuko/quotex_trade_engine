@@ -32,3 +32,17 @@ class EngineStartError(ControlError):
 
 class RealTradingInUseError(ControlError):
     """Real-money trading cannot be switched off while the REAL account is the one in use."""
+
+
+class SessionRunActiveError(ControlError):
+    """A trading session is running: only one runs at a time, and the account cannot be switched
+    nor the session edited meanwhile."""
+
+
+class NoActiveRunError(ControlError):
+    """There is no run in progress to stop."""
+
+
+class SessionNotLoadedError(ControlError):
+    """The running engine does not know the session (it was saved a moment ago, or the engine is
+    starting)."""

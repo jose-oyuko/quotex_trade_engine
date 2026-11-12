@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from app.api.schemas.groups import GroupOut, GroupSettingsOut
 from app.api.schemas.risk import ControlsOut, GroupRiskLimitsOut, RiskLimitsOut
-from app.domain.records import GroupSettingsRecord
+from app.api.schemas.sessions import SessionOut, SessionRunOut, SessionStrategyOut
+from app.domain.records import GroupSettingsRecord, SessionRunRecord
+from app.engine.engine import Engine
 from app.engine.risk import GroupRiskLimits, RiskLimits
 from app.services.groups import GroupView
 from app.services.live import Controls
+from app.services.sessions import SessionView
 
 
 def limits_out(limits: RiskLimits) -> RiskLimitsOut:
@@ -58,10 +61,72 @@ def settings_out(settings: GroupSettingsRecord) -> GroupSettingsOut:
     )
 
 
+def run_out(run: SessionRunRecord) -> SessionRunOut:
+    return SessionRunOut(
+        id=run.id,
+        session_id=run.session_id,
+        started_by=run.started_by,
+        account_type=run.account_type,
+        started_at=run.started_at,
+        window_end=run.window_end,
+        state=run.state,
+        updated_at=run.updated_at,
+        pairs_opened=run.pairs_opened,
+        rounds_skipped=run.rounds_skipped,
+        lopsided_pairs=run.lopsided_pairs,
+        profit=run.profit,
+        ended_at=run.ended_at,
+        end_reason=run.end_reason,
+        note=run.note,
+    )
+
+
+def session_out(view: SessionView, engine: Engine | None) -> SessionOut:
+    record = view.session
+    if record.id is None:
+        raise ValueError("a stored session always has an id")
+    active = engine.scheduler.active_run_of(record.id) if engine is not None else None
+    settings = view.settings
+    return SessionOut(
+        id=record.id,
+        name=record.name,
+        enabled=record.enabled,
+        group_id=record.group_id,
+        asset=record.asset,
+        duration_s=record.duration_s,
+        start_time=record.start_time,
+        end_time=record.end_time,
+        timezone=record.timezone,
+        repeat=record.repeat,
+        weekdays=list(record.weekdays),
+        pause_s=record.pause_s,
+        profit_target=record.profit_target,
+        loss_limit=record.loss_limit,
+        max_pairs=record.max_pairs,
+        strategy=None
+        if settings is None
+        else SessionStrategyOut(
+            strategy=settings.strategy,
+            base_stake=settings.base_stake,
+            max_steps=settings.max_steps,
+            multipliers=list(settings.multipliers),
+            min_payout_pct=settings.min_payout_pct,
+        ),
+        next_window_start=view.next_window.start if view.next_window else None,
+        next_window_end=view.next_window.end if view.next_window else None,
+        warnings=list(view.warnings),
+        active_run=run_out(active) if active is not None else None,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
 def group_out(view: GroupView, *, paused: bool, active_chains: int) -> GroupOut:
     group = view.group
     if group.id is None:
         raise ValueError("a stored group always has an id")
+    if group.telegram_chat_id is None:
+        raise ValueError("only Telegram groups are shown as groups")
     return GroupOut(
         id=group.id,
         telegram_chat_id=group.telegram_chat_id,

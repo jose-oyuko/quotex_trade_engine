@@ -57,9 +57,11 @@ and stops working as soon as the account exists. After that the login page is wh
 The **Settings** page starts, stops and restarts the engine (Quotex and Telegram together) while the
 application keeps running: no `.env` edit, no restart.
 
-- **Start the engine:** needs the logins (the page lists each one and where it comes from: *stored here*,
-  *from backend/.env*, *missing*). It always starts on the **demo** account. If it cannot start, the page
-  says why in words (and `/health` shows it), and you can fix it and try again.
+- **Start the engine:** needs the **Quotex** logins (the page lists each one and where it comes from: *stored
+  here*, *from backend/.env*, *missing*). The **Telegram** login is optional: without it the engine starts with
+  signals off (the page says so) and the trading sessions below still run. It always starts on the **demo**
+  account. If it cannot start, the page says why in words (and `/health` shows it), and you can fix it and try
+  again.
 - **Stop the engine:** asks first. No new signal is traded. Trades that are open stay open on Quotex and run
   to their expiry; here they are marked *unknown* at once (the application can no longer follow them), so look
   at them on Quotex.
@@ -73,6 +75,38 @@ application keeps running: no `.env` edit, no restart.
   stays DEMO until you press *Switch to the REAL account* (password again, refused while a chain or trade is
   running). Both are written to the risk log. You cannot stop allowing it while REAL is in use. After a
   restart the engine is on demo again.
+
+## Trading sessions (automatic trading from a schedule)
+
+A trading session trades by the clock, with no Telegram signal: you set it up once, and while its window is
+open it opens **pairs** (a CALL and a PUT on one asset, together) by itself. The one that loses recovers by the
+strategy you chose; the one that wins ends. (Until the dashboard page of Phase 18 exists, sessions are set up
+through the API, `docs/API.md`.)
+
+1. **Save a session:** asset (for example `EURUSD`, or `EURUSD_otc` at the weekend), trade length (M5 = 300 s),
+   start and end time with their time zone, how often it repeats (*once*: the next window only, or chosen
+   weekdays), the minimum payout, the strategy and its stakes, and optional profit and loss targets.
+2. **Leave the engine running.** At the start time the first pair goes out (a minute earlier the asset is made
+   ready). Pick a start on a candle boundary (an M5 session at `11:00`, `11:05`...): the form warns when you do
+   not, because Quotex may then give the trades a different expiry.
+3. **One pair at a time.** When both chains of a pair have ended, it waits the pause you set, then opens the next
+   pair on the next candle. A round where the asset is closed, the payout is too low or Quotex is not connected
+   is **skipped** (nothing is sent) and tried again on the next candle; the run says why.
+4. **It stops by itself** at the end of the window, at the profit target or the loss limit, or after the maximum
+   number of pairs. **Stopping never cuts a chain off:** no new pair opens, but a chain that is recovering keeps
+   going until it wins or runs out of steps. So the loss limit is **not** a cap on the loss: the worst case is the
+   limit plus the rest of every running chain's steps.
+5. **Start now / Stop:** *Start now* begins a run at once (the first pair immediately, for a window of the usual
+   length). *Stop* has the same soft effect as a target. The **kill switch** also ends the run.
+6. **Only one session runs at a time**, so two enabled sessions may not have overlapping windows. A session
+   cannot be edited or deleted while it runs.
+7. **Restarts and missed windows:** a run that was going when the application stopped is marked *interrupted*
+   and is never resumed, and a window that is already open when the engine starts is not started by itself
+   (press *Start now*). A window that passed while the engine was off is skipped. The next window starts
+   normally.
+
+Sessions use whichever account the engine is on (demo unless you switched on purpose); the account cannot be
+switched while a session runs.
 
 ## Moving old logins out of `.env`
 

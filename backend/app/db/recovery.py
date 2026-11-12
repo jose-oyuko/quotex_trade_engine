@@ -11,6 +11,7 @@ from app.db.repositories import (
     AppSettingsRepository,
     ChainRepository,
     GroupRepository,
+    SessionRepository,
     TradeRepository,
 )
 from app.domain.records import (
@@ -18,6 +19,8 @@ from app.domain.records import (
     ChainRecord,
     GroupRecord,
     GroupSettingsRecord,
+    SessionRecord,
+    SessionRunRecord,
     TradeRecord,
 )
 
@@ -35,6 +38,8 @@ class RecoveryState:
     unsettled_trades: list[TradeRecord]
     app_settings: list[AppSettingRecord] = field(default_factory=list)
     recent_settled_trades: list[TradeRecord] = field(default_factory=list)
+    sessions: list[SessionRecord] = field(default_factory=list)
+    unfinished_runs: list[SessionRunRecord] = field(default_factory=list)
 
 
 async def load_recovery_state(
@@ -53,4 +58,6 @@ async def load_recovery_state(
             unsettled_trades=await trades.list_unsettled(),
             app_settings=await AppSettingsRepository(session).all(),
             recent_settled_trades=await trades.list_settled_since(since),
+            sessions=await SessionRepository(session).list_all(),
+            unfinished_runs=await SessionRepository(session).list_unfinished_runs(),
         )

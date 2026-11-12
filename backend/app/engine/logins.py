@@ -32,7 +32,7 @@ class LoginItem:
     label: str
     present: bool
     source: str  # `dashboard`, `.env`, `.session file`, `missing` or `unreadable`
-    required: bool = True  # the engine cannot start without it
+    required: bool = True  # the engine cannot start without it (Telegram is optional, D-71)
 
 
 async def resolve_settings(settings: Settings, vault: SecretStore, *, allow_real: bool) -> Settings:
@@ -67,14 +67,15 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
             items.append(await _quotex_login(settings, vault))
             continue
         stored = status[name]
+        needed = not name.startswith("telegram")  # Telegram is optional (decision D-71)
         if stored.set and stored.readable:
-            items.append(LoginItem(label, True, "dashboard"))
+            items.append(LoginItem(label, True, "dashboard", required=needed))
         elif stored.set:
-            items.append(LoginItem(label, False, "unreadable"))
+            items.append(LoginItem(label, False, "unreadable", required=needed))
         elif _env_has(settings, field):
-            items.append(LoginItem(label, True, ".env"))
+            items.append(LoginItem(label, True, ".env", required=needed))
         else:
-            items.append(LoginItem(label, False, "missing"))
+            items.append(LoginItem(label, False, "missing", required=needed))
     return items
 
 
@@ -94,16 +95,18 @@ async def _quotex_login(settings: Settings, vault: SecretStore) -> LoginItem:
 
 
 async def _telegram_login(settings: Settings, vault: SecretStore) -> LoginItem:
+    """Not required: without it the engine starts with signals off, and trading sessions (which
+    need Quotex only) still run."""
     label = "Telegram login"
     if await vault.has("telegram_session"):
         try:
             await vault.get("telegram_session")
         except VaultError:
-            return LoginItem(label, False, "unreadable")
-        return LoginItem(label, True, "dashboard")
+            return LoginItem(label, False, "unreadable", required=False)
+        return LoginItem(label, True, "dashboard", required=False)
     if _env_has(settings, "telegram_session"):
-        return LoginItem(label, True, ".env")
+        return LoginItem(label, True, ".env", required=False)
     path = settings.telegram_session_path
     if path.with_name(path.name + ".session").is_file():
-        return LoginItem(label, True, ".session file")
-    return LoginItem(label, False, "missing")
+        return LoginItem(label, True, ".session file", required=False)
+    return LoginItem(label, False, "missing", required=False)

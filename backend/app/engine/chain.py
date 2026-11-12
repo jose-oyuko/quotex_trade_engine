@@ -45,6 +45,8 @@ class ChainSpec:
     multipliers: tuple[Decimal, ...]
     max_steps: int
     min_payout_pct: int = 0  # the group's minimum payout, for the risk guard (not stored)
+    session_run_id: UUID | None = None  # set for the chains of a trading session's pairs
+    pair_no: int | None = None
 
 
 class Chain:
@@ -143,6 +145,8 @@ class Chain:
             updated_at=self.updated_at,
             ended_at=self.ended_at,
             end_reason=self.end_reason,
+            session_run_id=s.session_run_id,
+            pair_no=s.pair_no,
         )
 
     # --- internals ---

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 from uuid import UUID
 
@@ -17,6 +17,10 @@ from app.domain.enums import (
     AssetSuffixMode,
     ChainStatus,
     Direction,
+    GroupSource,
+    RepeatKind,
+    RunEndReason,
+    RunState,
     SignalStatus,
     Strategy,
     TradeStatus,
@@ -27,14 +31,16 @@ type JsonScalar = str | int | float | bool | None
 
 @dataclass(slots=True, frozen=True)
 class GroupRecord:
-    """A Telegram group/channel being listened to. `id` is None until the database assigns it."""
+    """A Telegram group/channel being listened to, or the hidden group of a trading session (which
+    has no chat). `id` is None until the database assigns it."""
 
-    telegram_chat_id: int
+    telegram_chat_id: int | None
     title: str
     enabled: bool
     created_at: datetime
     updated_at: datetime
     id: int | None = None
+    source: GroupSource = GroupSource.TELEGRAM
 
 
 @dataclass(slots=True, frozen=True)
@@ -111,6 +117,9 @@ class ChainRecord:
     updated_at: datetime
     ended_at: datetime | None = None
     end_reason: str | None = None
+    # Chains opened by a trading session: the run, and which pair of the run (1, 2, ...)
+    session_run_id: UUID | None = None
+    pair_no: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -166,3 +175,73 @@ class AppSettingRecord:
     key: str
     value: JsonScalar
     updated_at: datetime
+
+
+@dataclass(slots=True, frozen=True)
+class SessionRecord:
+    """A trading session as the owner saved it (decision D-71): one asset, a time window that
+    repeats (or not), and when to stop. The strategy part (stakes, steps, minimum payout) lives in
+    the group settings of its hidden group, `group_id`."""
+
+    name: str
+    enabled: bool
+    group_id: int
+    asset: str  # the Quotex name: "EURUSD" or "EURUSD_otc"
+    duration_s: int  # the trade length, which is also the candle length
+    start_time: time  # wall-clock times in `timezone`; `end_time` may be before `start_time`
+    end_time: time  # (the window then crosses midnight)
+    timezone: str
+    repeat: RepeatKind
+    weekdays: tuple[int, ...]  # 0 = Monday ... 6 = Sunday; used when `repeat` is WEEKDAYS
+    pause_s: int  # sequential mode: wait this long after a pair is over before the next
+    created_at: datetime
+    updated_at: datetime
+    # ONCE: the window is the first one that starts at or after this moment
+    once_after: datetime
+    profit_target: Decimal | None = None
+    loss_limit: Decimal | None = None
+    max_pairs: int | None = None
+    id: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("the session needs a name")
+        if self.duration_s <= 0:
+            raise ValueError("the trade length must be greater than 0")
+        if self.start_time == self.end_time:
+            raise ValueError("the start and the end of the window must differ")
+        if self.pause_s < 0:
+            raise ValueError("the pause between pairs cannot be negative")
+        if self.profit_target is not None and self.profit_target <= 0:
+            raise ValueError("the profit target must be greater than 0 (or unset)")
+        if self.loss_limit is not None and self.loss_limit <= 0:
+            raise ValueError("the loss limit must be greater than 0 (or unset)")
+        if self.max_pairs is not None and self.max_pairs < 1:
+            raise ValueError("the maximum number of pairs must be at least 1 (or unset)")
+        if self.repeat is RepeatKind.WEEKDAYS and not self.weekdays:
+            raise ValueError("choose at least one day of the week")
+        if any(not 0 <= d <= 6 for d in self.weekdays) or len(set(self.weekdays)) != len(
+            self.weekdays
+        ):
+            raise ValueError("weekdays must be distinct numbers from 0 (Monday) to 6 (Sunday)")
+
+
+@dataclass(slots=True, frozen=True)
+class SessionRunRecord:
+    """One occurrence of a session (one window), with what it did and why it ended."""
+
+    id: UUID
+    session_id: int
+    started_by: str  # "schedule" or "manual"
+    account_type: AccountType
+    started_at: datetime
+    window_end: datetime
+    state: RunState
+    updated_at: datetime
+    pairs_opened: int = 0
+    rounds_skipped: int = 0
+    lopsided_pairs: int = 0  # a pair whose second leg was refused after the first was sent
+    profit: Decimal = Decimal(0)
+    ended_at: datetime | None = None
+    end_reason: RunEndReason | None = None
+    note: str | None = None  # the last thing worth saying (a skipped round's reason, an error)

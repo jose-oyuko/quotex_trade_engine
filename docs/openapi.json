@@ -426,6 +426,29 @@
           "origin_direction": {
             "$ref": "#/components/schemas/Direction"
           },
+          "pair_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair No"
+          },
+          "session_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Run Id"
+          },
           "signal_id": {
             "anyOf": [
               {
@@ -472,7 +495,9 @@
           "created_at",
           "updated_at",
           "ended_at",
-          "end_reason"
+          "end_reason",
+          "session_run_id",
+          "pair_no"
         ],
         "title": "ChainOut",
         "type": "object"
@@ -2255,6 +2280,70 @@
         "title": "Page[RiskEventOut]",
         "type": "object"
       },
+      "Page_SessionOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[SessionOut]",
+        "type": "object"
+      },
+      "Page_SessionRunOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRunOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[SessionRunOut]",
+        "type": "object"
+      },
       "Page_SignalOut_": {
         "properties": {
           "items": {
@@ -2453,6 +2542,14 @@
         ],
         "title": "RealTradingIn",
         "type": "object"
+      },
+      "RepeatKind": {
+        "enum": [
+          "once",
+          "weekdays"
+        ],
+        "title": "RepeatKind",
+        "type": "string"
       },
       "ResyncRequest": {
         "description": "The only message a client may send.",
@@ -2805,6 +2902,30 @@
         "title": "RiskTrippedMessage",
         "type": "object"
       },
+      "RunEndReason": {
+        "enum": [
+          "window_ended",
+          "profit_target",
+          "loss_limit",
+          "max_pairs",
+          "stopped",
+          "kill_switch",
+          "engine_stopped",
+          "interrupted",
+          "error"
+        ],
+        "title": "RunEndReason",
+        "type": "string"
+      },
+      "RunState": {
+        "enum": [
+          "running",
+          "stopping",
+          "ended"
+        ],
+        "title": "RunState",
+        "type": "string"
+      },
       "SampleGuideOut": {
         "properties": {
           "small_below": {
@@ -2930,6 +3051,7 @@
             "controls.changed": "#/components/schemas/ControlsChangedMessage",
             "heartbeat": "#/components/schemas/HeartbeatMessage",
             "risk.tripped": "#/components/schemas/RiskTrippedMessage",
+            "session.run": "#/components/schemas/SessionRunMessage",
             "signal.received": "#/components/schemas/SignalReceivedMessage",
             "snapshot": "#/components/schemas/SnapshotMessage",
             "trade.opened": "#/components/schemas/TradeOpenedMessage",
@@ -2976,9 +3098,555 @@
           },
           {
             "$ref": "#/components/schemas/ControlsChangedMessage"
+          },
+          {
+            "$ref": "#/components/schemas/SessionRunMessage"
           }
         ],
         "title": "ServerMessage"
+      },
+      "SessionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "asset": {
+            "description": "The Quotex name: `EURUSD` or `EURUSD_otc`.",
+            "maxLength": 20,
+            "minLength": 3,
+            "title": "Asset",
+            "type": "string"
+          },
+          "duration_s": {
+            "description": "The trade length in seconds, also the candle length: 60, 120, 180, 300, 600, 900, 1800, 3600 or 14400.",
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "end_time": {
+            "description": "Wall-clock time in `timezone`. Before `start_time` means the window crosses midnight.",
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "loss_limit": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The session stops opening pairs when its loss reaches this. Chains already running finish, so this does not cap the total loss.",
+            "title": "Loss Limit"
+          },
+          "max_pairs": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pairs"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "pause_s": {
+            "default": 0,
+            "description": "Seconds to wait after both chains of a pair have ended, before the next pair.",
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Pause S",
+            "type": "integer"
+          },
+          "profit_target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The session stops opening pairs when its profit reaches this.",
+            "title": "Profit Target"
+          },
+          "repeat": {
+            "$ref": "#/components/schemas/RepeatKind",
+            "description": "`once`: the next window only, never again. `weekdays`: on the chosen days."
+          },
+          "start_time": {
+            "description": "Wall-clock time in `timezone`, `HH:MM`.",
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/SessionStrategyIn"
+          },
+          "timezone": {
+            "description": "`UTC-3`, `UTC+5:30` or an IANA zone name.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "weekdays": {
+            "description": "0 = Monday ... 6 = Sunday. Needed when `repeat` is `weekdays`.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "title": "Weekdays",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "asset",
+          "duration_s",
+          "start_time",
+          "end_time",
+          "timezone",
+          "repeat",
+          "strategy"
+        ],
+        "title": "SessionIn",
+        "type": "object"
+      },
+      "SessionOut": {
+        "properties": {
+          "active_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionRunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_s": {
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "end_time": {
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "group_id": {
+            "description": "The session's hidden group: its chains and trades carry it.",
+            "title": "Group Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "loss_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loss Limit"
+          },
+          "max_pairs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pairs"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_window_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Window End"
+          },
+          "next_window_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it will start by itself next (null: switched off, or a finished 'once').",
+            "title": "Next Window Start"
+          },
+          "pause_s": {
+            "title": "Pause S",
+            "type": "integer"
+          },
+          "profit_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Target"
+          },
+          "repeat": {
+            "$ref": "#/components/schemas/RepeatKind"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionStrategyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "weekdays": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Weekdays",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "group_id",
+          "asset",
+          "duration_s",
+          "start_time",
+          "end_time",
+          "timezone",
+          "repeat",
+          "weekdays",
+          "pause_s",
+          "profit_target",
+          "loss_limit",
+          "max_pairs",
+          "strategy",
+          "next_window_start",
+          "next_window_end",
+          "warnings",
+          "active_run",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SessionOut",
+        "type": "object"
+      },
+      "SessionRunMessage": {
+        "description": "A trading session's run started, moved on (a pair opened, a target was hit) or ended.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SessionRunOut"
+          },
+          "seq": {
+            "description": "Number of the latest event this message includes.",
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "session.run",
+            "default": "session.run",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "at",
+          "data"
+        ],
+        "title": "SessionRunMessage",
+        "type": "object"
+      },
+      "SessionRunOut": {
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lopsided_pairs": {
+            "description": "Pairs where only one leg was ever running.",
+            "title": "Lopsided Pairs",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pairs_opened": {
+            "title": "Pairs Opened",
+            "type": "integer"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "rounds_skipped": {
+            "title": "Rounds Skipped",
+            "type": "integer"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "started_by": {
+            "description": "`schedule` or `manual`.",
+            "title": "Started By",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/RunState"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "started_by",
+          "account_type",
+          "started_at",
+          "window_end",
+          "state",
+          "updated_at",
+          "pairs_opened",
+          "rounds_skipped",
+          "lopsided_pairs",
+          "profit",
+          "ended_at",
+          "end_reason",
+          "note"
+        ],
+        "title": "SessionRunOut",
+        "type": "object"
+      },
+      "SessionStrategyIn": {
+        "additionalProperties": false,
+        "description": "The strategy part of a session: the same rules as a group's (docs/DOMAIN.md section 5). The\nCALL and the PUT of every pair are two chains that each follow it.",
+        "properties": {
+          "base_stake": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Base Stake"
+          },
+          "max_steps": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "min_payout_pct": {
+            "default": 0,
+            "description": "A round is skipped, and nothing is sent, if the asset pays less than this.",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Payout Pct",
+            "type": "integer"
+          },
+          "multipliers": {
+            "items": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1000.0,
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 20,
+            "title": "Multipliers",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "base_stake",
+          "max_steps"
+        ],
+        "title": "SessionStrategyIn",
+        "type": "object"
+      },
+      "SessionStrategyOut": {
+        "properties": {
+          "base_stake": {
+            "title": "Base Stake",
+            "type": "string"
+          },
+          "max_steps": {
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "min_payout_pct": {
+            "title": "Min Payout Pct",
+            "type": "integer"
+          },
+          "multipliers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Multipliers",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "base_stake",
+          "max_steps",
+          "multipliers",
+          "min_payout_pct"
+        ],
+        "title": "SessionStrategyOut",
+        "type": "object"
       },
       "SettingItemOut": {
         "properties": {
@@ -8598,6 +9266,796 @@
         "summary": "Put Secret",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "operationId": "list_sessions_api_v1_sessions_get",
+        "parameters": [
+          {
+            "description": "Rows per page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Rows per page.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Rows to skip.",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SessionOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Sessions",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "post": {
+        "description": "Saves the session. Two enabled sessions may not have overlapping windows.",
+        "operationId": "create_session_api_v1_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/runs": {
+      "get": {
+        "description": "Runs of every session (or of one), newest first.",
+        "operationId": "list_runs_api_v1_sessions_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
+            "description": "Rows per page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Rows per page.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Rows to skip.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Rows to skip.",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SessionRunOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "delete": {
+        "description": "Only a session with no runs on record can be deleted; otherwise disable it.",
+        "operationId": "delete_session_api_v1_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Session",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "get": {
+        "operationId": "get_session_api_v1_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Session",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "put": {
+        "description": "Refused while the session is running. Saving a 'once' session arms it again.",
+        "operationId": "update_session_api_v1_sessions__session_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Update Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/start": {
+      "post": {
+        "description": "Begin a run now, for a window of the session's usual length; the first pair goes out at\nonce. Refused while another run is in progress (only one session runs at a time).",
+        "operationId": "start_session_now_api_v1_sessions__session_id__start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Session Now",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/stop": {
+      "post": {
+        "description": "No new pairs from now on; the chains already running finish.",
+        "operationId": "stop_session_api_v1_sessions__session_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Stop Session",
+        "tags": [
+          "sessions"
         ]
       }
     },

@@ -54,6 +54,19 @@ class Money(TypeDecorator[Decimal]):
         return Decimal(value).scaleb(-2)
 
 
+class IntList(TypeDecorator[tuple[int, ...]]):
+    """A tuple of integers stored as a JSON list (the weekdays of a trading session)."""
+
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value: tuple[int, ...] | None, dialect: Dialect) -> Any:
+        return None if value is None else [int(n) for n in value]
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> tuple[int, ...] | None:
+        return None if value is None else tuple(int(n) for n in value)
+
+
 class DecimalList(TypeDecorator[tuple[Decimal, ...]]):
     """A tuple of Decimals stored as a JSON list of strings (exact, no float round-trip)."""
 

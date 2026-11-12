@@ -773,6 +773,113 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sessions */
+        get: operations["list_sessions_api_v1_sessions_get"];
+        put?: never;
+        /**
+         * Create Session
+         * @description Saves the session. Two enabled sessions may not have overlapping windows.
+         */
+        post: operations["create_session_api_v1_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description Runs of every session (or of one), newest first.
+         */
+        get: operations["list_runs_api_v1_sessions_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get_session_api_v1_sessions__session_id__get"];
+        /**
+         * Update Session
+         * @description Refused while the session is running. Saving a 'once' session arms it again.
+         */
+        put: operations["update_session_api_v1_sessions__session_id__put"];
+        post?: never;
+        /**
+         * Delete Session
+         * @description Only a session with no runs on record can be deleted; otherwise disable it.
+         */
+        delete: operations["delete_session_api_v1_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Session Now
+         * @description Begin a run now, for a window of the session's usual length; the first pair goes out at
+         *     once. Refused while another run is in progress (only one session runs at a time).
+         */
+        post: operations["start_session_now_api_v1_sessions__session_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Session
+         * @description No new pairs from now on; the chains already running finish.
+         */
+        post: operations["stop_session_api_v1_sessions__session_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -1295,6 +1402,10 @@ export interface components {
             /** Multipliers */
             multipliers: string[];
             origin_direction: components["schemas"]["Direction"];
+            /** Pair No */
+            pair_no: number | null;
+            /** Session Run Id */
+            session_run_id: string | null;
             /** Signal Id */
             signal_id: string | null;
             status: components["schemas"]["ChainStatus"];
@@ -2024,6 +2135,28 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** Page[SessionOut] */
+        Page_SessionOut_: {
+            /** Items */
+            items: components["schemas"]["SessionOut"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
+        /** Page[SessionRunOut] */
+        Page_SessionRunOut_: {
+            /** Items */
+            items: components["schemas"]["SessionRunOut"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** Page[SignalOut] */
         Page_SignalOut_: {
             /** Items */
@@ -2107,6 +2240,11 @@ export interface components {
              */
             password: string;
         };
+        /**
+         * RepeatKind
+         * @enum {string}
+         */
+        RepeatKind: "once" | "weekdays";
         /**
          * ResyncRequest
          * @description The only message a client may send.
@@ -2222,6 +2360,16 @@ export interface components {
              */
             type: "risk.tripped";
         };
+        /**
+         * RunEndReason
+         * @enum {string}
+         */
+        RunEndReason: "window_ended" | "profit_target" | "loss_limit" | "max_pairs" | "stopped" | "kill_switch" | "engine_stopped" | "interrupted" | "error";
+        /**
+         * RunState
+         * @enum {string}
+         */
+        RunState: "running" | "stopping" | "ended";
         /** SampleGuideOut */
         SampleGuideOut: {
             /**
@@ -2274,7 +2422,234 @@ export interface components {
          * ServerMessage
          * @description Every message the server can send on /ws; see app/api/schemas/ws.py.
          */
-        ServerMessage: components["schemas"]["SnapshotMessage"] | components["schemas"]["HeartbeatMessage"] | components["schemas"]["SignalReceivedMessage"] | components["schemas"]["ChainStartedMessage"] | components["schemas"]["ChainAdvancedMessage"] | components["schemas"]["ChainEndedMessage"] | components["schemas"]["TradeOpenedMessage"] | components["schemas"]["TradeSettledMessage"] | components["schemas"]["RiskTrippedMessage"] | components["schemas"]["BalanceUpdatedMessage"] | components["schemas"]["ConnectionChangedMessage"] | components["schemas"]["AccountChangedMessage"] | components["schemas"]["ControlsChangedMessage"];
+        ServerMessage: components["schemas"]["SnapshotMessage"] | components["schemas"]["HeartbeatMessage"] | components["schemas"]["SignalReceivedMessage"] | components["schemas"]["ChainStartedMessage"] | components["schemas"]["ChainAdvancedMessage"] | components["schemas"]["ChainEndedMessage"] | components["schemas"]["TradeOpenedMessage"] | components["schemas"]["TradeSettledMessage"] | components["schemas"]["RiskTrippedMessage"] | components["schemas"]["BalanceUpdatedMessage"] | components["schemas"]["ConnectionChangedMessage"] | components["schemas"]["AccountChangedMessage"] | components["schemas"]["ControlsChangedMessage"] | components["schemas"]["SessionRunMessage"];
+        /** SessionIn */
+        SessionIn: {
+            /**
+             * Asset
+             * @description The Quotex name: `EURUSD` or `EURUSD_otc`.
+             */
+            asset: string;
+            /**
+             * Duration S
+             * @description The trade length in seconds, also the candle length: 60, 120, 180, 300, 600, 900, 1800, 3600 or 14400.
+             */
+            duration_s: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * End Time
+             * Format: time
+             * @description Wall-clock time in `timezone`. Before `start_time` means the window crosses midnight.
+             */
+            end_time: string;
+            /**
+             * Loss Limit
+             * @description The session stops opening pairs when its loss reaches this. Chains already running finish, so this does not cap the total loss.
+             */
+            loss_limit?: number | string | null;
+            /** Max Pairs */
+            max_pairs?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Pause S
+             * @description Seconds to wait after both chains of a pair have ended, before the next pair.
+             * @default 0
+             */
+            pause_s: number;
+            /**
+             * Profit Target
+             * @description The session stops opening pairs when its profit reaches this.
+             */
+            profit_target?: number | string | null;
+            /** @description `once`: the next window only, never again. `weekdays`: on the chosen days. */
+            repeat: components["schemas"]["RepeatKind"];
+            /**
+             * Start Time
+             * Format: time
+             * @description Wall-clock time in `timezone`, `HH:MM`.
+             */
+            start_time: string;
+            strategy: components["schemas"]["SessionStrategyIn"];
+            /**
+             * Timezone
+             * @description `UTC-3`, `UTC+5:30` or an IANA zone name.
+             */
+            timezone: string;
+            /**
+             * Weekdays
+             * @description 0 = Monday ... 6 = Sunday. Needed when `repeat` is `weekdays`.
+             */
+            weekdays?: number[];
+        };
+        /** SessionOut */
+        SessionOut: {
+            active_run: components["schemas"]["SessionRunOut"] | null;
+            /** Asset */
+            asset: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Duration S */
+            duration_s: number;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * End Time
+             * Format: time
+             */
+            end_time: string;
+            /**
+             * Group Id
+             * @description The session's hidden group: its chains and trades carry it.
+             */
+            group_id: number;
+            /** Id */
+            id: number;
+            /** Loss Limit */
+            loss_limit: string | null;
+            /** Max Pairs */
+            max_pairs: number | null;
+            /** Name */
+            name: string;
+            /** Next Window End */
+            next_window_end: string | null;
+            /**
+             * Next Window Start
+             * @description When it will start by itself next (null: switched off, or a finished 'once').
+             */
+            next_window_start: string | null;
+            /** Pause S */
+            pause_s: number;
+            /** Profit Target */
+            profit_target: string | null;
+            repeat: components["schemas"]["RepeatKind"];
+            /**
+             * Start Time
+             * Format: time
+             */
+            start_time: string;
+            strategy: components["schemas"]["SessionStrategyOut"] | null;
+            /** Timezone */
+            timezone: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Warnings */
+            warnings: string[];
+            /** Weekdays */
+            weekdays: number[];
+        };
+        /**
+         * SessionRunMessage
+         * @description A trading session's run started, moved on (a pair opened, a target was hit) or ended.
+         */
+        SessionRunMessage: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            data: components["schemas"]["SessionRunOut"];
+            /**
+             * Seq
+             * @description Number of the latest event this message includes.
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "session.run";
+        };
+        /** SessionRunOut */
+        SessionRunOut: {
+            account_type: components["schemas"]["AccountType"];
+            end_reason: components["schemas"]["RunEndReason"] | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lopsided Pairs
+             * @description Pairs where only one leg was ever running.
+             */
+            lopsided_pairs: number;
+            /** Note */
+            note: string | null;
+            /** Pairs Opened */
+            pairs_opened: number;
+            /** Profit */
+            profit: string;
+            /** Rounds Skipped */
+            rounds_skipped: number;
+            /** Session Id */
+            session_id: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Started By
+             * @description `schedule` or `manual`.
+             */
+            started_by: string;
+            state: components["schemas"]["RunState"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Window End
+             * Format: date-time
+             */
+            window_end: string;
+        };
+        /**
+         * SessionStrategyIn
+         * @description The strategy part of a session: the same rules as a group's (docs/DOMAIN.md section 5). The
+         *     CALL and the PUT of every pair are two chains that each follow it.
+         */
+        SessionStrategyIn: {
+            /** Base Stake */
+            base_stake: number | string;
+            /** Max Steps */
+            max_steps: number;
+            /**
+             * Min Payout Pct
+             * @description A round is skipped, and nothing is sent, if the asset pays less than this.
+             * @default 0
+             */
+            min_payout_pct: number;
+            /** Multipliers */
+            multipliers?: (number | string)[];
+            strategy: components["schemas"]["Strategy"];
+        };
+        /** SessionStrategyOut */
+        SessionStrategyOut: {
+            /** Base Stake */
+            base_stake: string;
+            /** Max Steps */
+            max_steps: number;
+            /** Min Payout Pct */
+            min_payout_pct: number;
+            /** Multipliers */
+            multipliers: string[];
+            strategy: components["schemas"]["Strategy"];
+        };
         /** SettingItemOut */
         SettingItemOut: {
             /** Choices */
@@ -6039,6 +6414,625 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_sessions_get: {
+        parameters: {
+            query?: {
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Rows to skip. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SessionOut_"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_session_api_v1_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_sessions_runs_get: {
+        parameters: {
+            query?: {
+                session_id?: number | null;
+                /** @description Rows per page. */
+                limit?: number;
+                /** @description Rows to skip. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_SessionRunOut_"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_session_api_v1_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_session_api_v1_sessions__session_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_session_api_v1_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    start_session_now_api_v1_sessions__session_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRunOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stop_session_api_v1_sessions__session_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRunOut"];
+                };
             };
             /** @description Not Found */
             404: {

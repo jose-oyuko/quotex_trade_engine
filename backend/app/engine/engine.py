@@ -1,7 +1,9 @@
-"""The engine: Telegram -> pipeline -> chain manager -> executor -> Quotex adapter, wired together.
+"""The engine: Telegram -> pipeline -> chain manager -> executor -> Quotex adapter, wired together,
+with the trading-session scheduler (D-71) feeding the same chain manager from a timer.
 
 This is only composition: every rule lives in the component it belongs to. Tests build it with the
-fake Telegram source and the fake adapter; the application builds it with the real ones.
+fake Telegram source and the fake adapter; the application builds it with the real ones. Without a
+Telegram source (none is logged in) the engine runs with signals off: trading sessions still work.
 """
 
 from __future__ import annotations
@@ -14,9 +16,9 @@ from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
-from app.domain.enums import AccountType
+from app.domain.enums import AccountType, GroupSource
 from app.domain.ids import new_id
-from app.domain.records import GroupRecord, GroupSettingsRecord, RiskEventRecord
+from app.domain.records import GroupRecord, GroupSettingsRecord, RiskEventRecord, SessionRecord
 from app.engine.errors import AccountSwitchRefusedError, TelegramNotConnectedError
 from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
@@ -24,6 +26,7 @@ from app.engine.risk import RiskGuard, RiskLimits
 from app.events.bus import EventBus
 from app.events.types import AccountChanged, RiskTripped
 from app.quotex.base import QuotexAdapter
+from app.sessions.scheduler import TICK_S, SessionConfig, SessionScheduler
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, PipelineConfig, SignalPipeline, Sleeper
 from app.telegram.listener import ListenerState, TelegramListener
@@ -46,7 +49,7 @@ class Engine:
         self,
         *,
         adapter: QuotexAdapter,
-        source: TelegramSource,
+        source: TelegramSource | None,
         bus: EventBus,
         clock: Clock,
         tasks: TaskSupervisor,
@@ -56,6 +59,8 @@ class Engine:
         result_margin_s: float = RESULT_MARGIN_S,
         risk_limits: RiskLimits | None = None,
         telegram_backoff: BackoffPolicy | None = None,
+        session_sleep: Sleeper | None = None,
+        session_tick_s: float = TICK_S,
     ) -> None:
         self.adapter = adapter
         self._source = source
@@ -78,36 +83,72 @@ class Engine:
             config=pipeline_config,
             sleep=sleep,
         )
-        self.listener = TelegramListener(
-            source,
-            handler=self.pipeline.handle,
+        self.listener: TelegramListener | None = (
+            None
+            if source is None
+            else TelegramListener(
+                source,
+                handler=self.pipeline.handle,
+                bus=bus,
+                clock=clock,
+                tasks=tasks,
+                backoff=telegram_backoff,
+            )
+        )
+        self.scheduler = SessionScheduler(
+            manager=self.manager,
+            guard=self.guard,
+            adapter=adapter,
             bus=bus,
             clock=clock,
             tasks=tasks,
-            backoff=telegram_backoff,
+            sleep=session_sleep or sleep,
+            tick_s=session_tick_s,
         )
+
+    @property
+    def telegram_enabled(self) -> bool:
+        """False when no Telegram login was available: signals are off, sessions still run."""
+        return self.listener is not None
 
     # --- groups (the API of Phase 6 will call these when a group is created or edited) ---
 
     def set_group(self, group: GroupRecord, settings: GroupSettingsRecord) -> None:
-        route = GroupRoute.from_records(group, settings)
-        self.pipeline.set_route(route)
         self.manager.set_group(settings)
+        if group.source is GroupSource.SESSION or group.telegram_chat_id is None:
+            return  # a session's hidden group has no chat: only its strategy settings matter
+        self.pipeline.set_route(GroupRoute.from_records(group, settings))
+        if self.listener is None:
+            return
         if group.enabled:
             self.listener.subscribe(group.telegram_chat_id)
         else:
             self.listener.unsubscribe(group.telegram_chat_id)
 
     def remove_group(self, group: GroupRecord) -> None:
-        self.pipeline.remove_route(group.telegram_chat_id)
-        self.listener.unsubscribe(group.telegram_chat_id)
+        if group.telegram_chat_id is not None:
+            self.pipeline.remove_route(group.telegram_chat_id)
+            if self.listener is not None:
+                self.listener.unsubscribe(group.telegram_chat_id)
         if group.id is not None:
             self.manager.remove_group(group.id)
+
+    # --- trading sessions (the API calls these when a session is saved, edited or deleted) ---
+
+    def set_session(self, session: SessionRecord, settings: GroupSettingsRecord) -> None:
+        self.scheduler.set_session(SessionConfig(session, settings))
+
+    def remove_session(self, session_id: int) -> None:
+        self.scheduler.remove_session(session_id)
 
     async def switch_account(self, account_type: AccountType) -> None:
         """Move between demo and real. Refused while any chain or trade is running (their stakes
         and results belong to the account they started on); real also needs the owner's
         permission."""
+        if self.scheduler.active_run is not None:
+            raise AccountSwitchRefusedError(
+                "a trading session is running: stop it (and let its chains finish) first"
+            )
         if self.manager.active_chains() or self.guard.open_trades:
             raise AccountSwitchRefusedError(
                 f"{len(self.manager.active_chains())} chain(s) and {self.guard.open_trades} "
@@ -135,7 +176,11 @@ class Engine:
     async def list_chats(self, *, timeout_s: float | None = None) -> list[ChatChoice]:
         """The chats the logged-in Telegram account is in. Read-only, and it uses the connection the
         listener already has: asking never starts a second login on the same session file."""
-        if self.listener.state is not ListenerState.CONNECTED:
+        if (
+            self.listener is None
+            or self._source is None
+            or self.listener.state is not ListenerState.CONNECTED
+        ):
             raise TelegramNotConnectedError("Telegram is not connected")
         async with asyncio.timeout(CHAT_LIST_TIMEOUT_S if timeout_s is None else timeout_s):
             dialogs = await self._source.list_dialogs()
@@ -159,6 +204,10 @@ class Engine:
         for group in recovery.groups:
             if group.id is not None and group.id in settings:
                 self.set_group(group, settings[group.id])
+        for session in recovery.sessions:
+            if session.group_id in settings:
+                self.set_session(session, settings[session.group_id])
+        self.scheduler.recover(recovery.unfinished_runs)
         return self.manager.recover(recovery)
 
     async def start(self, recovery: RecoveryState) -> RecoverySummary:
@@ -166,11 +215,15 @@ class Engine:
         # Connecting may take long (retries with backoff): it must not hold up start-up, and
         # orders placed before it succeeds are refused cleanly (the chain ends `failed`).
         self._tasks.spawn(self.adapter.connect(retry_forever=True), name="quotex-connect")
-        self.listener.start()
+        if self.listener is not None:
+            self.listener.start()
+        self.scheduler.start()
         return summary
 
     async def stop(self) -> None:
-        """Stop taking signals, stop the chains, then close the connections."""
-        await self.listener.stop()
+        """Stop opening pairs, stop taking signals, stop the chains, then close the connections."""
+        await self.scheduler.stop()
+        if self.listener is not None:
+            await self.listener.stop()
         await self.manager.stop()
         await self.adapter.disconnect()
