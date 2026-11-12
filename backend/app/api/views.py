@@ -103,6 +103,8 @@ def session_out(view: SessionView, engine: Engine | None) -> SessionOut:
         profit_target=record.profit_target,
         loss_limit=record.loss_limit,
         max_pairs=record.max_pairs,
+        mode=record.mode,
+        max_open_pairs=record.max_open_pairs,
         strategy=None
         if settings is None
         else SessionStrategyOut(

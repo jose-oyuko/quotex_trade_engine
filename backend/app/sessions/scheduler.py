@@ -33,6 +33,7 @@ from app.domain.enums import (
     Direction,
     RunEndReason,
     RunState,
+    SessionMode,
     SignalStatus,
 )
 from app.domain.ids import new_id
@@ -370,11 +371,24 @@ class SessionScheduler:
             if (reason := self._reason_to_stop(run)) is not None:
                 self._begin_stop(run, reason)
                 break
-            problem = self._pair_problem(run.cfg)
-            opened = problem is None and self._open_pair(run)
+            every_candle = session.mode is SessionMode.EVERY_CANDLE
+            open_pairs = self._open_pairs(run)
+            problem: str | None = None
+            opened = False
+            if every_candle and open_pairs >= session.max_open_pairs:
+                # the limit: this candle gets no pair, and the run says so
+                self._skip_round(
+                    run,
+                    f"{open_pairs} pair(s) are already open: the limit is {session.max_open_pairs}",
+                )
+            else:
+                problem = self._pair_problem(run.cfg)
+                opened = problem is None and self._open_pair(run)
+                if problem is not None:
+                    self._skip_round(run, problem)
             if run.stopping:
                 break
-            if opened:
+            if opened and not every_candle:
                 await self._wait_pair_over(run)
                 if run.stopping:
                     break
@@ -383,13 +397,18 @@ class SessionScheduler:
                     ready - timedelta(seconds=ALIGN_GRACE_S), session.duration_s
                 )
             else:
-                if problem is not None:
-                    self._skip_round(run, problem)
+                # every candle: whatever is still running keeps running; the next pair is for the
+                # next candle. A skipped round (either mode) is tried again at the next candle.
                 next_at = next_boundary(self._clock.now(), session.duration_s, after=True)
             if next_at >= run.window_end:
                 self._begin_stop(run, RunEndReason.WINDOW_ENDED)
                 break
             await self._wait_until(run, next_at)
+
+    def _open_pairs(self, run: _Run) -> int:
+        """Pairs with at least one chain still running."""
+        self._reconcile(run)
+        return len(set(run.chains.values()))
 
     def _reason_to_stop(self, run: _Run) -> RunEndReason | None:
         session, record = run.cfg.session, run.record

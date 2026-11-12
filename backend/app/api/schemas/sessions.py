@@ -10,7 +10,14 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.api.schemas.groups import MAX_BASE_STAKE, MAX_STEPS, Multiplier
-from app.domain.enums import AccountType, RepeatKind, RunEndReason, RunState, Strategy
+from app.domain.enums import (
+    AccountType,
+    RepeatKind,
+    RunEndReason,
+    RunState,
+    SessionMode,
+    Strategy,
+)
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 Money = Annotated[Decimal, Field(gt=0, le=MAX_BASE_STAKE, max_digits=12, decimal_places=2)]
@@ -86,6 +93,18 @@ class SessionIn(BaseModel):
         "running finish, so this does not cap the total loss.",
     )
     max_pairs: int | None = Field(default=None, ge=1, le=100_000)
+    mode: SessionMode = Field(
+        default=SessionMode.SEQUENTIAL,
+        description="`sequential`: one pair at a time, the next after both chains ended (and "
+        "`pause_s`). `every_candle`: a pair at every candle, up to `max_open_pairs` open at once.",
+    )
+    max_open_pairs: int = Field(
+        default=1,
+        ge=1,
+        le=50,
+        description="`every_candle` only: at most this many pairs open at once (a pair is open "
+        "while one of its chains runs); a candle that finds the limit reached is skipped.",
+    )
     strategy: SessionStrategyIn
 
     @model_validator(mode="after")
@@ -139,6 +158,8 @@ class SessionOut(BaseModel):
     profit_target: Decimal | None
     loss_limit: Decimal | None
     max_pairs: int | None
+    mode: SessionMode
+    max_open_pairs: int
     strategy: SessionStrategyOut | None
     next_window_start: datetime | None = Field(
         description="When it will start by itself next (null: switched off, or a finished 'once')."

@@ -28,6 +28,8 @@ def _values(body: SessionIn) -> SessionValues:
         profit_target=body.profit_target,
         loss_limit=body.loss_limit,
         max_pairs=body.max_pairs,
+        mode=body.mode,
+        max_open_pairs=body.max_open_pairs,
         strategy=body.strategy.strategy,
         base_stake=body.strategy.base_stake,
         max_steps=body.strategy.max_steps,

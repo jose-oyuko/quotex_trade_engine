@@ -89,8 +89,10 @@ through the API, `docs/API.md`.)
 2. **Leave the engine running.** At the start time the first pair goes out (a minute earlier the asset is made
    ready). Pick a start on a candle boundary (an M5 session at `11:00`, `11:05`...): the form warns when you do
    not, because Quotex may then give the trades a different expiry.
-3. **One pair at a time.** When both chains of a pair have ended, it waits the pause you set, then opens the next
-   pair on the next candle. A round where the asset is closed, the payout is too low or Quotex is not connected
+3. **How pairs are spaced.** *Sequential* (the default): one pair at a time. When both chains of a pair have ended, it
+   waits the pause you set, then opens the next pair on the next candle. *Every candle*: a pair at every candle, whatever is
+   still running, up to the number of open pairs you set (a pair is open while one of its chains runs); a candle that finds
+   the limit reached is skipped. Every chain stays independent. More open pairs means more stakes at risk at once. A round where the asset is closed, the payout is too low or Quotex is not connected
    is **skipped** (nothing is sent) and tried again on the next candle; the run says why.
 4. **It stops by itself** at the end of the window, at the profit target or the loss limit, or after the maximum
    number of pairs. **Stopping never cuts a chain off:** no new pair opens, but a chain that is recovering keeps

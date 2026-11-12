@@ -41,6 +41,7 @@ from app.domain.enums import (
     RepeatKind,
     RunEndReason,
     RunState,
+    SessionMode,
     SignalStatus,
     Strategy,
     TradeStatus,
@@ -239,6 +240,12 @@ class TradingSession(Base):
     profit_target: Mapped[Decimal | None] = mapped_column(Money)
     loss_limit: Mapped[Decimal | None] = mapped_column(Money)
     max_pairs: Mapped[int | None] = mapped_column(Integer)
+    mode: Mapped[SessionMode] = mapped_column(
+        _enum(SessionMode),
+        default=SessionMode.SEQUENTIAL,
+        server_default=SessionMode.SEQUENTIAL.value,
+    )
+    max_open_pairs: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     once_after: Mapped[datetime] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)

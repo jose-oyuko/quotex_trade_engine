@@ -3148,6 +3148,14 @@
             "description": "The session stops opening pairs when its loss reaches this. Chains already running finish, so this does not cap the total loss.",
             "title": "Loss Limit"
           },
+          "max_open_pairs": {
+            "default": 1,
+            "description": "`every_candle` only: at most this many pairs open at once (a pair is open while one of its chains runs); a candle that finds the limit reached is skipped.",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Open Pairs",
+            "type": "integer"
+          },
           "max_pairs": {
             "anyOf": [
               {
@@ -3160,6 +3168,11 @@
               }
             ],
             "title": "Max Pairs"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode",
+            "default": "sequential",
+            "description": "`sequential`: one pair at a time, the next after both chains ended (and `pause_s`). `every_candle`: a pair at every candle, up to `max_open_pairs` open at once."
           },
           "name": {
             "maxLength": 80,
@@ -3235,6 +3248,14 @@
         "title": "SessionIn",
         "type": "object"
       },
+      "SessionMode": {
+        "enum": [
+          "sequential",
+          "every_candle"
+        ],
+        "title": "SessionMode",
+        "type": "string"
+      },
       "SessionOut": {
         "properties": {
           "active_run": {
@@ -3289,6 +3310,10 @@
             ],
             "title": "Loss Limit"
           },
+          "max_open_pairs": {
+            "title": "Max Open Pairs",
+            "type": "integer"
+          },
           "max_pairs": {
             "anyOf": [
               {
@@ -3299,6 +3324,9 @@
               }
             ],
             "title": "Max Pairs"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode"
           },
           "name": {
             "title": "Name",
@@ -3402,6 +3430,8 @@
           "profit_target",
           "loss_limit",
           "max_pairs",
+          "mode",
+          "max_open_pairs",
           "strategy",
           "next_window_start",
           "next_window_end",

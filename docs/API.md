@@ -124,6 +124,8 @@ start for the opposite direction on the same asset while one runs, two chains at
   "timezone": "UTC",
   "repeat": "weekdays",
   "weekdays": [0, 1, 2, 3, 4],
+  "mode": "sequential",
+  "max_open_pairs": 1,
   "pause_s": 0,
   "profit_target": "10.00",
   "loss_limit": "20.00",
@@ -138,7 +140,7 @@ start for the opposite direction on the same asset while one runs, two chains at
 }
 ```
 
-`repeat: "once"` needs no `weekdays`. The strategy part follows the group rules (one multiplier per step).
+`repeat: "once"` needs no `weekdays`. `mode` is `sequential` (one pair at a time; the next after both chains ended and `pause_s`) or `every_candle` (a pair at every candle, up to `max_open_pairs` open at once; `pause_s` unused; a candle that finds the limit reached is skipped). The strategy part follows the group rules (one multiplier per step).
 The `loss_limit` stops new pairs; chains already running finish, so it does not cap the loss (decision D-72).
 Chains and trades opened by a session carry `session_run_id` and `pair_no` (`GET /chains`).
 

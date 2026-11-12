@@ -99,6 +99,12 @@ decides how many pairs run). Telegram signals and groups are not affected.
   both chains have ended, wait `pause_s`, then open the next pair on the first candle boundary at or after that
   (candles are multiples of the trade length from 00:00 UTC; within 5 s after a boundary counts as on it). No pair
   opens at or after the window end.
+- **Every-candle mode** (`mode: every_candle`): a pair at **every** candle boundary after the first, whatever is
+  still running, up to `max_open_pairs` open at once (a pair is open while at least one of its chains runs). A
+  candle that finds the limit reached gets no pair: the round is skipped and the run records it. `pause_s` is not
+  used. The chains of different pairs share nothing (step, stakes, counters, owner controls), and every stop rule
+  below applies to all of them: no new pair, and every running chain of every pair finishes. Once no later candle
+  fits in the window, the run stops (`window_ended`) while the last pairs finish.
 - **Before a pair** (both legs are checked before either is sent): the kill switch is off, Quotex is connected,
   the asset is open and pays at least the minimum. Otherwise the round is **skipped**, the reason is recorded
   on the run, nothing is sent, and the next candle tries again.
@@ -162,6 +168,7 @@ name, enabled, asset: "EURUSD" | "EURUSD_otc", duration_s: 60|120|180|300|600|90
 start_time, end_time: wall-clock "HH:MM" in `timezone` (end before start = crosses midnight),
 timezone: "UTC-3" | IANA name,
 repeat: "once" | "weekdays", weekdays: [0..6] (0 = Monday),
+mode: "sequential" | "every_candle", max_open_pairs: int >= 1 (every_candle: pairs open at once),
 pause_s: seconds to wait after a pair is over (sequential mode),
 profit_target, loss_limit: decimal > 0 or none, max_pairs: int >= 1 or none,
 strategy: { strategy, base_stake, max_steps, multipliers, min_payout_pct }

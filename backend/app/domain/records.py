@@ -21,6 +21,7 @@ from app.domain.enums import (
     RepeatKind,
     RunEndReason,
     RunState,
+    SessionMode,
     SignalStatus,
     Strategy,
     TradeStatus,
@@ -202,8 +203,14 @@ class SessionRecord:
     loss_limit: Decimal | None = None
     max_pairs: int | None = None
     id: int | None = None
+    # How pairs are spaced (D-73): one at a time, or one at every candle with at most
+    # `max_open_pairs` open at once (a pair is open while at least one of its chains runs)
+    mode: SessionMode = SessionMode.SEQUENTIAL
+    max_open_pairs: int = 1
 
     def __post_init__(self) -> None:
+        if self.max_open_pairs < 1:
+            raise ValueError("the number of open pairs must be at least 1")
         if not self.name.strip():
             raise ValueError("the session needs a name")
         if self.duration_s <= 0:

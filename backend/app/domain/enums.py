@@ -45,6 +45,11 @@ class RepeatKind(StrEnum):
     WEEKDAYS = "weekdays"  # on the chosen days of the week
 
 
+class SessionMode(StrEnum):
+    SEQUENTIAL = "sequential"  # one pair at a time; the next after both chains ended (and a pause)
+    EVERY_CANDLE = "every_candle"  # a pair at every candle, up to a number of open pairs
+
+
 class RunState(StrEnum):
     RUNNING = "running"  # opening pairs
     STOPPING = "stopping"  # no more pairs; the chains already running finish (decision D-72)

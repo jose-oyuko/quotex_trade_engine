@@ -120,7 +120,7 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0005"
+    assert head_revision() == "0006"
 
 
 def test_the_opposite_pair_column_arrives_switched_off_for_existing_groups(db_file: Path) -> None:
@@ -189,3 +189,29 @@ def test_trading_sessions_keep_existing_groups_and_history(db_file: Path) -> Non
         assert connection.execute("SELECT count(*) FROM chains").fetchone() == (1,)
         columns = [row[1] for row in connection.execute("PRAGMA table_info(chains)")]
     assert "session_run_id" not in columns and "pair_no" not in columns
+
+
+def test_existing_sessions_stay_sequential_when_the_modes_arrive(db_file: Path) -> None:
+    config = alembic_config(url_of(db_file))
+    command.upgrade(config, "0005")
+    with sqlite3.connect(db_file) as connection:
+        connection.execute(
+            "INSERT INTO groups (id, telegram_chat_id, title, enabled, created_at, updated_at, "
+            "source) VALUES (1, NULL, 'hidden', 1, '2026-11-01 00:00:00', '2026-11-01 00:00:00', "
+            "'session')"
+        )
+        connection.execute(
+            "INSERT INTO trading_sessions (id, name, enabled, group_id, asset, duration_s, "
+            "start_time, end_time, timezone, repeat, weekdays, pause_s, once_after, created_at, "
+            "updated_at) VALUES (1, 'old', 1, 1, 'EURUSD', 300, '11:00:00', '12:00:00', 'UTC', "
+            "'weekdays', '[0, 1]', 0, '2026-11-01 00:00:00', '2026-11-01 00:00:00', "
+            "'2026-11-01 00:00:00')"
+        )
+    command.upgrade(config, "head")
+    with sqlite3.connect(db_file) as connection:
+        row = connection.execute("SELECT mode, max_open_pairs FROM trading_sessions").fetchone()
+    assert row == ("sequential", 1)  # the old behaviour: one pair at a time
+    command.downgrade(config, "0005")
+    with sqlite3.connect(db_file) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(trading_sessions)")]
+    assert "mode" not in columns and "max_open_pairs" not in columns

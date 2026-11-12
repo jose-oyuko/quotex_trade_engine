@@ -22,14 +22,14 @@ agent to start the next phase.
 | 14 | Quotex login in the dashboard | Done — committed; live checks pending |
 | 15 | Clean-up and documentation | Done — committed; live checks pending |
 | 16 | Trading sessions: one pair at a time (backend) | Done — committed; live checks pending |
-| 17 | Trading sessions: a pair at every candle (backend) | Not started — planned |
+| 17 | Trading sessions: a pair at every candle (backend) | Done — committed; live checks pending |
 | 18 | Trading sessions on the dashboard and in the reports | Not started — planned |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
 **Current phase:** Phases 16-18 (trading sessions: automatic pairs from a schedule set on the dashboard; decisions
 D-71 to D-73; planned in `PHASES.md`). The owner asked for all three to be built in order, testing and committing after
-each. Phase 16 is done ([report](reports/phase-16.md)); 17 is next. The opposite pair for the flip strategies ([report](reports/opposite-pair.md), D-70) is built and
+each. Phases 16 and 17 are done ([16](reports/phase-16.md), [17](reports/phase-17.md)); 18 is next. The opposite pair for the flip strategies ([report](reports/opposite-pair.md), D-70) is built and
 committed (`d6ddc24`). All fifteen numbered phases before them are built and committed. Phases 10-15 (everything the owner types moves into the dashboard: reports [phase-10](reports/phase-10.md), [phase-11](reports/phase-11.md), [phase-12](reports/phase-12.md), [phase-13](reports/phase-13.md), [phase-14](reports/phase-14.md), [phase-15](reports/phase-15.md)) were done on the owner's instruction to carry on to the end, testing and committing after each. The owner asked the agent to carry on through Phase 15, testing and committing after each phase. Phases 10-15 (everything the owner types moves into the dashboard, D-58) are planned in `PHASES.md`; The final report ([phase-15](reports/phase-15.md)) lists the known limitations and every live check still to be run. Before that: all nine original phases were built. Phase 9 is committed. The owner asked the agent to
 carry on through the remaining phases in order, committing after each finished and tested phase; that is
 complete. Phases 2-9 are only verified on fakes; their live checks are in each report's "could not be

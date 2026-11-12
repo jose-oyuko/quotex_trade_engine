@@ -2451,8 +2451,19 @@ export interface components {
              * @description The session stops opening pairs when its loss reaches this. Chains already running finish, so this does not cap the total loss.
              */
             loss_limit?: number | string | null;
+            /**
+             * Max Open Pairs
+             * @description `every_candle` only: at most this many pairs open at once (a pair is open while one of its chains runs); a candle that finds the limit reached is skipped.
+             * @default 1
+             */
+            max_open_pairs: number;
             /** Max Pairs */
             max_pairs?: number | null;
+            /**
+             * @description `sequential`: one pair at a time, the next after both chains ended (and `pause_s`). `every_candle`: a pair at every candle, up to `max_open_pairs` open at once.
+             * @default sequential
+             */
+            mode: components["schemas"]["SessionMode"];
             /** Name */
             name: string;
             /**
@@ -2486,6 +2497,11 @@ export interface components {
              */
             weekdays?: number[];
         };
+        /**
+         * SessionMode
+         * @enum {string}
+         */
+        SessionMode: "sequential" | "every_candle";
         /** SessionOut */
         SessionOut: {
             active_run: components["schemas"]["SessionRunOut"] | null;
@@ -2514,8 +2530,11 @@ export interface components {
             id: number;
             /** Loss Limit */
             loss_limit: string | null;
+            /** Max Open Pairs */
+            max_open_pairs: number;
             /** Max Pairs */
             max_pairs: number | null;
+            mode: components["schemas"]["SessionMode"];
             /** Name */
             name: string;
             /** Next Window End */

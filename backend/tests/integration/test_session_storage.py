@@ -21,6 +21,7 @@ from app.domain.enums import (
     RepeatKind,
     RunEndReason,
     RunState,
+    SessionMode,
 )
 from app.domain.ids import new_id
 from app.domain.records import GroupRecord, SessionRecord
@@ -263,3 +264,17 @@ def test_a_session_record_refuses_what_makes_no_sense() -> None:
     ):
         with pytest.raises(ValueError):
             make_session(**bad)
+
+
+async def test_the_mode_and_the_open_pair_limit_are_stored(session_factory: Factory) -> None:
+    _, saved = await add_session(
+        session_factory, id=None, mode=SessionMode.EVERY_CANDLE, max_open_pairs=4
+    )
+    assert saved.id is not None
+    async with session_factory() as db:
+        loaded = await SessionRepository(db).get(saved.id)
+    assert loaded is not None
+    assert (loaded.mode, loaded.max_open_pairs) == (SessionMode.EVERY_CANDLE, 4)
+    assert make_session().mode is SessionMode.SEQUENTIAL  # the default is one pair at a time
+    with pytest.raises(ValueError):
+        make_session(max_open_pairs=0)

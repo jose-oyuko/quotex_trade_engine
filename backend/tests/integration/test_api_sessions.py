@@ -349,3 +349,50 @@ async def test_a_run_found_still_going_at_start_up_ends_as_interrupted_and_is_no
         await rig.eventually(interrupted)
         assert rig.fakes.engine.scheduler.active_run is None  # nothing was resumed
         assert rig.fakes.adapter.orders == []
+
+
+async def test_pairs_can_be_spaced_one_at_a_time_or_at_every_candle(tmp_path: Path) -> None:
+    async with running_api(tmp_path) as rig:
+        plain = await create(rig)
+        assert plain["mode"] == "sequential" and plain["max_open_pairs"] == 1
+
+        candle = await create(
+            rig,
+            name="Candles",
+            start_time="13:00",
+            end_time="14:00",
+            mode="every_candle",
+            max_open_pairs=3,
+        )
+        assert candle["mode"] == "every_candle" and candle["max_open_pairs"] == 3
+        assert (await rig.client.get(f"{API}/{candle['id']}")).json()["max_open_pairs"] == 3
+
+        edited = await rig.client.put(
+            f"{API}/{candle['id']}",
+            json=session_body(
+                name="Candles", start_time="13:00", end_time="14:00", mode="sequential"
+            ),
+        )
+        assert edited.json()["mode"] == "sequential" and edited.json()["max_open_pairs"] == 1
+
+
+async def test_the_open_pair_limit_must_be_a_sensible_number(tmp_path: Path) -> None:
+    async with running_api(tmp_path) as rig:
+        for bad in (0, -1, 51):
+            response = await rig.client.post(
+                API, json=session_body(mode="every_candle", max_open_pairs=bad)
+            )
+            assert response.status_code == 422, bad
+        unknown = await rig.client.post(API, json=session_body(mode="all_at_once"))
+        assert unknown.status_code == 422
+
+
+async def test_a_session_in_candle_mode_opens_pairs_through_the_api(tmp_path: Path) -> None:
+    async with running_api(tmp_path, with_engine=True, hold_results=True) as rig:
+        created = await create(rig, mode="every_candle", max_open_pairs=2)
+        started = await rig.client.post(f"{API}/{created['id']}/start")
+        assert started.status_code == 200, started.text
+        await rig.eventually(_orders(rig, 2))
+        assert len(rig.fakes.engine.scheduler._sessions) == 1
+        stopped = await rig.client.post(f"{API}/{created['id']}/stop")
+        assert stopped.status_code == 200

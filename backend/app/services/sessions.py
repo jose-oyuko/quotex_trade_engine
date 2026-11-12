@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.db.repositories import GroupRepository, SessionRepository
-from app.domain.enums import AssetSuffixMode, GroupSource, RepeatKind, Strategy
+from app.domain.enums import AssetSuffixMode, GroupSource, RepeatKind, SessionMode, Strategy
 from app.domain.records import (
     GroupRecord,
     GroupSettingsRecord,
@@ -92,6 +92,9 @@ class SessionValues:
     max_steps: int
     multipliers: tuple[Decimal, ...]
     min_payout_pct: int
+    # how pairs are spaced (decision D-73)
+    mode: SessionMode = SessionMode.SEQUENTIAL
+    max_open_pairs: int = 1
 
 
 @dataclass(slots=True, frozen=True)
@@ -291,6 +294,8 @@ class SessionService:
                 profit_target=values.profit_target,
                 loss_limit=values.loss_limit,
                 max_pairs=values.max_pairs,
+                mode=values.mode,
+                max_open_pairs=values.max_open_pairs,
                 once_after=once_after,
                 created_at=created_at,
                 updated_at=now,
