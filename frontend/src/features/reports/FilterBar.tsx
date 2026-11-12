@@ -1,4 +1,4 @@
-import { useGroups } from '../../api/queries'
+import { useGroups, useSessions } from '../../api/queries'
 import type { AccountType, Strategy } from '../../api/types'
 import type { DateRange, RangePreset } from '../../lib/dates'
 
@@ -6,6 +6,7 @@ export interface ReportControls {
   account: AccountType
   range: DateRange
   groupId: number | undefined
+  sessionId: number | undefined
   strategy: Strategy | undefined
   asset: string
 }
@@ -36,6 +37,7 @@ export function FilterBar({
   rangeError: string | null
 }) {
   const groups = useGroups()
+  const sessions = useSessions()
   const set = (patch: Partial<ReportControls>) => {
     onChange({ ...value, ...patch })
   }
@@ -110,6 +112,22 @@ export function FilterBar({
           {(groups.data?.items ?? []).map((group) => (
             <option key={group.id} value={group.id}>
               {group.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Session{' '}
+        <select
+          value={value.sessionId ?? ''}
+          onChange={(event) => {
+            set({ sessionId: event.target.value === '' ? undefined : Number(event.target.value) })
+          }}
+        >
+          <option value="">All sessions</option>
+          {(sessions.data?.items ?? []).map((session) => (
+            <option key={session.id} value={session.id}>
+              {session.name}
             </option>
           ))}
         </select>

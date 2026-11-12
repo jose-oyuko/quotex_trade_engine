@@ -559,7 +559,7 @@ export interface paths {
         };
         /**
          * Get Breakdown
-         * @description The same figures split by group, asset, strategy, hour of day or weekday.
+         * @description The same figures split by group, trading session, asset, strategy, hour of day or weekday.
          */
         get: operations["get_breakdown_api_v1_reports_breakdown_get"];
         put?: never;
@@ -1303,7 +1303,7 @@ export interface components {
          * BreakdownKind
          * @enum {string}
          */
-        BreakdownKind: "group" | "asset" | "strategy" | "hour" | "weekday";
+        BreakdownKind: "group" | "session" | "asset" | "strategy" | "hour" | "weekday";
         /** BreakdownOut */
         BreakdownOut: {
             by: components["schemas"]["BreakdownKind"];
@@ -1778,6 +1778,8 @@ export interface components {
             asset: string | null;
             /** Group Id */
             group_id: number | null;
+            /** Session Id */
+            session_id: number | null;
             /** Since */
             since: string | null;
             strategy: components["schemas"]["Strategy"] | null;
@@ -5521,6 +5523,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5607,6 +5611,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5693,6 +5699,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5781,6 +5789,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5869,6 +5879,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5955,6 +5967,8 @@ export interface operations {
                 /** @description End of the range (exclusive), ISO time with a zone. */
                 to?: string | null;
                 group_id?: number | null;
+                /** @description Only the trades of this trading session. */
+                session_id?: number | null;
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */

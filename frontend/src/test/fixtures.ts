@@ -8,6 +8,8 @@ import type {
   ReportEquity,
   ReportMetrics,
   ReportSummary,
+  Session,
+  SessionRun,
   Signal,
   Snapshot,
   Trade,
@@ -170,6 +172,7 @@ const FILTER = {
   since: null,
   until: null,
   group_id: null,
+  session_id: null,
   strategy: null,
   asset: null,
   utc_offset_minutes: 0,
@@ -256,5 +259,62 @@ export function makeDepth(): ReportDepth {
     other: 0,
     avg_chain_profit: '-0.50',
     steps: [row(1, 5, 1), row(2, 3, 0.6), row(3, 1, 0.2)],
+  }
+}
+
+export function makeSession(overrides: Partial<Session> = {}): Session {
+  return {
+    id: 1,
+    name: 'London open',
+    enabled: true,
+    group_id: 50,
+    asset: 'EURUSD',
+    duration_s: 300,
+    start_time: '11:00:00',
+    end_time: '12:00:00',
+    timezone: 'UTC',
+    repeat: 'weekdays',
+    weekdays: [0, 1, 2, 3, 4],
+    pause_s: 0,
+    profit_target: '10.00',
+    loss_limit: '20.00',
+    max_pairs: null,
+    mode: 'sequential',
+    max_open_pairs: 1,
+    strategy: {
+      strategy: 'flip_every_loss',
+      base_stake: '1.00',
+      max_steps: 2,
+      multipliers: ['2.0', '3.0'],
+      min_payout_pct: 80,
+    },
+    next_window_start: '2026-11-03T11:00:00Z',
+    next_window_end: '2026-11-03T12:00:00Z',
+    warnings: [],
+    active_run: null,
+    created_at: NOW,
+    updated_at: NOW,
+    ...overrides,
+  }
+}
+
+export function makeSessionRun(overrides: Partial<SessionRun> = {}): SessionRun {
+  return {
+    id: 'run-1',
+    session_id: 1,
+    started_by: 'schedule',
+    account_type: 'demo',
+    started_at: NOW,
+    window_end: '2026-11-02T11:00:00Z',
+    state: 'running',
+    updated_at: NOW,
+    pairs_opened: 2,
+    rounds_skipped: 1,
+    lopsided_pairs: 0,
+    profit: '1.40',
+    ended_at: null,
+    end_reason: null,
+    note: null,
+    ...overrides,
   }
 }

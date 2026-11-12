@@ -21,6 +21,9 @@ export const keys = {
   status: ['status'] as const,
   risk: ['risk'] as const,
   groups: ['groups'] as const,
+  sessions: ['sessions'] as const,
+  session: (id: number) => ['sessions', id] as const,
+  sessionRuns: ['session-runs'] as const,
   group: (id: number) => ['groups', id] as const,
   chains: ['chains'] as const,
   trades: ['trades'] as const,
@@ -98,6 +101,40 @@ export function useGroup(id: number) {
     queryKey: keys.group(id),
     queryFn: ({ signal }) => api.groups.get(id, signal),
   })
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: keys.sessions,
+    queryFn: ({ signal }) => api.sessions.list({ limit: 200 }, signal),
+  })
+}
+
+export function useSession(id: number) {
+  return useQuery({
+    queryKey: keys.session(id),
+    queryFn: ({ signal }) => api.sessions.get(id, signal),
+  })
+}
+
+export interface SessionRunFilters extends Paging {
+  session_id?: number
+}
+
+export function useSessionRuns(filters: SessionRunFilters) {
+  return useQuery({
+    queryKey: [...keys.sessionRuns, filters],
+    queryFn: ({ signal }) => api.sessions.runs(filters, signal),
+    placeholderData: (previous) => previous,
+  })
+}
+
+/** After a session or a run changed: the lists that show them fetch again. */
+export async function invalidateSessions(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: keys.sessions }),
+    client.invalidateQueries({ queryKey: keys.sessionRuns }),
+  ])
 }
 
 export interface TradeFilters extends Paging {

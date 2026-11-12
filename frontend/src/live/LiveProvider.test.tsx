@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LiveSocketOptions } from '../api/live'
 import { keys } from '../api/queries'
 import type { Snapshot } from '../api/types'
-import { makeChain, makeSnapshot, makeTrade } from '../test/fixtures'
+import { makeChain, makeSessionRun, makeSnapshot, makeTrade } from '../test/fixtures'
 import { LiveProvider, type CreateLive } from './LiveProvider'
 import { useLiveStatus } from './liveStatus'
 
@@ -137,6 +137,23 @@ describe('LiveProvider', () => {
     expect(invalidated.sort()).toEqual(
       [JSON.stringify(keys.risk), JSON.stringify(keys.trades)].sort(),
     )
+  })
+
+  it('marks the session lists stale when a run moves on, and leaves the status alone', () => {
+    const { live, client } = setup()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    live.send({
+      type: 'session.run',
+      seq: 1,
+      at: AT,
+      data: makeSessionRun({ state: 'stopping' }),
+    })
+    flushFrame()
+    const invalidated = spy.mock.calls.map((call) => JSON.stringify(call[0]?.queryKey))
+    expect(invalidated.sort()).toEqual(
+      [JSON.stringify(keys.sessions), JSON.stringify(keys.sessionRuns)].sort(),
+    )
+    expect(invalidated).not.toContain(JSON.stringify(keys.status))
   })
 
   it('marks a list stale once, even when many events concern it', () => {

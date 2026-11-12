@@ -14,6 +14,7 @@ const NAV = [
   { to: '/', label: 'Live', end: true },
   { to: '/signals', label: 'Signals', end: false },
   { to: '/groups', label: 'Groups', end: false },
+  { to: '/sessions', label: 'Sessions', end: false },
   { to: '/history', label: 'History', end: false },
   { to: '/reports', label: 'Reports', end: false },
   { to: '/settings', label: 'Settings', end: false },

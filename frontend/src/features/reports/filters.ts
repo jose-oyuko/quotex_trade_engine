@@ -22,6 +22,7 @@ export function toFilters(
   if (range.from !== undefined) filters.from = range.from
   if (range.to !== undefined) filters.to = range.to
   if (controls.groupId !== undefined) filters.group_id = controls.groupId
+  if (controls.sessionId !== undefined) filters.session_id = controls.sessionId
   if (controls.strategy !== undefined) filters.strategy = controls.strategy
   if (controls.asset !== '') filters.asset = controls.asset
   return { filters, error: null }

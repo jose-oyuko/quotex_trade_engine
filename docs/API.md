@@ -75,7 +75,7 @@ trust:
 | `GET /engine` | The engine's state (`stopped`, `starting`, `running`, `stopping`, `failed`), why the last start failed, whether it starts with the application, and which logins it has (`dashboard`, `.env`, `missing`, `unreadable`: never their values). |
 | `POST /engine/start`, `POST /engine/stop`, `POST /engine/restart` | Start (always on the demo account), stop, or restart the engine without restarting the application. One at a time: while one runs, another is 409 `engine_busy`; a start that cannot work is 409 `engine_start_failed` with the reason. Stopping marks what was in flight `unknown` at once. |
 | `GET /reports/summary` | Profit, win rate, return on stakes, drawdown, streaks, what is not counted, and how the win rate compares with break-even. |
-| `GET /reports/breakdown?by=group\|asset\|strategy\|hour\|weekday` | The same figures split five ways (hour and weekday always list every hour / day). |
+| `GET /reports/breakdown?by=group\|session\|asset\|strategy\|hour\|weekday` | The same figures split six ways (hour and weekday always list every hour / day; `session` lists the trading sessions only). |
 | `GET /reports/equity` | The result of each day and the running total (the profit curve). |
 | `GET /reports/depth` | How far chains go: per step, how many chains got there, what it staked and earned, and how chains that ended there did overall. |
 | `GET /reports/export/trades.csv`, `GET /reports/export/breakdown.csv?by=…` | Spreadsheet downloads (see below). |
@@ -148,7 +148,7 @@ Chains and trades opened by a session carry `session_run_id` and `pair_no` (`GET
 
 Every report takes the same filters as query parameters: `account_type` (`demo` by default; demo
 and real are never mixed), `from` (inclusive) and `to` (exclusive) as ISO times **with a zone**
-(`2026-11-02T00:00:00Z`), `group_id`, `strategy`, `asset`, and `utc_offset_minutes` (your clock for
+(`2026-11-02T00:00:00Z`), `group_id`, `session_id` (only the trades of one trading session), `strategy`, `asset`, and `utc_offset_minutes` (your clock for
 hour of day, weekday and days: UTC-3 is `-180`; fixed, daylight saving is not followed). The answer
 echoes the filters used. Rates are numbers from 0 to 1; money is text.
 

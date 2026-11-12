@@ -152,6 +152,25 @@ there for safety.
 asset is not open now (an OTC suffix may be needed), or its payout is under the group's minimum. The
 trade's error text says which. Not a fault.
 
+## Trading sessions
+
+**A session did not start at its time** — open **Sessions**: *Next start* shows when it will start by itself, and
+*Past runs* lists what happened. The usual reasons: the engine was not running when the window opened (a missed
+window is skipped, never made up); the session is disabled; the window was already open when the engine started
+(press *Start now*); another session was running (only one runs at a time); the window crosses midnight and you
+read its day differently (it belongs to the day it starts); or the time zone is not the one you meant.
+
+**A run says rounds were skipped** — each skipped round names its reason in the panel's note: the asset is closed
+(use the `_otc` name at the weekend), the payout is below your minimum, Quotex is not connected, the kill switch is
+on, or (every-candle mode) the limit of open pairs was reached. Nothing was sent in a skipped round.
+
+**A run is "stopping" for a long time** — that is by design: no new pair opens, but the chains that are running
+finish (a losing chain keeps recovering). It ends when the last chain ends; *Skip to base* on a chain in the panel
+ends that one at once.
+
+**"The window overlaps the one of …"** — only one session runs at a time. Change a time or a day, or disable the
+other session.
+
 ## The dashboard
 
 **The header says "reconnecting…" or "stopped" instead of "live"** — the dashboard lost its connection to the

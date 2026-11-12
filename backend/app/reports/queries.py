@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import BigInteger, ColumnElement, Select, String, case, func, select, type_coerce
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Chain, Group, Trade
+from app.db.models import Chain, Group, Trade, TradingSession
 from app.domain.enums import RESULT_TRADE_STATUSES, ChainStatus, TradeStatus
 from app.reports.models import (
     EMPTY_METRICS,
@@ -60,11 +60,18 @@ def _selectors(flt: ReportFilter) -> list[ColumnElement[bool]]:
     conditions: list[ColumnElement[bool]] = [Trade.account_type == flt.account_type]
     if flt.group_id is not None:
         conditions.append(Trade.group_id == flt.group_id)
+    if flt.session_id is not None:
+        conditions.append(Trade.group_id.in_(_session_group(flt.session_id)))
     if flt.asset is not None:
         conditions.append(Trade.asset == flt.asset)
     if flt.strategy is not None:
         conditions.append(Chain.strategy == flt.strategy)
     return conditions
+
+
+def _session_group(session_id: int) -> Select[Any]:
+    """The hidden group of a trading session: its trades are the session's trades."""
+    return select(TradingSession.group_id).where(TradingSession.id == session_id)
 
 
 def _resolved_trades[S: Select[Any]](stmt: S, flt: ReportFilter) -> S:
@@ -115,6 +122,8 @@ async def breakdown(
     match kind:
         case BreakdownKind.GROUP:
             key, labels = Trade.group_id, Group.title
+        case BreakdownKind.SESSION:
+            key, labels = TradingSession.id, TradingSession.name
         case BreakdownKind.ASSET:
             key = labels = Trade.asset
         case BreakdownKind.STRATEGY:
@@ -128,6 +137,8 @@ async def breakdown(
     stmt = stmt.select_from(Trade)
     if kind is BreakdownKind.GROUP:
         stmt = stmt.join(Group, Group.id == Trade.group_id)
+    if kind is BreakdownKind.SESSION:
+        stmt = stmt.join(TradingSession, TradingSession.group_id == Trade.group_id)
     if kind is BreakdownKind.STRATEGY and flt.strategy is None:
         stmt = stmt.join(Chain, Chain.id == Trade.chain_id)
     stmt = _resolved_trades(stmt, flt).group_by(key, labels)
@@ -283,6 +294,8 @@ async def depth(session: AsyncSession, flt: ReportFilter) -> DepthReport:
     ]
     if flt.group_id is not None:
         chain_filter.append(Chain.group_id == flt.group_id)
+    if flt.session_id is not None:
+        chain_filter.append(Chain.group_id.in_(_session_group(flt.session_id)))
     if flt.asset is not None:
         chain_filter.append(Chain.asset == flt.asset)
     if flt.strategy is not None:

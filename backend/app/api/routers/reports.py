@@ -56,6 +56,9 @@ def report_filter(
         datetime | None, Query(description="End of the range (exclusive), ISO time with a zone.")
     ] = None,
     group_id: int | None = None,
+    session_id: Annotated[
+        int | None, Query(description="Only the trades of this trading session.")
+    ] = None,
     strategy: Strategy | None = None,
     asset: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
     utc_offset_minutes: Annotated[
@@ -75,6 +78,7 @@ def report_filter(
             since=since.astimezone(UTC) if since else None,
             until=until.astimezone(UTC) if until else None,
             group_id=group_id,
+            session_id=session_id,
             strategy=strategy,
             asset=asset,
             utc_offset_minutes=utc_offset_minutes,
@@ -94,7 +98,7 @@ async def get_summary(flt: FilterDep, session: SessionDep) -> SummaryOut:
 
 @router.get("/breakdown", response_model=BreakdownOut)
 async def get_breakdown(flt: FilterDep, session: SessionDep, by: BreakdownKind) -> BreakdownOut:
-    """The same figures split by group, asset, strategy, hour of day or weekday."""
+    """The same figures split by group, trading session, asset, strategy, hour of day or weekday."""
     return breakdown_out(flt, by, await queries.breakdown(session, flt, by))
 
 

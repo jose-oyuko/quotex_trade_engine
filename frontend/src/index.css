@@ -752,3 +752,58 @@ summary {
   flex-wrap: wrap;
   gap: 0.25rem 1.25rem;
 }
+
+/* --- trading sessions --- */
+
+.form-warning {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-radius: 4px;
+}
+
+.worst-case {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-radius: 6px;
+}
+
+.worst-case p {
+  margin: 0;
+}
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.run-panel {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  margin: 0.75rem 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 1.1rem;
+}

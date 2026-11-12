@@ -54,6 +54,8 @@ class ReportFilter:
     strategy: Strategy | None = None
     asset: str | None = None
     utc_offset_minutes: int = 0
+    # only the trades of one trading session (its hidden group's), decision D-71
+    session_id: int | None = None
 
     def __post_init__(self) -> None:
         if abs(self.utc_offset_minutes) > MAX_UTC_OFFSET_MINUTES:
@@ -64,6 +66,7 @@ class ReportFilter:
 
 class BreakdownKind(StrEnum):
     GROUP = "group"
+    SESSION = "session"  # trading sessions only (Telegram groups have no session)
     ASSET = "asset"
     STRATEGY = "strategy"
     HOUR = "hour"

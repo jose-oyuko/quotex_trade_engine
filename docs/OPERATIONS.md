@@ -80,10 +80,9 @@ application keeps running: no `.env` edit, no restart.
 
 A trading session trades by the clock, with no Telegram signal: you set it up once, and while its window is
 open it opens **pairs** (a CALL and a PUT on one asset, together) by itself. The one that loses recovers by the
-strategy you chose; the one that wins ends. (Until the dashboard page of Phase 18 exists, sessions are set up
-through the API, `docs/API.md`.)
+strategy you chose; the one that wins ends. You set it up on the **Sessions** page (the API is in `docs/API.md`).
 
-1. **Save a session:** asset (for example `EURUSD`, or `EURUSD_otc` at the weekend), trade length (M5 = 300 s),
+1. **Save a session:** open **Sessions**, press *Add a session* and fill in asset (for example `EURUSD`, or `EURUSD_otc` at the weekend), trade length (M5 = 300 s),
    start and end time with their time zone, how often it repeats (*once*: the next window only, or chosen
    weekdays), the minimum payout, the strategy and its stakes, and optional profit and loss targets.
 2. **Leave the engine running.** At the start time the first pair goes out (a minute earlier the asset is made
@@ -92,8 +91,9 @@ through the API, `docs/API.md`.)
 3. **How pairs are spaced.** *Sequential* (the default): one pair at a time. When both chains of a pair have ended, it
    waits the pause you set, then opens the next pair on the next candle. *Every candle*: a pair at every candle, whatever is
    still running, up to the number of open pairs you set (a pair is open while one of its chains runs); a candle that finds
-   the limit reached is skipped. Every chain stays independent. More open pairs means more stakes at risk at once. A round where the asset is closed, the payout is too low or Quotex is not connected
-   is **skipped** (nothing is sent) and tried again on the next candle; the run says why.
+   the limit reached is skipped. Every chain stays independent. More open pairs means more stakes at risk at once.
+   A round where the asset is closed, the payout is too low or Quotex is not connected is **skipped** (nothing is
+   sent) and tried again on the next candle; the run says why.
 4. **It stops by itself** at the end of the window, at the profit target or the loss limit, or after the maximum
    number of pairs. **Stopping never cuts a chain off:** no new pair opens, but a chain that is recovering keeps
    going until it wins or runs out of steps. So the loss limit is **not** a cap on the loss: the worst case is the
@@ -109,6 +109,16 @@ through the API, `docs/API.md`.)
 
 Sessions use whichever account the engine is on (demo unless you switched on purpose); the account cannot be
 switched while a session runs.
+
+**What the Sessions page shows.** The table lists each session with its window and zone, how often it repeats, how
+pairs are spaced, when it stops, its **next start** and its state, with *Edit*, *Start now*, *Disable* and *Delete*.
+While a run is going, a panel at the top shows its state, the time left in the window, the **profit so far against
+the targets**, the pairs opened and the rounds skipped (with the last reason), and the run's own chains with the usual
+chain controls. *Stop* asks first and says the chains are not cut off. Under the table, **Past runs** lists every run
+with how it ended and what it made. The form shows **in figures the most that can be at stake** (both first trades
+and every step of the leg that keeps losing, times the open pairs) and warns when the start is not on a candle
+boundary; an overlap with another session is refused with the name of the other. **Reports** can be narrowed to one
+session and split *By session*, and the signal and trade lists name a session's trades *Session: <name>*.
 
 ## Moving old logins out of `.env`
 

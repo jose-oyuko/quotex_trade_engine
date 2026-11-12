@@ -30,6 +30,7 @@ class FilterOut(BaseModel):
     since: datetime | None
     until: datetime | None
     group_id: int | None
+    session_id: int | None
     strategy: Strategy | None
     asset: str | None
     utc_offset_minutes: int
@@ -151,6 +152,7 @@ def filter_out(flt: ReportFilter) -> FilterOut:
         since=flt.since,
         until=flt.until,
         group_id=flt.group_id,
+        session_id=flt.session_id,
         strategy=flt.strategy,
         asset=flt.asset,
         utc_offset_minutes=flt.utc_offset_minutes,

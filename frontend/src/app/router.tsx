@@ -36,6 +36,24 @@ export const routes: RouteObject[] = [
         }),
       },
       {
+        path: 'sessions',
+        lazy: async () => ({
+          Component: (await import('../features/sessions/SessionsPage')).default,
+        }),
+      },
+      {
+        path: 'sessions/new',
+        lazy: async () => ({
+          Component: (await import('../features/sessions/SessionFormPage')).default,
+        }),
+      },
+      {
+        path: 'sessions/:id/edit',
+        lazy: async () => ({
+          Component: (await import('../features/sessions/SessionFormPage')).default,
+        }),
+      },
+      {
         path: 'history',
         lazy: async () => ({
           Component: (await import('../features/history/HistoryPage')).default,

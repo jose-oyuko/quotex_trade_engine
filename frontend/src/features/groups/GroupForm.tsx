@@ -18,7 +18,7 @@ export interface PickedChat {
   title: string
 }
 
-function Field({
+export function Field({
   label,
   error,
   help,

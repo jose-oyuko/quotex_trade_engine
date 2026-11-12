@@ -22,6 +22,7 @@ a sentence for each problem, and the dashboard shows the same sentence in a bann
 | Dashboard too slow | Unaffected | Unaffected | The dashboard reloads itself | `test_ws_hub`, `test_ws_socket` |
 | Application crashes / power cut | Stops | Last moments may be missing | On next start: trades and chains `unknown` | `test_restart` |
 | Shutdown (Ctrl+C) | Stops | Everything queued is written first | Log line `shutdown` | `test_restart` |
+| A trading session's run is in progress at a crash | Stops; the run is **not** resumed | The run ends as `interrupted` at the next start | Past runs: "The application stopped while it ran" | `test_a_run_found_still_going_at_start_up_ends_as_interrupted_and_is_not_resumed` |
 | Random mix of all of the above | Rules hold | Books balance | — | `test_chaos` (14 seeds) |
 
 ## Telegram drops

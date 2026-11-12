@@ -190,6 +190,7 @@
       "BreakdownKind": {
         "enum": [
           "group",
+          "session",
           "asset",
           "strategy",
           "hour",
@@ -1365,6 +1366,17 @@
             ],
             "title": "Group Id"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "since": {
             "anyOf": [
               {
@@ -1409,6 +1421,7 @@
           "since",
           "until",
           "group_id",
+          "session_id",
           "strategy",
           "asset",
           "utc_offset_minutes"
@@ -7538,7 +7551,7 @@
     },
     "/api/v1/reports/breakdown": {
       "get": {
-        "description": "The same figures split by group, asset, strategy, hour of day or weekday.",
+        "description": "The same figures split by group, trading session, asset, strategy, hour of day or weekday.",
         "operationId": "get_breakdown_api_v1_reports_breakdown_get",
         "parameters": [
           {
@@ -7612,6 +7625,24 @@
                 }
               ],
               "title": "Group Id"
+            }
+          },
+          {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
             }
           },
           {
@@ -7812,6 +7843,24 @@
             }
           },
           {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8006,6 +8055,24 @@
                 }
               ],
               "title": "Group Id"
+            }
+          },
+          {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
             }
           },
           {
@@ -8223,6 +8290,24 @@
             }
           },
           {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8427,6 +8512,24 @@
             }
           },
           {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8617,6 +8720,24 @@
                 }
               ],
               "title": "Group Id"
+            }
+          },
+          {
+            "description": "Only the trades of this trading session.",
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the trades of this trading session.",
+              "title": "Session Id"
             }
           },
           {

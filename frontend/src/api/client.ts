@@ -20,6 +20,9 @@ import type {
   GroupUpdate,
   Health,
   Page,
+  Session,
+  SessionInput,
+  SessionRun,
   ReportBreakdown,
   ReportDepth,
   ReportEquity,
@@ -172,6 +175,21 @@ export const api = {
       request<GroupRiskLimits>('PUT', `/groups/${String(id)}/risk`, { body }),
   },
 
+  sessions: {
+    list: (filters: ListFilters = {}, signal?: AbortSignal) =>
+      request<Page<Session>>('GET', '/sessions', { query: filters, signal }),
+    get: (id: number, signal?: AbortSignal) =>
+      request<Session>('GET', `/sessions/${String(id)}`, { signal }),
+    create: (body: SessionInput) => request<Session>('POST', '/sessions', { body }),
+    update: (id: number, body: SessionInput) =>
+      request<Session>('PUT', `/sessions/${String(id)}`, { body }),
+    remove: (id: number) => request<undefined>('DELETE', `/sessions/${String(id)}`),
+    start: (id: number) => request<SessionRun>('POST', `/sessions/${String(id)}/start`),
+    stop: (id: number) => request<SessionRun>('POST', `/sessions/${String(id)}/stop`),
+    runs: (filters: ListFilters & { session_id?: number } = {}, signal?: AbortSignal) =>
+      request<Page<SessionRun>>('GET', '/sessions/runs', { query: filters, signal }),
+  },
+
   auth: {
     state: (signal?: AbortSignal) => request<AuthState>('GET', '/auth/state', { signal }),
     setup: (body: { setup_code: string; username: string; password: string }) =>
@@ -322,6 +340,7 @@ export interface ReportFilters {
   from?: string
   to?: string
   group_id?: number
+  session_id?: number
   strategy?: Strategy
   asset?: string
   utc_offset_minutes?: number

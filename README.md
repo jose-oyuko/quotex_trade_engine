@@ -129,7 +129,7 @@ started on the dashboard, and an old line in `.env` can neither start it nor all
 - **Trading sessions.** Trading by the clock, with no signal: one asset, a time window and the strategy you
   choose; while the window is open it opens a pair (a CALL and a PUT together), the loser recovers by the
   strategy, and it stops at the end of the window or a profit or loss target (running chains always finish).
-  One session at a time; needs only the Quotex login. Set up through the API for now (see `docs/OPERATIONS.md`).
+  One session at a time; needs only the Quotex login. Set up on the **Sessions** page (see `docs/OPERATIONS.md`).
 - **Safety.** Limits before every order (max stake, exposure, concurrent trades, chain length, minimum
   payout, daily stop-loss and profit target, globally and per group), a kill switch, group pausing, "stop
   after current trade" and "end chain". Kill switch, pauses and limits survive restarts. If the app

@@ -97,6 +97,7 @@ async def test_the_filters_are_echoed_back(tmp_path: Path) -> None:
         "since": "2026-11-02T10:10:00Z",  # normalised to UTC
         "until": None,
         "group_id": 1,
+        "session_id": None,
         "strategy": None,
         "asset": None,
         "utc_offset_minutes": -180,

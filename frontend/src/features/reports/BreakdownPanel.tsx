@@ -11,6 +11,7 @@ import { sampleLabel } from '../../lib/reportText'
 
 const TABS: { by: BreakdownKind; label: string; chart: string }[] = [
   { by: 'group', label: 'By group', chart: 'Profit by group' },
+  { by: 'session', label: 'By session', chart: 'Profit by session' },
   { by: 'asset', label: 'By asset', chart: 'Profit by asset' },
   { by: 'strategy', label: 'By strategy', chart: 'Profit by strategy' },
   { by: 'hour', label: 'By hour of day', chart: 'Profit by hour of day' },

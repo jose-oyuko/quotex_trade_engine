@@ -79,7 +79,7 @@ describe('the app shell', () => {
   it('has a main navigation to every page', async () => {
     await renderApp('/')
     const nav = screen.getByRole('navigation', { name: 'Main' })
-    for (const name of ['Live', 'Signals', 'Groups', 'History', 'Reports']) {
+    for (const name of ['Live', 'Signals', 'Groups', 'Sessions', 'History', 'Reports']) {
       expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
     }
     expect(await screen.findByRole('heading', { name: 'Live', level: 1 })).toBeInTheDocument()

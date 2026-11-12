@@ -7,6 +7,7 @@ import {
   makeEquity,
   makeGroup,
   makeMetrics,
+  makeSession,
   makeSummary,
   page,
 } from '../../test/fixtures'
@@ -24,11 +25,18 @@ const GROUPS = [
   json(page([makeGroup(), makeGroup({ id: 2, title: 'Beta' })])),
 ] as const
 
+const SESSIONS = [
+  'GET',
+  '/sessions',
+  json(page([makeSession(), makeSession({ id: 2, name: 'Night owl' })])),
+] as const
+
 function routes(overrides: Parameters<typeof mockApi>[0] = []) {
   // the first route that matches answers, so the overrides go first
   return [
     ...overrides,
     GROUPS,
+    SESSIONS,
     ['GET', '/reports/summary', json(makeSummary())],
     ['GET', '/reports/equity', json(makeEquity())],
     ['GET', '/reports/depth', json(makeDepth())],
@@ -170,6 +178,19 @@ describe('ReportsPage', () => {
       }
     })
 
+    it('can split the result by trading session', async () => {
+      const api = mockApi(routes())
+      const user = userEvent.setup()
+      renderWith(<ReportsPage />)
+      await screen.findByLabelText('Report figures')
+      await user.click(screen.getByRole('tab', { name: 'By session' }))
+      await waitFor(() => {
+        expect(lastQuery(api, '/reports/breakdown').get('by')).toBe('session')
+      })
+      const table = await breakdownTable(/Profit by session/)
+      expect(table.getByText('session one')).toBeInTheDocument()
+    })
+
     it('fades rows with too few trades and labels every row’s sample size', async () => {
       mockApi(
         routes([
@@ -296,6 +317,20 @@ describe('ReportsPage', () => {
       })
       const depth = lastQuery(api, '/reports/depth')
       expect([depth.get('group_id'), depth.get('strategy')]).toEqual(['2', 'martingale'])
+    })
+
+    it('narrow every report to one trading session', async () => {
+      const api = mockApi(routes())
+      const user = userEvent.setup()
+      renderWith(<ReportsPage />)
+      await screen.findByLabelText('Report figures')
+      expect(lastQuery(api, '/reports/summary').get('session_id')).toBeNull() // all sessions
+      await user.selectOptions(await screen.findByLabelText('Session'), 'Night owl')
+      await waitFor(() => {
+        expect(lastQuery(api, '/reports/summary').get('session_id')).toBe('2')
+      })
+      expect(lastQuery(api, '/reports/depth').get('session_id')).toBe('2')
+      expect(lastQuery(api, '/reports/breakdown').get('session_id')).toBe('2')
     })
 
     it('use the browser’s own clock for hours, days and the start of "today"', async () => {

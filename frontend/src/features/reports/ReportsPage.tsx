@@ -58,6 +58,7 @@ export default function ReportsPage() {
     account: 'demo',
     range: { preset: 'all' },
     groupId: undefined,
+    sessionId: undefined,
     strategy: undefined,
     asset: '',
   })
