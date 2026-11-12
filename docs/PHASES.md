@@ -340,6 +340,129 @@ and invitation links. Deliberately **not** added now (YAGNI, and it touches ever
 
 ---
 
+## Phases 16-18 — Trading sessions (automatic trading, decisions D-71 to D-73)
+
+**Why (owner's request):** today every trade starts from a Telegram signal. The owner wants trading that starts
+from a **schedule set on the dashboard**: in a time window, on one chosen asset, the system opens a **pair**
+(CALL and PUT together), the loser recovers through the strategy, the winner ends; it repeats until the window
+closes or a profit or loss target is hit. A second mode opens a new pair at every candle and lets the earlier
+pairs keep running, with a limit on how many are open. Telegram signals are untouched.
+
+**Words used here:** a *session* is the saved setup; a *run* is one occurrence of it (one window); a *pair* is
+the CALL and PUT opened together; a *round* is one pair opening. (Not to be confused with the login sessions of
+Phase 10.)
+
+**Fixed by the owner:** one asset per session; one session running at a time; a stop never cuts a running chain,
+it only stops new pairs; the first pair goes out at the start time; later pairs at candle boundaries; repeat =
+once or chosen weekdays; a window missed while the app was off is skipped; a restart ends the run and does not
+resume it. All other design choices are in D-71 to D-73.
+
+**Not in these phases:** Telegram signals during a session, several assets in one session, a hard "end the
+chains" loss limit, catching up on missed windows, trend filters (all suggestions for later, not scheduled).
+
+### Phase 16 — Sessions, one pair at a time (backend)
+
+**Goal:** a session can be saved, runs on its schedule, opens one pair at a time with the pause between pairs,
+stops by the rules of D-72, and is controlled by the API. Tested on the fake Quotex and a manual clock.
+
+**Scope**
+- **Data** (migration `0005`): tables `trading_sessions` (name, enabled, hidden group id, asset, trade length,
+  minimum payout, start time, end time, time zone, repeat kind and weekdays, profit target, loss limit, maximum
+  pairs, pause between pairs) and `session_runs` (session, start and end, state, end reason, pairs opened,
+  profit, account type). `groups.source` (`telegram` or `session`) and a nullable `telegram_chat_id` (a session's
+  hidden group has none); `chains` get `session_run_id` and `pair_no`. Every existing row keeps its behaviour.
+- **Session service and API:** create, edit, delete, enable or disable, list; *Start now*; *Stop*; list the runs.
+  Validation in plain words: asset format, trade length is one Quotex offers, payout 0-100, targets above 0,
+  start and end differ, at least one weekday for a repeating session, **no overlap with another enabled
+  session** (D-73), a warning (not an error) when the start is not on a candle boundary of the trade length.
+  Saving the strategy part writes the hidden group's settings (the existing rules for stakes and multipliers).
+- **Scheduler** (`engine/sessions.py`): finds the next window of each enabled session from the clock and time
+  zone; a minute before it, checks engine, connection, asset and payout; at the start time opens the first pair;
+  runs the sequential mode (wait, then the first boundary at or after it); skips and records a round whose
+  checks fail; ends the run for every reason in D-72; does not open a pair at or after the window end.
+- **Pair:** both legs are checked before either is sent; both are handed to `ChainManager` as signals of the
+  hidden group (their inbox rows are published first, marked as from a session); D-9 is not applied to them.
+  A leg refused after the first was sent is recorded as a "lopsided pair".
+- **Run accounting:** the profit of the run from the settled trades of its chains; target check at every
+  settlement and before every pair; the run is `ended` when its last chain ends. Events on the event bus, so the
+  database writer stores them like everything else.
+- **Restart and engine control:** at start-up a run left in progress becomes `interrupted` and a *once* session
+  that was running is finished; no run starts by itself inside an open window. Stopping the engine ends the run
+  (`engine_stopped`). The kill switch ends it (`kill_switch`).
+- **Telegram optional:** the engine starts with the Quotex login alone; the Settings page says the signal
+  source is off. With the login present nothing changes for Telegram.
+- **Docs:** API.md and `docs/openapi.json` regenerated, DOMAIN.md (sessions), OPERATIONS.md (how a session runs).
+
+**Acceptance criteria**
+- A session with a 23:00 start, on the manual clock, places its CALL and its PUT at 23:00:00, and nothing earlier
+  (test).
+- Sequential rule: with both chains still running no new pair opens; after both ended and the pause, the next
+  pair goes out at the first boundary at or after it (tests with winning, losing and draw outcomes).
+- Each stop reason ends the run without opening a pair, **lets the running chains finish**, and records the
+  reason (one test per reason: window end, profit target, loss limit, maximum pairs, *Stop*, kill switch).
+- A failed check (asset closed, payout below the minimum, not connected) sends **no** order and records why.
+- Two enabled sessions with overlapping windows are refused on save, including across midnight and on repeating
+  weekdays; *Start now* is refused while a run is active.
+- A *once* session runs one window and never again; a weekday session runs on its days only; a window missed while
+  the engine was off does not run (tests with the manual clock).
+- Restart test: a run in progress becomes `interrupted`, its chains `unknown`, and nothing resumes.
+- Engine start with the Quotex login only (fake) and no Telegram login works; a session trades.
+- Telegram groups behave exactly as before: the existing D-9, D-70 and pipeline tests pass unchanged.
+- The execution path is unchanged (the benchmark test) and the architecture-rule tests pass.
+- Migration test: upgrade and downgrade, existing groups keep `source = telegram`.
+
+### Phase 17 — Overlapping pairs: a pair at every candle (backend)
+
+**Goal:** the second mode: a new pair at every candle boundary, whatever is still running, up to a chosen number
+of open pairs.
+
+**Scope:** the mode setting (`sequential` or `every_candle`) and `max_open_pairs` (at least 1) in the session, the
+API and its validation; the scheduler places a pair at each boundary while fewer than the maximum are open, and
+otherwise skips that boundary and records it; the open pairs are counted from the chains in memory (a pair is
+open while one of its chains runs); chains of different pairs stay fully independent (stakes, steps, controls);
+the stop rules of D-72 apply as before (running chains of all pairs finish); docs and `openapi.json`.
+
+**Acceptance criteria**
+- A pair opens at every boundary until the maximum is open (test: boundaries 23:00, 23:05, ... with losers kept
+  running); at the maximum, the boundary is skipped and recorded; when a pair's last chain ends, the next boundary
+  opens a pair again.
+- The chains of different pairs do not influence each other: one chain reaching its last step, being ended by the
+  owner or ending on a win leaves every other chain unchanged (tests).
+- All stop reasons work with several pairs open; **every** running chain of **every** pair finishes.
+- A boundary is never missed or doubled by a slow round (tests with delays on the manual clock).
+- `sequential` behaves exactly as in Phase 16 (its tests pass unchanged).
+- The execution path is unchanged (benchmark) and the opposite-pair and D-9 tests pass.
+
+### Phase 18 — Sessions on the dashboard, and in the reports
+
+**Goal:** everything is set and watched on the dashboard.
+
+**Scope**
+- **Sessions page:** list (state, next window, last result), create and edit form (asset, trade length, minimum
+  payout, strategy and stakes with the same form parts as a group, window and time zone, repeat: once / every day
+  / Monday to Friday / chosen days, mode and open-pair limit, pause, profit and loss targets, maximum pairs),
+  enable or disable, delete, *Start now*, *Stop* (asks first; says that running chains finish).
+- **Plain-words checks on the form:** the overlap error, the start-not-on-a-boundary warning, and the **worst
+  case in figures**: the most a single pair can stake, times the open-pair limit, and that the loss limit does
+  not cap the loss (D-72).
+- **Live run panel:** state, time to the next pair or to the window end, profit against both targets, pairs
+  opened and open now, skipped rounds with the reason, and the run's chains (the existing chain controls still
+  work on each one). Updates arrive over the WebSocket like the rest of the dashboard.
+- **History:** past runs with their end reason and profit.
+- **Reports:** breakdown by session and a session filter, from the same queries as the other breakdowns.
+- Docs: README, OPERATIONS (how to set a session up, step by step), TROUBLESHOOTING (a session did not start:
+  the reasons it lists), FAILURE_MODES. The phase report lists the live checks to be done on the demo account
+  (gap between the two legs of a pair, expiry of both legs, a full window).
+
+**Acceptance criteria**
+- A session can be created, edited, started, stopped and deleted from the dashboard (component and form tests);
+  every refusal of the API is shown in words.
+- The live panel follows a run on the fake backend: pairs, targets, the stop reason.
+- The reports break down by session and agree with the Trades page totals (test on seeded data).
+- `eslint`, `tsc --noEmit`, `vitest` and `npm run api:check` pass; no secret appears anywhere.
+
+---
+
 ## Later backlog (not scheduled)
 
 Telegram alerts to the owner; backtester over stored messages; more parsers + "test this message" tool;

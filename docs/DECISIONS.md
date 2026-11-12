@@ -615,6 +615,78 @@ default, so every existing group behaves as before; a migration adds it switched
 - **Risk:** the exposure limit counts open trades only, so two chains each climbing the steps can stake up to
   twice a single chain's maximum; the group's max stake and daily stop-loss still apply to each order.
 
+**D-71. Trading sessions: automatic trading from the dashboard, with no signal (Phases 16-18).** The owner wants
+trades placed by a schedule, not by a Telegram message. A **trading session** is set up once on the dashboard:
+one asset (the Quotex name, `EURUSD` or `EURUSD_otc`), the trade length (M5 = 300 s), a minimum payout, a
+strategy (any of the four, with its stakes), a time window with a time zone and a repeat rule, and optional
+profit and loss targets. While its window is open it opens **pairs**: a CALL and a PUT on the asset at the same
+moment. Each leg is an ordinary chain (own step, stakes and controls, D-10): the winner ends on its win, the
+loser follows the strategy (the flip, for the flip strategies). Telegram signals are **not affected** in any way
+and keep their rules (D-9, D-70). How it fits the engine:
+- A **session scheduler** inside the engine decides *when*; it hands the two legs to `ChainManager` as plain
+  signals. The order path (`RiskGuard.admit`, executor, adapter) is the same code as for a Telegram signal, so
+  every limit, the kill switch and the demo/real switch apply as before, and nothing was added to the fast path
+  (the scheduler works before it, on a timer).
+- The strategy part lives in an ordinary group-settings row of a **hidden group** that belongs to the session
+  (`groups.source = 'session'`, no Telegram chat), so chains, trades, reports and the per-group limits work
+  unchanged. The hidden group is not on the Groups page and is never listened to.
+- Chains of a session are exempt from D-9: the scheduler is their gatekeeper (it opens a pair only if fewer than
+  the allowed number of pairs are open). D-9 and D-70 stay as they are for Telegram groups.
+- A session needs **Quotex only**. The Telegram login becomes optional for starting the engine; without it the
+  engine starts with the signal source off and says so on the Settings page.
+- Both legs are checked **before** either is sent (engine running, Quotex connected, asset open, payout at least
+  the minimum). If a check fails the round is skipped, the reason is recorded, and nothing is sent, so a pair is
+  never opened as a single, unhedged trade on purpose. Orders still go out one at a time (D-27): if the second
+  leg is refused by a limit after the first was sent, the first runs on and the run records a "lopsided pair".
+
+**D-72. A session stops softly, and a limit is not a cap on the loss.** When a session ends (the window closes, a
+target is hit, the maximum number of pairs is reached, or the owner presses *Stop*) it **opens no more pairs, and
+the chains already running finish** their steps. The run is `ended` when the last of its chains has ended.
+- The session's **profit** is the sum of the `profit` of its settled trades (a draw counts 0; unknown and failed
+  trades count nothing), per account type. A target is checked when a trade settles and again before each pair:
+  profit at or above the profit target, or loss at or beyond the loss limit, stops the session.
+- Because running chains finish, a loss that is *already in recovery* keeps climbing after the limit is hit. The
+  loss limit therefore stops **new** pairs; it does **not** cap the total loss: the worst case is the limit plus
+  the rest of every running chain's steps. The session form shows that worst case in figures (Phase 18). The
+  global limits (max stake, exposure, daily stop-loss, kill switch) still apply to every order, and a chain
+  blocked by them ends as before; the kill switch also ends the run (`kill_switch`).
+- Each run records why it ended: `window_ended`, `profit_target`, `loss_limit`, `max_pairs`, `stopped`,
+  `kill_switch`, `engine_stopped`, `interrupted`, `error`.
+
+**D-73. Session schedule: one at a time, no catch-up, no resume.**
+- **Repeat:** *once* (the next window only, never again) or chosen *weekdays* (every day, Monday to Friday, or any
+  selection), in a time zone picked per session (daylight saving handled with `zoneinfo`, as in
+  `signals/scheduling.py`). The window is `[start, end)`; it may cross midnight (a 23:00-01:00 window belongs to
+  the day it started).
+- **One session at a time.** Windows of enabled sessions may not overlap (checked when saving, over the whole
+  week), and *Start now* is refused while a run is active. If a window nevertheless opens while another run is
+  active, it is skipped and the reason is logged.
+- **The first pair goes out at the start time** (23:00:00 for a 23:00 session). A check starts a minute before
+  so the connection, the asset and the payout are known. If a check fails at the start time, the first pair waits
+  for the next round (below).
+- **Alignment.** Later pairs are placed at **candle boundaries**: multiples of the trade length counted from
+  00:00 UTC (for M5: :00, :05, :10 ...). In the default `TIME` expiry mode the library picks the expiry from the
+  clock when the order is built (see D-70): a trade built just after a boundary expires at the next one (a full
+  M5); one built mid-candle may get a shorter or longer trade. So the form **warns** when the start time is not
+  on a boundary of the trade length (it does not forbid it), and the sequential mode (below) places its next pair
+  on the first boundary at or after the wait.
+- **Two ways to space pairs** (one mechanism, two settings: how many pairs may be open at once, and when the next
+  one is released):
+  - *Sequential* (Phase 16): one pair at a time; when both of its chains have ended, wait a preset time (may be
+    0), then open the next pair at the first candle boundary at or after the wait.
+  - *Every candle* (Phase 17): a pair at every boundary, whatever is still running, up to a chosen **maximum of
+    open pairs** (a pair is open while at least one of its chains runs). At a boundary with the maximum already
+    open, that boundary is skipped and the skip is recorded.
+- **Restart (D-35 applies).** A run that was in progress when the application stopped ends as `interrupted` (its
+  chains are already marked `unknown` by recovery) and is **not resumed**. A session whose window is open at start
+  is **not started on its own** (that would be a resume); the next scheduled window starts normally, and *Start
+  now* is available. A *once* session whose only run was interrupted is finished, not rescheduled.
+- **Missed windows are skipped.** If the application, or the engine, was off when a window opened, that run does
+  not happen and nothing is made up later.
+- **Start now** runs a window of the session's usual length, beginning at once (the first pair at once, not at a
+  boundary). It follows the same stop rules.
+- A session trades on whichever account the engine is on (demo by default, D-15); it has no switch of its own.
+
 ---
 
 ## Decisions to be made later (record here when decided)
