@@ -35,4 +35,53 @@ Also covered: a skipped round (closed asset) is retried at the next candle, *Sta
 candles, `pause_s` is not used, the run ends early when no later candle fits in the window.
 
 ## 4. Checks run
-RESULTS_PLACEHOLDER
+```
+$ ruff check . ; ruff format --check . ; mypy                  (backend)
+All checks passed; 259 files formatted; no issues in 136 source files
+$ pytest                                                       (backend, whole suite, 8 min)
+1346 passed
+$ eslint . ; tsc -b --noEmit ; prettier --check .              (frontend)
+clean; clean; clean
+$ vitest run                                                   (frontend)
+388 passed, 1 failed: App.test "marks the current page..." (it fails the same way on the committed Phase 15 code and
+passes when run on its own; see the Phase 16 report). Not changed.
+$ npm run api:check
+docs/openapi.json is up to date; src/api/schema.d.ts is up to date
+```
+The slow report-performance test passed this time (it is timing-dependent on this PC).
+
+## 5. Challenges and how they were resolved
+1. **Counting open pairs.** A pair is open while one of its chains runs. The count is taken from the chains in memory
+   (the same set the sequential mode waits on), refreshed against the manager first, so a lost event cannot leave a pair
+   "open" for ever.
+2. **A first test expectation was wrong, not the code:** with a limit of 3, three pairs are open by 11:10 (six chains),
+   not two; the test now says so.
+3. **Time.** The boundary test jumps over seven candles in one step; the fake timers wake the scheduler at each
+   boundary in order, so each candle still gets exactly one pair, stamped on its boundary.
+
+## 6. Deviations from the plan
+None. (No new decision numbers: D-73 already describes both modes.)
+
+## 7. Could not be verified
+Everything that needs the real Quotex, as in the Phase 16 report. In addition, on the demo account, in every-candle mode
+with a limit of 2 and an M5 asset: pairs go out at :00, :05, :10... (the Trades page shows the chains of each pair with
+its pair number), a third candle with two pairs still open is skipped (the run says why), and a pair that finishes frees a
+place for the next candle. **Money at risk:** with many pairs open at once the stakes of the recoveries add up; the real
+numbers depend on your multipliers (Phase 18's form shows the worst case).
+
+## 8. Measurements
+None against the real service. The loopback benchmark is unchanged (median 2.9 ms, max 5.9 ms for 20 orders).
+
+## 9. New dependencies / files of note
+No new dependencies. New: `alembic/versions/0006_session_modes.py`, `tests/integration/test_engine_session_pairs.py`.
+Tests: 20 new (14 for the scheduler's second mode; the rest API, storage and migration).
+
+## 10. Suggestions and open questions
+- **Exposure grows with the number of open pairs.** The global exposure limit counts open trades only; with
+  `max_open_pairs` pairs each recovering, the stakes can reach `max_open_pairs` times one pair's worst case. Set the group
+  limits (max stake, daily stop-loss) with that in mind. A limit that reserves the follow-ups is still not built.
+- A skipped candle is counted in `rounds_skipped` with the reason in `note`; a separate counter for "skipped at the limit"
+  could be added if it helps the dashboard.
+
+## 11. Git state
+Committed after the checks above (the owner asked for a commit after each milestone).
