@@ -102,7 +102,15 @@ class Settings(BaseSettings):
     # this in when it builds the engine (decision D-65); it can also be pasted here by hand.
     telegram_session: SecretStr | None = None
 
-    @field_validator("telegram_api_id", "telegram_phone", mode="before")
+    # Deriv (decisions D-74 to D-77). A Personal Access Token per account (demo, and optionally
+    # real) with the Trade permission, and the app id registered on Deriv's developer site. Until
+    # the dashboard stores them (Phase 21) they are read from `.env` here.
+    deriv_app_id: str | None = None
+    deriv_token_demo: SecretStr | None = None
+    deriv_token_real: SecretStr | None = None
+    deriv_api_url: str = "https://api.derivws.com/trading/v1/"
+
+    @field_validator("telegram_api_id", "telegram_phone", "deriv_app_id", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         """A copied `.env` line like `TELEGRAM_API_ID=` means "not set", not an invalid number."""
@@ -130,6 +138,8 @@ class Settings(BaseSettings):
             self.secret_key,
             self.telegram_session,
             self.quotex_session,
+            self.deriv_token_demo,
+            self.deriv_token_real,
         )
         return [s.get_secret_value() for s in secrets if s is not None]
 

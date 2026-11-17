@@ -46,6 +46,38 @@ def test_the_guard_actually_sees_imports() -> None:
     assert "pyquotex.stable_api" in imported_modules(APP / "quotex" / "pyquotex_client.py")
 
 
+def test_only_the_deriv_package_talks_to_deriv() -> None:
+    """Decision D-74: Deriv is reached through `app/deriv/` only; it is the only part of the
+    application that opens a WebSocket or makes an HTTP call of its own."""
+    offenders = [
+        f"{path.relative_to(APP)}: {module}"
+        for path in APP.rglob("*.py")
+        if path.relative_to(APP).parts[0] != "deriv"
+        for module in imported_modules(path)
+        if module.split(".")[0] in {"websockets", "httpx"} or module.startswith("app.deriv")
+    ]
+    assert offenders == []
+    assert "websockets.asyncio.client" in imported_modules(APP / "deriv" / "connection.py")
+
+
+def test_the_two_brokers_know_nothing_of_each_other() -> None:
+    """Quotex and Deriv share only `app/brokers/` (the interface, the errors, the fake)."""
+    offenders = [
+        f"{path.relative_to(APP)}: {module}"
+        for package, other in (("quotex", "app.deriv"), ("deriv", "app.quotex"))
+        for path in (APP / package).rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(other) or (package == "deriv" and module.startswith("pyquotex"))
+    ]
+    offenders += [
+        f"{path.relative_to(APP)}: {module}"
+        for path in (APP / "brokers").rglob("*.py")
+        for module in imported_modules(path)
+        if module.startswith(("app.quotex", "app.deriv", "pyquotex"))
+    ]
+    assert offenders == []
+
+
 def test_only_the_telethon_wrapper_imports_telethon() -> None:
     """Same idea as pyquotex: the Telegram library sits behind one small module."""
     importers = sorted(
@@ -194,7 +226,9 @@ def test_lower_layers_never_import_the_layers_above_them() -> None:
         "domain": ("app.api", "app.services", "app.engine", "app.db", "app.quotex", "app.telegram"),
         "events": ("app.api", "app.services", "app.engine", "app.db"),
         "db": ("app.api", "app.services", "app.engine"),
+        "brokers": ("app.api", "app.services", "app.engine", "app.db", "app.sessions"),
         "quotex": ("app.api", "app.services", "app.engine"),
+        "deriv": ("app.api", "app.services", "app.engine", "app.db", "app.sessions"),
         "engine": ("app.api", "app.services"),
         "sessions": ("app.api", "app.services"),
         "services": ("app.api",),

@@ -33,6 +33,7 @@
     "db:upgrade": "uv run --directory backend alembic upgrade head",
     "db:downgrade": "uv run --directory backend alembic downgrade base",
     "quotex:diagnose": "uv run --directory backend python -m scripts.quotex_diagnose",
+    "deriv:check": "uv run --directory backend python -m scripts.deriv_check",
     "telegram:login": "uv run --directory backend python -m scripts.telegram_cli login",
     "telegram:dialogs": "uv run --directory backend python -m scripts.telegram_cli dialogs",
     "telegram:listen": "uv run --directory backend python -m scripts.telegram_cli listen",

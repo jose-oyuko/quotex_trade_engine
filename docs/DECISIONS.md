@@ -728,6 +728,32 @@ with that reason. Orders are **not** serialised: every request carries a unique 
 by it, so the two legs of a pair go out together. D-27 stays a Quotex rule. An order without a confirmation is
 still `OrderAckTimeoutError` ("may have been placed", never retried).
 
+**D-74, D-76, D-77 amended in Phase 19 (Deriv's current API, read from developers.deriv.com and its JSON
+schemas on 2026-11-17).** Deriv has replaced the API these decisions were written for:
+- **Login (D-74, D-76).** There is no `authorize` call and no fixed socket address any more. The owner's
+  Personal Access Token and the app id go in the headers (`Authorization: Bearer ...`, `Deriv-App-ID`) of two
+  REST calls to `https://api.derivws.com/trading/v1/`: `GET options/accounts` lists the token's accounts, and
+  `POST options/accounts/{id}/otp` returns a one-time link, `wss://.../options/ws/demo?otp=...` or
+  `.../ws/real?otp=...`, valid once and for 120 s. Every (re)connect asks for a new link (`app/deriv/login.py`).
+- **The account check (D-76)** is made three times: the account picked from the list (Deriv's `account_type`
+  / `group` field decides; the account number only when that field is missing), the link's own path
+  (`/ws/demo` or `/ws/real`), and the `loginid` of the first balance on the socket. Demo numbers start `VR`
+  (old API) or `DOT` (new Options API, e.g. `DOT90004580`); real ones `CR`, `MF`, `MLT`, `MX`. A number with
+  any other prefix is not read as either kind (the new real numbering is undocumented), so the first two checks
+  decide for it. Any disagreement refuses the login and is never retried. A token that reaches several real accounts is refused rather than guessed.
+- **Scopes (D-76).** The API does not tell an application which permissions a token has, so the adapter cannot
+  refuse a token with the `payment` permission itself; the guide tells the owner to create tokens with
+  **Trade** only. A missing Trade permission shows as Deriv refusing the calls.
+- **Message names (D-77).** A symbol is `underlying_symbol` (in `active_symbols`, `contracts_for`, `proposal`
+  and in the `parameters` of `buy`), its name `underlying_symbol_name`; `buy` is `"1"` with `parameters`; the
+  result's `profit` is text. `req_id` is used as before.
+- **Payouts (D-77).** Deriv does not stream quotes for under-24-hour Rise/Fall on the Volatility indices, so the
+  payout comes from a one-off `proposal` per prepared asset and trade length, asked again every 30 s (well
+  inside the 360-a-minute limit shared with `buy`); a quote that fails removes the figure, so nothing trades
+  on a stale payout.
+- **Trade lengths (D-77).** `contracts_for` may write a length without a unit (its example says `"5"`); a
+  length that cannot be read is never guessed: Deriv's own refusal of the order decides, and nothing is placed.
+
 ---
 
 ## Decisions to be made later (record here when decided)

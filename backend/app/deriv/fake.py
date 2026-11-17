@@ -1,0 +1,47 @@
+"""The fake broker under its Deriv name, with Deriv's own rules (decision D-77): trade lengths are
+offered per asset, `_otc` pairs do not exist, and there is no draw (an equal exit is a loss)."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+from app.brokers.base import TradeOutcome
+from app.brokers.errors import DurationNotOfferedError
+from app.brokers.fake import FakeBrokerAdapter
+from app.deriv.protocol import LengthRange, allows, deriv_symbol, describe_lengths
+
+
+class FakeDerivAdapter(FakeBrokerAdapter):
+    """See `FakeBrokerAdapter`. `set_lengths("EURUSD", [LengthRange(900, 86400)])` limits the trade
+    lengths of an asset; an asset without such a limit accepts any length."""
+
+    COMPONENT = "deriv"
+    LABEL = "Deriv"
+
+    _lengths: dict[str, list[LengthRange]] | None = None  # made on the first `set_lengths`
+
+    def set_lengths(self, asset: str, ranges: list[LengthRange]) -> None:
+        if self._lengths is None:
+            self._lengths = {}
+        self._lengths[asset] = ranges
+
+    def is_open(self, asset: str) -> bool:
+        return deriv_symbol(asset) is not None and super().is_open(asset)
+
+    async def prepare_asset(self, asset: str, duration_s: int) -> None:
+        self._require_connected()
+        ranges = (self._lengths or {}).get(asset)
+        if ranges is not None and not allows(ranges, duration_s):
+            raise DurationNotOfferedError(
+                f"Deriv does not offer {duration_s} s Rise/Fall on {asset} (it offers "
+                f"{describe_lengths(ranges)}); order not sent"
+            )
+        await super().prepare_asset(asset, duration_s)
+
+    def _next_result(
+        self, asset: str, duration_s: int, amount: Decimal
+    ) -> tuple[TradeOutcome, Decimal]:
+        outcome, profit = super()._next_result(asset, duration_s, amount)
+        if outcome is TradeOutcome.DRAW:  # Deriv has no draw on Rise/Fall
+            return TradeOutcome.LOST, -amount
+        return outcome, profit

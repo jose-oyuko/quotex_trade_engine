@@ -10,6 +10,13 @@ class AccountType(StrEnum):
     REAL = "real"
 
 
+class Broker(StrEnum):
+    """Where a trade is placed (decision D-75). Groups and sessions choose one from Phase 20."""
+
+    QUOTEX = "quotex"
+    DERIV = "deriv"
+
+
 class UserRole(StrEnum):
     ADMIN = "admin"  # the owner; invited users (a later phase) get their own roles
 
