@@ -35,6 +35,7 @@ from app.db.types import DecimalList, IntList, Money, UTCDateTime
 from app.domain.enums import (
     AccountType,
     AssetSuffixMode,
+    Broker,
     ChainStatus,
     Direction,
     GroupSource,
@@ -72,6 +73,9 @@ class Group(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)
     source: Mapped[GroupSource] = mapped_column(
         _enum(GroupSource), default=GroupSource.TELEGRAM, server_default=GroupSource.TELEGRAM.value
+    )
+    broker: Mapped[Broker] = mapped_column(
+        _enum(Broker), default=Broker.QUOTEX, server_default=Broker.QUOTEX.value
     )
 
 
@@ -129,6 +133,7 @@ class Chain(Base):
         Index("ix_chains_status", "status"),
         Index("ix_chains_group_id_asset_status", "group_id", "asset", "status"),
         Index("ix_chains_account_type_created_at", "account_type", "created_at"),
+        Index("ix_chains_broker_account_type_created_at", "broker", "account_type", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -151,6 +156,9 @@ class Chain(Base):
     end_reason: Mapped[str | None] = mapped_column(String(255))
     session_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("session_runs.id"))
     pair_no: Mapped[int | None] = mapped_column(SmallInteger)
+    broker: Mapped[Broker] = mapped_column(
+        _enum(Broker), default=Broker.QUOTEX, server_default=Broker.QUOTEX.value
+    )
 
 
 class Trade(Base):
@@ -163,6 +171,7 @@ class Trade(Base):
             "ix_trades_group_id_account_type_settled_at", "group_id", "account_type", "settled_at"
         ),
         Index("ix_trades_account_type_asset", "account_type", "asset"),
+        Index("ix_trades_broker_account_type_settled_at", "broker", "account_type", "settled_at"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -189,6 +198,9 @@ class Trade(Base):
     t_decided_ns: Mapped[int | None] = mapped_column(BigInteger)
     t_order_sent_ns: Mapped[int | None] = mapped_column(BigInteger)
     t_order_acked_ns: Mapped[int | None] = mapped_column(BigInteger)
+    broker: Mapped[Broker] = mapped_column(
+        _enum(Broker), default=Broker.QUOTEX, server_default=Broker.QUOTEX.value
+    )
 
 
 class RiskEvent(Base):
@@ -207,12 +219,21 @@ class BalanceSnapshot(Base):
     __tablename__ = "balance_snapshots"
     __table_args__ = (
         Index("ix_balance_snapshots_account_type_taken_at", "account_type", "taken_at"),
+        Index(
+            "ix_balance_snapshots_broker_account_type_taken_at",
+            "broker",
+            "account_type",
+            "taken_at",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     taken_at: Mapped[datetime] = mapped_column(UTCDateTime)
     account_type: Mapped[AccountType] = mapped_column(_enum(AccountType))
     balance: Mapped[Decimal] = mapped_column(Money)
+    broker: Mapped[Broker] = mapped_column(
+        _enum(Broker), default=Broker.QUOTEX, server_default=Broker.QUOTEX.value
+    )
 
 
 class TradingSession(Base):
@@ -246,6 +267,9 @@ class TradingSession(Base):
         server_default=SessionMode.SEQUENTIAL.value,
     )
     max_open_pairs: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    broker: Mapped[Broker] = mapped_column(
+        _enum(Broker), default=Broker.QUOTEX, server_default=Broker.QUOTEX.value
+    )
     once_after: Mapped[datetime] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime)

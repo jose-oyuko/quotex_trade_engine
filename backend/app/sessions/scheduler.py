@@ -3,7 +3,8 @@
 It works *before* the order path: on a timer it decides that a pair is due, checks that both orders
 could be sent, and hands the two legs (a CALL and a PUT on the session's asset) to `ChainManager`
 as signals of the session's hidden group. From there they are ordinary chains: the same risk
-guard, executor and adapter, and nothing was added to the fast path.
+guard, executor and adapter, and nothing was added to the fast path. Each session trades on its
+own broker (decision D-75); the checks before a pair ask that broker.
 
     window opens -> round: check -> open the pair -> both chains end -> pause -> next candle
                       |  a check fails: skip the round, retry at the next candle
@@ -25,6 +26,8 @@ from uuid import UUID
 
 import structlog
 
+from app.brokers.base import ConnectionState
+from app.brokers.errors import BrokerError
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import (
@@ -44,6 +47,7 @@ from app.domain.records import (
     SignalRecord,
 )
 from app.engine.errors import NoActiveRunError, SessionNotLoadedError, SessionRunActiveError
+from app.engine.executor import Executor
 from app.engine.manager import ChainManager
 from app.engine.risk import KEY_KILL_SWITCH, RiskGuard
 from app.events.bus import EventBus, OverflowPolicy, Subscription, SubscriptionClosedError
@@ -55,8 +59,6 @@ from app.events.types import (
     SignalReceived,
     TradeSettled,
 )
-from app.quotex.base import ConnectionState, QuotexAdapter
-from app.quotex.errors import QuotexError
 from app.sessions.schedule import (
     SEARCH_DAYS,
     Window,
@@ -116,7 +118,7 @@ class SessionScheduler:
         *,
         manager: ChainManager,
         guard: RiskGuard,
-        adapter: QuotexAdapter,
+        executor: Executor,
         bus: EventBus,
         clock: Clock,
         tasks: TaskSupervisor,
@@ -125,7 +127,7 @@ class SessionScheduler:
     ) -> None:
         self._manager = manager
         self._guard = guard
-        self._adapter = adapter
+        self._executor = executor
         self._bus = bus
         self._clock = clock
         self._tasks = tasks
@@ -141,6 +143,9 @@ class SessionScheduler:
         self._background: list[asyncio.Task[Any]] = []
 
     # --- what the dashboard and the API ask ---
+
+    def sessions(self) -> list[SessionConfig]:
+        return list(self._sessions.values())
 
     @property
     def active_run(self) -> SessionRunRecord | None:
@@ -304,9 +309,12 @@ class SessionScheduler:
         """Do the one-time per-asset work ahead of the first order, so that order does not pay
         for it. Best effort: a failure here shows up as a skipped round, with its reason."""
         session = config.session
+        adapter = self._executor.adapter(session.broker)
+        if adapter is None:
+            return  # the round says why when it is due
         try:
             await asyncio.wait_for(
-                self._adapter.prepare_asset(session.asset, session.duration_s), PREPARE_TIMEOUT_S
+                adapter.prepare_asset(session.asset, session.duration_s), PREPARE_TIMEOUT_S
             )
         except Exception as exc:
             log.warning("session_prepare_failed", asset=session.asset, error=str(exc)[:200])
@@ -332,7 +340,7 @@ class SessionScheduler:
             id=new_id(),
             session_id=config.id,
             started_by=started_by,
-            account_type=self._adapter.account_type,
+            account_type=self._executor.account_type,
             started_at=now,
             window_end=window_end,
             state=RunState.RUNNING,
@@ -430,13 +438,19 @@ class SessionScheduler:
         session, settings = config.session, config.settings
         if (blocked := self._guard.signal_block_reason(session.group_id)) is not None:
             return blocked
-        if self._adapter.state is not ConnectionState.CONNECTED:
-            return "Quotex is not connected"
-        if not self._adapter.is_open(session.asset):
-            return f"{session.asset} is closed (or unknown to Quotex)"
+        broker = session.broker
+        adapter = self._executor.adapter(broker)
+        if adapter is None:
+            return f"{broker.label} is not set up: its login is missing"
+        if adapter.state is not ConnectionState.CONNECTED:
+            return f"{broker.label} is not connected"
+        if (refused := adapter.order_refusal(session.asset, session.duration_s)) is not None:
+            return refused
+        if not adapter.is_open(session.asset):
+            return f"{session.asset} is closed (or unknown to {broker.label})"
         try:
-            payout = self._adapter.payout(session.asset, session.duration_s // 60)
-        except QuotexError as exc:
+            payout = adapter.payout(session.asset, session.duration_s // 60)
+        except BrokerError as exc:
             return f"the payout of {session.asset} cannot be read: {exc}"
         if payout is None:
             return f"the payout of {session.asset} is not known"

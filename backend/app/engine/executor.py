@@ -7,19 +7,25 @@ adapter, with a timeout of `duration + margin` that ends in an `unknown` trade, 
 
 Every trade is published twice before it settles: `pending` just before the order is sent (so a
 crash between sending and confirmation leaves a trace that recovery turns into `unknown`), then
-`open` once Quotex confirmed it.
+`open` once the broker confirmed it.
+
+There is one adapter per broker that has a login (decision D-75); each trade goes to the adapter of
+its chain's broker.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from enum import StrEnum
 
 import structlog
 
+from app.brokers.base import BrokerAdapter, ConnectionState, TradeOutcome
+from app.brokers.errors import BrokerError, OrderAckTimeoutError, ResultTimeoutError
 from app.core.clock import Clock
-from app.domain.enums import AccountType, TradeStatus
+from app.domain.enums import AccountType, Broker, TradeStatus
 from app.domain.ids import new_id
 from app.domain.records import TradeRecord
 from app.engine.chain import Chain
@@ -27,8 +33,6 @@ from app.engine.risk import BlockKind, OrderRequest, RiskGuard
 from app.engine.strategies import StepPlan
 from app.events.bus import EventBus
 from app.events.types import TradeOpened, TradeSettled
-from app.quotex.base import QuotexAdapter, TradeOutcome
-from app.quotex.errors import OrderAckTimeoutError, QuotexError, ResultTimeoutError
 
 log = structlog.get_logger()
 
@@ -39,7 +43,7 @@ class StepKind(StrEnum):
     WON = "won"
     LOST = "lost"
     DRAW = "draw"
-    FAILED = "failed"  # the order certainly did not reach Quotex
+    FAILED = "failed"  # the order certainly did not reach the broker
     BLOCKED = "blocked"  # the risk guard refused it; nothing was sent
     UNKNOWN = "unknown"  # the order may exist, or its result is missing
 
@@ -81,28 +85,51 @@ _OUTCOME_STATUS = {
 class Executor:
     def __init__(
         self,
-        adapter: QuotexAdapter,
+        adapters: Mapping[Broker, BrokerAdapter],
         *,
         guard: RiskGuard,
         clock: Clock,
         bus: EventBus,
         result_margin_s: float = RESULT_MARGIN_S,
     ) -> None:
-        self._adapter = adapter
+        if not adapters:
+            raise ValueError("the executor needs at least one broker")
+        self._adapters = dict(adapters)
         self._guard = guard
         self._clock = clock
         self._bus = bus
         self._margin = result_margin_s
 
     @property
+    def adapters(self) -> Mapping[Broker, BrokerAdapter]:
+        return self._adapters
+
+    def adapter(self, broker: Broker) -> BrokerAdapter | None:
+        """The broker's adapter, or None when it has no login (it was not built)."""
+        return self._adapters.get(broker)
+
+    @property
     def account_type(self) -> AccountType:
-        return self._adapter.account_type
+        """The account every broker is on: one demo/real switch for all (decision D-75)."""
+        return next(iter(self._adapters.values())).account_type
+
+    def refusal(self, broker: Broker, asset: str, duration_s: int) -> str | None:
+        """Why a chain on `broker` for this asset and trade length must not start, from memory:
+        the broker has no login, is not connected, or would surely refuse the order. None if it may
+        start (the risk guard and the broker still decide on each order)."""
+        adapter = self._adapters.get(broker)
+        if adapter is None:
+            return f"{broker.label} is not set up: its login is missing"
+        if adapter.state is not ConnectionState.CONNECTED:
+            return f"{broker.label} is not connected"
+        return adapter.order_refusal(asset, duration_s)
 
     async def place(
         self, chain: Chain, plan: StepPlan, stamps: Stamps
     ) -> PlacedTrade | StepOutcome:
         """Send the order for `plan`. Returns the open trade, or the outcome if it was refused."""
         spec = chain.spec
+        adapter = self._adapters.get(spec.broker)
         pending = TradeRecord(
             id=new_id(),
             chain_id=spec.id,
@@ -115,17 +142,24 @@ class Executor:
             account_type=spec.account_type,
             status=TradeStatus.PENDING,
             created_at=self._clock.now(),
-            payout_pct=self._payout(spec.asset, spec.duration_s),
+            payout_pct=None if adapter is None else _payout(adapter, spec.asset, spec.duration_s),
             t_msg_received_ns=stamps.msg_received_ns,
             t_parsed_ns=stamps.parsed_ns,
             t_decided_ns=stamps.decided_ns,
+            broker=spec.broker,
         )
-        if self._adapter.account_type is not spec.account_type:
+        if adapter is None:
+            return self._end(
+                pending,
+                StepKind.FAILED,
+                f"{spec.broker.label} is not set up: its login is missing; order not sent",
+            )
+        if adapter.account_type is not spec.account_type:
             return self._end(
                 pending,
                 StepKind.FAILED,
                 f"the account changed from {spec.account_type.value} to "
-                f"{self._adapter.account_type.value} after this chain started; order not sent",
+                f"{adapter.account_type.value} after this chain started; order not sent",
             )
         decision = self._guard.admit(
             OrderRequest(
@@ -138,6 +172,7 @@ class Executor:
                 account_type=spec.account_type,
                 payout_pct=pending.payout_pct,
                 min_payout_pct=spec.min_payout_pct,
+                broker=spec.broker,
             )
         )
         if not decision.allowed:
@@ -150,12 +185,10 @@ class Executor:
             )
         self._bus.publish(TradeOpened(occurred_at=pending.created_at, trade=pending))
         try:
-            ack = await self._adapter.place_order(
-                spec.asset, plan.direction, spec.duration_s, plan.stake
-            )
+            ack = await adapter.place_order(spec.asset, plan.direction, spec.duration_s, plan.stake)
         except OrderAckTimeoutError as exc:
             return self._end(pending, StepKind.UNKNOWN, f"order sent, no confirmation: {exc}")
-        except QuotexError as exc:
+        except BrokerError as exc:
             return self._end(pending, StepKind.FAILED, f"{type(exc).__name__}: {exc}")
         except Exception as exc:
             # We cannot tell whether the order left the machine: never assume it did not.
@@ -179,11 +212,14 @@ class Executor:
         """Wait for the trade's result (as an event, never a fixed sleep)."""
         trade = placed.trade
         order_id = trade.broker_order_id or ""
+        adapter = self._adapters.get(trade.broker)
         try:
-            result = await self._adapter.await_result(order_id, trade.duration_s + self._margin)
+            if adapter is None:  # pragma: no cover - a placed trade's broker always exists
+                raise BrokerError(f"{trade.broker.label} is not set up")
+            result = await adapter.await_result(order_id, trade.duration_s + self._margin)
         except ResultTimeoutError as exc:
             return self._end(trade, StepKind.UNKNOWN, f"no result in time: {exc}")
-        except QuotexError as exc:
+        except BrokerError as exc:
             return self._end(trade, StepKind.UNKNOWN, f"{type(exc).__name__}: {exc}")
         except Exception as exc:
             log.exception("await_result_crashed", trade_id=str(trade.id))
@@ -202,12 +238,6 @@ class Executor:
 
     # --- internals ---
 
-    def _payout(self, asset: str, duration_s: int) -> int | None:
-        try:
-            return self._adapter.payout(asset, duration_s // 60)
-        except QuotexError:
-            return None  # a doubtful payout figure must not stop a trade the group asked for
-
     def _end(
         self, trade: TradeRecord, kind: StepKind, detail: str, *, stop: bool = False
     ) -> StepOutcome:
@@ -218,3 +248,10 @@ class Executor:
         self._guard.release(trade.id)  # not open any more, whatever happened to it
         self._bus.publish(TradeSettled(occurred_at=now, trade=ended))
         return StepOutcome(kind, ended, detail, stop)
+
+
+def _payout(adapter: BrokerAdapter, asset: str, duration_s: int) -> int | None:
+    try:
+        return adapter.payout(asset, duration_s // 60)
+    except BrokerError:
+        return None  # a doubtful payout figure must not stop a trade the group asked for

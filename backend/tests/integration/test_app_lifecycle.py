@@ -12,7 +12,7 @@ from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
 from app.db.repositories import GroupRepository, SignalRepository
-from app.domain.enums import SignalStatus
+from app.domain.enums import Broker, SignalStatus
 from app.engine.engine import Engine
 from app.events.bus import EventBus
 from app.events.types import SignalReceived
@@ -135,9 +135,9 @@ async def test_an_enabled_engine_starts_with_the_app_and_stops_before_the_writer
         [engine] = captured
         assert app.state.trading is engine
         assert await engine.listener.wait_until_connected(2)
-        await wait_for(lambda: engine.adapter.state is ConnectionState.CONNECTED)
+        await wait_for(lambda: engine.adapters[Broker.QUOTEX].state is ConnectionState.CONNECTED)
     assert engine.listener.state.value == "stopped"
-    assert engine.adapter.state is ConnectionState.DISCONNECTED
+    assert engine.adapters[Broker.QUOTEX].state is ConnectionState.DISCONNECTED
 
 
 async def test_a_missing_login_leaves_the_application_up_and_the_engine_failed_with_the_reason(

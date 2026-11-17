@@ -57,6 +57,7 @@ from app.deriv.protocol import (
     describe_lengths,
     duration_params,
     error_of,
+    human_length,
     is_rise_fall,
     login_kind,
     parse_active_symbols,
@@ -65,7 +66,7 @@ from app.deriv.protocol import (
     settled_profit,
     to_money,
 )
-from app.domain.enums import AccountType, Direction
+from app.domain.enums import AccountType, Broker, Direction
 from app.domain.ids import new_id
 from app.domain.records import BalanceSnapshotRecord
 from app.events.bus import EventBus
@@ -101,6 +102,8 @@ class DerivAdapter:
         ping_interval_s: float = 30.0,
         payout_refresh_s: float = 30.0,
         assets_refresh_s: float = 300.0,
+        preload_lengths: bool = True,
+        lengths_per_tick: int = 5,
     ) -> None:
         if account_type is AccountType.REAL and not allow_real:
             raise RealAccountNotAllowedError("real trading is not enabled")
@@ -120,6 +123,8 @@ class DerivAdapter:
         self._ping_interval_s = ping_interval_s
         self._payout_refresh_s = payout_refresh_s
         self._assets_refresh_s = assets_refresh_s
+        self._preload_lengths = preload_lengths
+        self._lengths_per_tick = lengths_per_tick
 
         self._state = ConnectionState.DISCONNECTED
         self._up = asyncio.Event()
@@ -131,6 +136,7 @@ class DerivAdapter:
         self._balance: Decimal | None = None
         self._assets: dict[str, DerivAsset] = {}
         self._lengths: dict[str, list[LengthRange] | None] = {}
+        self._lengths_tried: set[str] = set()  # asked for in the background, on this connection
         self._payouts: dict[tuple[str, int], int] = {}  # (symbol, minutes) -> percent
         self._prepared: set[tuple[str, int]] = set()  # (symbol, seconds), on this connection
         self._wanted_quotes: set[tuple[str, int]] = set()  # made again after a reconnect
@@ -245,6 +251,7 @@ class DerivAdapter:
         self._prepared.clear()
         self._payouts.clear()
         self._lengths.clear()
+        self._lengths_tried.clear()
         self._last_ping = self._last_quotes = self._last_assets = self._seconds()
         self._set_state(ConnectionState.CONNECTED)
         for symbol, duration_s in sorted(self._wanted_quotes):
@@ -320,6 +327,21 @@ class DerivAdapter:
                 )
                 if error_of(reply) is None:
                     self._assets = parse_active_symbols(reply.get("active_symbols"))
+        if self._preload_lengths:
+            await self._load_some_lengths(conn)
+
+    async def _load_some_lengths(self, conn: DerivConnection) -> None:
+        """Learn, a few assets per tick, the trade lengths every open asset allows, so a signal
+        with a length Deriv does not offer is skipped from memory (`order_refusal`), never sent."""
+        todo = [
+            symbol
+            for symbol, asset in sorted(self._assets.items())
+            if asset.is_open and symbol not in self._lengths and symbol not in self._lengths_tried
+        ][: self._lengths_per_tick]
+        for symbol in todo:
+            self._lengths_tried.add(symbol)
+            with contextlib.suppress(BrokerError, TimeoutError):
+                await self._lengths_for(conn, symbol)
 
     async def _reconnect(self) -> None:
         log.warning("deriv_connection_lost")
@@ -395,7 +417,11 @@ class DerivAdapter:
                 BalanceUpdated(
                     occurred_at=now,
                     snapshot=BalanceSnapshotRecord(
-                        id=new_id(), taken_at=now, account_type=self._account_type, balance=amount
+                        id=new_id(),
+                        taken_at=now,
+                        account_type=self._account_type,
+                        balance=amount,
+                        broker=Broker.DERIV,
                     ),
                 )
             )
@@ -412,6 +438,30 @@ class DerivAdapter:
         symbol = deriv_symbol(asset)
         known = self._assets.get(symbol) if symbol is not None else None
         return self._state is ConnectionState.CONNECTED and known is not None and known.is_open
+
+    def order_refusal(self, asset: str, duration_s: int) -> str | None:
+        """Why Deriv would surely refuse this order, from memory; None if nothing known says so
+        (before the asset list or the asset's trade lengths are known, Deriv's answer decides)."""
+        symbol = deriv_symbol(asset)
+        if symbol is None:
+            if asset.lower().endswith("_otc"):
+                return f"{asset} is an OTC pair: Deriv has no OTC pairs"
+            return f"{asset} is not traded on Deriv"
+        if not self._assets:
+            return None
+        known = self._assets.get(symbol)
+        if known is None:
+            return f"{asset} is not traded on Deriv"
+        if not known.is_open:
+            return f"{asset} is closed on Deriv"
+        if symbol in self._lengths:
+            lengths = self._lengths[symbol]
+            if not allows(lengths, duration_s):
+                return (
+                    f"Deriv does not offer {human_length(duration_s)} Rise/Fall on {asset}: it "
+                    f"offers {describe_lengths(lengths or [])}"
+                )
+        return None
 
     def assets(self) -> list[DerivAsset]:
         """Every asset Deriv listed, open or not (for the dashboard and the check script)."""

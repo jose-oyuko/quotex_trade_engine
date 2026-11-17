@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from app.api.schemas.groups import MAX_BASE_STAKE, MAX_STEPS, Multiplier
 from app.domain.enums import (
     AccountType,
+    Broker,
     RepeatKind,
     RunEndReason,
     RunState,
@@ -55,8 +56,15 @@ class SessionIn(BaseModel):
 
     name: Name
     enabled: bool = True
+    broker: Broker = Field(
+        default=Broker.QUOTEX,
+        description="Where its trades are placed: `quotex` or `deriv` (decision D-75).",
+    )
     asset: str = Field(
-        min_length=3, max_length=20, description="The Quotex name: `EURUSD` or `EURUSD_otc`."
+        min_length=3,
+        max_length=20,
+        description="Quotex: `EURUSD` or `EURUSD_otc`. Deriv: a forex pair (`EURUSD`, 15 minutes "
+        "or more) or a synthetic index (`R_75`, `1HZ100V`, 1 minute or more).",
     )
     duration_s: int = Field(
         description="The trade length in seconds, also the candle length: 60, 120, 180, 300, 600, "
@@ -147,6 +155,7 @@ class SessionOut(BaseModel):
     name: str
     enabled: bool
     group_id: int = Field(description="The session's hidden group: its chains and trades carry it.")
+    broker: Broker
     asset: str
     duration_s: int
     start_time: time

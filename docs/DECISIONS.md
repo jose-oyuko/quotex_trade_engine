@@ -753,6 +753,28 @@ schemas on 2026-11-17).** Deriv has replaced the API these decisions were writte
   on a stale payout.
 - **Trade lengths (D-77).** `contracts_for` may write a length without a unit (its example says `"5"`); a
   length that cannot be read is never guessed: Deriv's own refusal of the order decides, and nothing is placed.
+- **Rise/Fall entries (D-77), seen on the live demo.** Deriv marks Rise/Fall (`callput`, `CALL`/`PUT`) with
+  `barriers: 1` (the entry price); Higher/Lower has its own `higherlower` category, and `callputequal` (an
+  equal exit wins) is a different contract. Rise/Fall is recognised by category and type only.
+
+**D-75 settled in Phase 20 (how the two brokers share the engine).**
+- **One switch, all or nothing.** The demo/real switch moves every broker or none: a broker that cannot go to
+  REAL (no permission, no Deriv real token) refuses the switch, and the brokers already moved go back.
+- **A signal the broker cannot take is skipped, before a chain starts**, with the reason in the inbox: the
+  broker has no login ("Deriv is not set up"), is not connected ("Quotex is not connected"), does not trade the
+  asset (`_otc` on Deriv), or does not offer the trade length on it (Deriv: "it offers 15 min to 365 days").
+  All read from memory: the Deriv adapter learns every open asset's trade lengths in the background after it
+  connects (a few assets a second). For Quotex this replaces "the chain starts and fails" when Quotex is
+  down; Quotex's closed assets are still refused when the order is placed, as before.
+- **Limits per broker.** The day's result, the daily stop-loss and profit target, the open-trade count and the
+  exposure limit are counted per broker and account type; a group's own limits are unchanged (a group has
+  one broker). The day's figure for the dashboard is given per broker and as a labelled total.
+- **One session at a time stays**, across both brokers (D-71): two sessions' windows may not overlap even if
+  they are on different brokers.
+- **Indexes.** The broker indexes are added next to the account-type ones the reports use today; the old
+  ones go when the reports filter by broker (Phase 21).
+- **Stopping** cancels every broker's connect loop first, then closes each broker with a 10 s limit, so a
+  broker that does not answer can no longer keep the application from stopping (the hang of 2026-11-13).
 
 ---
 

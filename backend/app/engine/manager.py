@@ -9,6 +9,10 @@ A flip group runs one chain at a time (decision D-9), or, when its owner allows 
 chains of a trading session (D-71) come in through `open_session_chain` instead: the session
 scheduler decides how many pairs run, so D-9 is not applied to them.
 
+Each group trades on its own broker (decision D-75). A signal is skipped, with the reason in the
+inbox, when that broker has no login, is not connected, or would surely refuse the order (an asset
+it does not trade, a trade length it does not offer): all read from memory.
+
 A signal is handled synchronously (`on_signal` never waits): it creates the chain in memory,
 publishes `chain.started` and starts the task. The task's first act is the order. Nothing here
 touches the database; every change is an event for the DB writer.
@@ -23,10 +27,11 @@ from uuid import UUID
 
 import structlog
 
+from app.brokers.base import TradeOutcome
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
-from app.domain.enums import ChainStatus, SignalStatus, TradeStatus
+from app.domain.enums import Broker, ChainStatus, SignalStatus, TradeStatus
 from app.domain.ids import new_id
 from app.domain.records import GroupSettingsRecord, RiskEventRecord, SignalRecord
 from app.engine.chain import Chain, ChainSpec
@@ -44,7 +49,6 @@ from app.events.types import (
     SignalReceived,
     TradeSettled,
 )
-from app.quotex.base import TradeOutcome
 from app.signals.models import Signal
 
 log = structlog.get_logger()
@@ -104,6 +108,7 @@ class ChainManager:
         self._clock = clock
         self._tasks = tasks
         self._settings: dict[int, GroupSettingsRecord] = {}
+        self._brokers: dict[int, Broker] = {}  # each group's broker
         self._chains: dict[UUID, Chain] = {}
         self._by_group: defaultdict[int, set[UUID]] = defaultdict(set)
         self._drivers: dict[UUID, asyncio.Task[None]] = {}
@@ -116,12 +121,18 @@ class ChainManager:
 
     # --- group settings (in memory; updated when a group is edited) ---
 
-    def set_group(self, settings: GroupSettingsRecord) -> None:
-        """New settings apply to chains created from now on; running chains keep theirs."""
+    def set_group(self, settings: GroupSettingsRecord, broker: Broker = Broker.QUOTEX) -> None:
+        """New settings (and broker) apply to chains created from now on; running chains keep
+        theirs."""
         self._settings[settings.group_id] = settings
+        self._brokers[settings.group_id] = broker
 
     def remove_group(self, group_id: int) -> None:
         self._settings.pop(group_id, None)
+        self._brokers.pop(group_id, None)
+
+    def group_broker(self, group_id: int) -> Broker:
+        return self._brokers.get(group_id, Broker.QUOTEX)
 
     # --- queries ---
 
@@ -156,6 +167,10 @@ class ChainManager:
         if settings is None:
             self._ignore(signal, "group has no strategy settings")
             return
+        broker = self.group_broker(signal.group_id)
+        if (refused := self._executor.refusal(broker, signal.asset, signal.duration_s)) is not None:
+            self._ignore(signal, refused)
+            return
         partner: Chain | None = None
         if settings.strategy in FLIP_STRATEGIES and (
             running := self.active_chains(signal.group_id)
@@ -164,7 +179,7 @@ class ChainManager:
                 self._ignore(signal, refusal)
                 return
             partner = running[0]
-        self._start_chain(signal, settings, partner=partner)
+        self._start_chain(signal, settings, broker, partner=partner)
 
     def open_session_chain(self, signal: Signal, *, run_id: UUID, pair_no: int) -> UUID | None:
         """Start one leg of a trading session's pair (decision D-71). The session scheduler is the
@@ -177,13 +192,18 @@ class ChainManager:
         if settings is None:
             self._ignore(signal, "the session has no strategy settings")
             return None
-        chain = self._start_chain(signal, settings, session=(run_id, pair_no))
+        broker = self.group_broker(signal.group_id)
+        if (refused := self._executor.refusal(broker, signal.asset, signal.duration_s)) is not None:
+            self._ignore(signal, refused)
+            return None
+        chain = self._start_chain(signal, settings, broker, session=(run_id, pair_no))
         return None if chain is None else chain.id
 
     def _start_chain(
         self,
         signal: Signal,
         settings: GroupSettingsRecord,
+        broker: Broker,
         *,
         partner: Chain | None = None,
         session: tuple[UUID, int] | None = None,
@@ -206,6 +226,7 @@ class ChainManager:
                 min_payout_pct=settings.min_payout_pct,
                 session_run_id=session[0] if session else None,
                 pair_no=session[1] if session else None,
+                broker=broker,
             ),
             now,
         )
@@ -406,7 +427,7 @@ class ChainManager:
     def recover(self, state: RecoveryState) -> RecoverySummary:
         """Deal with what was in flight when the application stopped.
 
-        We cannot see Quotex's history, and a follow-up placed minutes late is not the trade the
+        We cannot see the broker's history, and a follow-up placed minutes late is not the trade the
         strategy asked for, so everything unfinished is marked `unknown`, loudly (a `risk.tripped`
         event per affected group) and never continued or retried (decision D-35).
         """
@@ -417,6 +438,7 @@ class ChainManager:
             self._bus.publish(TradeSettled(occurred_at=now, trade=ended))
             trades += 1
         affected: dict[int, int] = defaultdict(int)
+        where: dict[int, Broker] = {}
         for chain in state.open_chains:
             ended_chain = replace(
                 chain,
@@ -427,6 +449,7 @@ class ChainManager:
             )
             self._bus.publish(ChainEnded(occurred_at=now, chain=ended_chain))
             affected[chain.group_id] += 1
+            where[chain.group_id] = chain.broker
         for group_id, count in affected.items():
             self._bus.publish(
                 RiskTripped(
@@ -436,7 +459,7 @@ class ChainManager:
                         occurred_at=now,
                         kind="restart_unknown",
                         message=f"{count} chain(s) were running when the application stopped "
-                        "and were marked unknown: check them on Quotex",
+                        f"and were marked unknown: check them on {where[group_id].label}",
                         group_id=group_id,
                     ),
                 )

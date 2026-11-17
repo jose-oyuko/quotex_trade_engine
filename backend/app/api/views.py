@@ -105,6 +105,7 @@ def session_out(view: SessionView, engine: Engine | None) -> SessionOut:
         max_pairs=record.max_pairs,
         mode=record.mode,
         max_open_pairs=record.max_open_pairs,
+        broker=record.broker,
         strategy=None
         if settings is None
         else SessionStrategyOut(
@@ -134,6 +135,7 @@ def group_out(view: GroupView, *, paused: bool, active_chains: int) -> GroupOut:
         telegram_chat_id=group.telegram_chat_id,
         title=group.title,
         enabled=group.enabled,
+        broker=group.broker,
         created_at=group.created_at,
         updated_at=group.updated_at,
         settings=settings_out(view.settings) if view.settings else None,

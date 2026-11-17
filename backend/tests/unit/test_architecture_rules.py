@@ -48,15 +48,19 @@ def test_the_guard_actually_sees_imports() -> None:
 
 def test_only_the_deriv_package_talks_to_deriv() -> None:
     """Decision D-74: Deriv is reached through `app/deriv/` only; it is the only part of the
-    application that opens a WebSocket or makes an HTTP call of its own."""
+    application that opens a WebSocket or makes an HTTP call of its own. The engine's factory
+    (where the adapters are built) is the one place outside it that names it."""
+    builder = Path("engine") / "factory.py"
     offenders = [
         f"{path.relative_to(APP)}: {module}"
         for path in APP.rglob("*.py")
         if path.relative_to(APP).parts[0] != "deriv"
         for module in imported_modules(path)
-        if module.split(".")[0] in {"websockets", "httpx"} or module.startswith("app.deriv")
+        if module.split(".")[0] in {"websockets", "httpx"}
+        or (module.startswith("app.deriv") and path.relative_to(APP) != builder)
     ]
     assert offenders == []
+    assert "app.deriv.factory" in imported_modules(APP / builder)
     assert "websockets.asyncio.client" in imported_modules(APP / "deriv" / "connection.py")
 
 

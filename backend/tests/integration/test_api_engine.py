@@ -11,6 +11,7 @@ import pytest
 
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
+from app.domain.enums import Broker
 from app.engine.engine import Engine
 from app.events.bus import EventBus
 from app.quotex.base import ConnectionState
@@ -35,7 +36,7 @@ async def started(rig: ApiRig) -> FakeParts:
     assert await fakes.engine.listener.wait_until_connected(2)
 
     async def connected() -> bool:
-        return fakes.engine.adapter.state is ConnectionState.CONNECTED
+        return fakes.engine.adapters[Broker.QUOTEX].state is ConnectionState.CONNECTED
 
     await rig.eventually(connected)
     return fakes
@@ -73,7 +74,13 @@ async def test_a_new_installation_has_the_engine_stopped_and_says_what_it_would_
             "Telegram API id",
             "Telegram login",
             "Quotex login",
+            "Deriv app id",
+            "Deriv demo token",
+            "Deriv real token",
         }
+        # one broker is enough (decision D-75): with neither, both are listed as needed
+        assert "Deriv demo token" in body["missing_logins"]
+        assert "Deriv real token" not in body["missing_logins"]
         # nothing that needs the engine works yet, and says how to fix it
         refused = await rig.client.post(f"{API}/kill-switch")
         assert refused.status_code == 503
@@ -132,7 +139,7 @@ async def test_restart_builds_a_new_engine_and_leaves_no_task_behind(tmp_path: P
 def _all_connected(rig: ApiRig) -> Any:
     async def check() -> bool:
         fakes = rig.parts[-1]
-        return fakes.engine.adapter.state is ConnectionState.CONNECTED
+        return fakes.engine.adapters[Broker.QUOTEX].state is ConnectionState.CONNECTED
 
     return check
 
@@ -480,7 +487,7 @@ async def test_the_permission_survives_a_restart_but_the_engine_always_starts_on
     async with running_api(tmp_path) as again:  # the engine comes back by itself
         assert (await engine_state(again))["real_trading_allowed"] is True
         assert (await again.client.get(f"{API}/account")).json()["account_type"] == "demo"
-        assert again.app.state.trading.adapter.account_type.value == "demo"
+        assert again.app.state.trading.adapters[Broker.QUOTEX].account_type.value == "demo"
 
 
 async def test_allowing_real_money_twice_is_one_entry_in_the_risk_log(tmp_path: Path) -> None:

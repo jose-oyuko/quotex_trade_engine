@@ -336,3 +336,18 @@ def _risk_event(rig):  # type: ignore[no-untyped-def]
         return any(e["kind"] == "group_max_stake" for e in items)
 
     return check
+
+
+async def test_a_group_trades_on_quotex_unless_deriv_is_chosen(tmp_path: Path) -> None:
+    """Decision D-75: the broker is part of the group, Quotex by default."""
+    async with running_api(tmp_path) as rig:
+        created = await rig.create_group()
+        assert created["broker"] == "quotex"
+        edit = {"title": "On Deriv", "enabled": True, "broker": "deriv"}
+        edit["settings"] = group_body()["settings"]
+        response = await rig.client.put(f"{API}/1", json=edit)
+        assert response.status_code == 200, response.text
+        assert response.json()["broker"] == "deriv"
+        assert (await rig.client.get(f"{API}/1")).json()["broker"] == "deriv"  # it was stored
+        bad = await rig.client.put(f"{API}/1", json={**edit, "broker": "binance"})
+        assert bad.status_code == 422

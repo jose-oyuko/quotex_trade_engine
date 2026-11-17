@@ -18,7 +18,14 @@ from decimal import Decimal
 from uuid import UUID
 
 from app.core.errors import DomainError
-from app.domain.enums import ACTIVE_CHAIN_STATUSES, AccountType, ChainStatus, Direction, Strategy
+from app.domain.enums import (
+    ACTIVE_CHAIN_STATUSES,
+    AccountType,
+    Broker,
+    ChainStatus,
+    Direction,
+    Strategy,
+)
 from app.domain.records import ChainRecord
 from app.engine.strategies import StepPlan, has_follow_up, plan_step
 from app.quotex.base import TradeOutcome
@@ -47,6 +54,7 @@ class ChainSpec:
     min_payout_pct: int = 0  # the group's minimum payout, for the risk guard (not stored)
     session_run_id: UUID | None = None  # set for the chains of a trading session's pairs
     pair_no: int | None = None
+    broker: Broker = Broker.QUOTEX  # the group's (or session's) broker when the chain started
 
 
 class Chain:
@@ -147,6 +155,7 @@ class Chain:
             end_reason=self.end_reason,
             session_run_id=s.session_run_id,
             pair_no=s.pair_no,
+            broker=s.broker,
         )
 
     # --- internals ---

@@ -16,6 +16,11 @@ class Broker(StrEnum):
     QUOTEX = "quotex"
     DERIV = "deriv"
 
+    @property
+    def label(self) -> str:
+        """The name the owner reads: "Quotex", "Deriv"."""
+        return self.value.capitalize()
+
 
 class UserRole(StrEnum):
     ADMIN = "admin"  # the owner; invited users (a later phase) get their own roles

@@ -72,6 +72,7 @@ async def create_group(
         telegram_chat_id=body.telegram_chat_id,
         title=body.title,
         enabled=body.enabled,
+        broker=body.broker,
         settings=_settings_values(body.settings),
     )
     response.headers["Location"] = f"/api/v1/groups/{view.group.id}"
@@ -89,7 +90,11 @@ async def update_group(
 ) -> GroupOut:
     """Chains already running keep the settings they started with."""
     view = await groups.update(
-        group_id, title=body.title, enabled=body.enabled, settings=_settings_values(body.settings)
+        group_id,
+        title=body.title,
+        enabled=body.enabled,
+        broker=body.broker,
+        settings=_settings_values(body.settings),
     )
     return _out(view, engine, live)
 

@@ -15,6 +15,7 @@ from uuid import UUID
 from app.domain.enums import (
     AccountType,
     AssetSuffixMode,
+    Broker,
     ChainStatus,
     Direction,
     GroupSource,
@@ -42,6 +43,7 @@ class GroupRecord:
     updated_at: datetime
     id: int | None = None
     source: GroupSource = GroupSource.TELEGRAM
+    broker: Broker = Broker.QUOTEX  # where its trades are placed (decision D-75)
 
 
 @dataclass(slots=True, frozen=True)
@@ -121,6 +123,7 @@ class ChainRecord:
     # Chains opened by a trading session: the run, and which pair of the run (1, 2, ...)
     session_run_id: UUID | None = None
     pair_no: int | None = None
+    broker: Broker = Broker.QUOTEX
 
 
 @dataclass(slots=True, frozen=True)
@@ -151,6 +154,7 @@ class TradeRecord:
     t_decided_ns: int | None = None
     t_order_sent_ns: int | None = None
     t_order_acked_ns: int | None = None
+    broker: Broker = Broker.QUOTEX
 
 
 @dataclass(slots=True, frozen=True)
@@ -169,6 +173,7 @@ class BalanceSnapshotRecord:
     taken_at: datetime
     account_type: AccountType
     balance: Decimal
+    broker: Broker = Broker.QUOTEX
 
 
 @dataclass(slots=True, frozen=True)
@@ -187,7 +192,7 @@ class SessionRecord:
     name: str
     enabled: bool
     group_id: int
-    asset: str  # the Quotex name: "EURUSD" or "EURUSD_otc"
+    asset: str  # our name: "EURUSD", "EURUSD_otc" (Quotex only) or a Deriv index like "R_75"
     duration_s: int  # the trade length, which is also the candle length
     start_time: time  # wall-clock times in `timezone`; `end_time` may be before `start_time`
     end_time: time  # (the window then crosses midnight)
@@ -207,6 +212,7 @@ class SessionRecord:
     # `max_open_pairs` open at once (a pair is open while at least one of its chains runs)
     mode: SessionMode = SessionMode.SEQUENTIAL
     max_open_pairs: int = 1
+    broker: Broker = Broker.QUOTEX  # its hidden group has the same broker
 
     def __post_init__(self) -> None:
         if self.max_open_pairs < 1:

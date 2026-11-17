@@ -55,9 +55,27 @@ def _env_has(settings: Settings, field: str) -> bool:
     return bool(value.get_secret_value().strip()) if isinstance(value, SecretStr) else True
 
 
+# (Settings field, label): Deriv's logins, read from `.env` until the dashboard stores them
+DERIV_LOGINS = (
+    ("deriv_app_id", "Deriv app id"),
+    ("deriv_token_demo", "Deriv demo token"),
+    ("deriv_token_real", "Deriv real token"),
+)
+
+
 async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]:
-    """Which logins the engine would have, and where each comes from (never the values)."""
+    """Which logins the engine would have, and where each comes from (never the values). One
+    broker is enough (decision D-75): Quotex's email and password are needed only without Deriv's
+    app id and demo token, and the other way round."""
     status = {item.name: item for item in (await vault.status()).secrets}
+    deriv_ready = _env_has(settings, "deriv_app_id") and _env_has(settings, "deriv_token_demo")
+    quotex_ready = all(
+        (status[name].set and status[name].readable) or _env_has(settings, field)
+        for name, field in (
+            ("quotex_email", "quotex_email"),
+            ("quotex_password", "quotex_password"),
+        )
+    )
     items: list[LoginItem] = []
     for name, field, label in STORED_LOGINS:
         if name == "telegram_session":
@@ -67,7 +85,8 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
             items.append(await _quotex_login(settings, vault))
             continue
         stored = status[name]
-        needed = not name.startswith("telegram")  # Telegram is optional (decision D-71)
+        # Telegram is optional (decision D-71); Quotex is when Deriv can trade instead (D-75)
+        needed = not name.startswith("telegram") and not deriv_ready
         if stored.set and stored.readable:
             items.append(LoginItem(label, True, "dashboard", required=needed))
         elif stored.set:
@@ -76,6 +95,10 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
             items.append(LoginItem(label, True, ".env", required=needed))
         else:
             items.append(LoginItem(label, False, "missing", required=needed))
+    for field, label in DERIV_LOGINS:
+        needed = field != "deriv_token_real" and not quotex_ready
+        present = _env_has(settings, field)
+        items.append(LoginItem(label, present, ".env" if present else "missing", required=needed))
     return items
 
 

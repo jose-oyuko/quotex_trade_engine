@@ -142,6 +142,9 @@
             "title": "Balance",
             "type": "string"
           },
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
+          },
           "taken_at": {
             "format": "date-time",
             "title": "Taken At",
@@ -151,6 +154,7 @@
         "required": [
           "taken_at",
           "account_type",
+          "broker",
           "balance"
         ],
         "title": "BalanceOut",
@@ -244,6 +248,15 @@
         ],
         "title": "BreakdownRowOut",
         "type": "object"
+      },
+      "Broker": {
+        "description": "Where a trade is placed (decision D-75). Groups and sessions choose one from Phase 20.",
+        "enum": [
+          "quotex",
+          "deriv"
+        ],
+        "title": "Broker",
+        "type": "string"
       },
       "ChainAdvancedMessage": {
         "properties": {
@@ -368,6 +381,9 @@
             "title": "Base Stake",
             "type": "string"
           },
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
+          },
           "consecutive_losses": {
             "title": "Consecutive Losses",
             "type": "integer"
@@ -486,6 +502,7 @@
           "origin_direction",
           "duration_s",
           "account_type",
+          "broker",
           "strategy",
           "status",
           "step",
@@ -780,8 +797,16 @@
           "account_type": {
             "$ref": "#/components/schemas/AccountType"
           },
+          "by_broker": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Net result since `since` per broker (`quotex`, `deriv`).",
+            "title": "By Broker",
+            "type": "object"
+          },
           "pnl": {
-            "description": "Net result since `since`; negative is a loss.",
+            "description": "Net result since `since` on every broker added up; negative is a loss. Each broker's own figure is in `by_broker` (the daily limits count per broker).",
             "title": "Pnl",
             "type": "string"
           },
@@ -1432,6 +1457,11 @@
       "GroupCreateIn": {
         "additionalProperties": false,
         "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/Broker",
+            "default": "quotex",
+            "description": "Where its trades are placed: `quotex` or `deriv` (decision D-75)."
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -1465,6 +1495,9 @@
           "active_chains": {
             "title": "Active Chains",
             "type": "integer"
+          },
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
           },
           "created_at": {
             "format": "date-time",
@@ -1512,6 +1545,7 @@
           "telegram_chat_id",
           "title",
           "enabled",
+          "broker",
           "created_at",
           "updated_at",
           "settings",
@@ -1769,6 +1803,11 @@
         "additionalProperties": false,
         "description": "Replaces the group's title, enabled flag and settings. The chat cannot be changed: that\nwould be a different group.",
         "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/Broker",
+            "default": "quotex",
+            "description": "Where its trades are placed: `quotex` or `deriv` (decision D-75)."
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -1804,6 +1843,16 @@
             ],
             "title": "Database",
             "type": "string"
+          },
+          "deriv": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConnectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "engine": {
             "$ref": "#/components/schemas/EngineStatus"
@@ -3122,11 +3171,16 @@
         "additionalProperties": false,
         "properties": {
           "asset": {
-            "description": "The Quotex name: `EURUSD` or `EURUSD_otc`.",
+            "description": "Quotex: `EURUSD` or `EURUSD_otc`. Deriv: a forex pair (`EURUSD`, 15 minutes or more) or a synthetic index (`R_75`, `1HZ100V`, 1 minute or more).",
             "maxLength": 20,
             "minLength": 3,
             "title": "Asset",
             "type": "string"
+          },
+          "broker": {
+            "$ref": "#/components/schemas/Broker",
+            "default": "quotex",
+            "description": "Where its trades are placed: `quotex` or `deriv` (decision D-75)."
           },
           "duration_s": {
             "description": "The trade length in seconds, also the candle length: 60, 120, 180, 300, 600, 900, 1800, 3600 or 14400.",
@@ -3285,6 +3339,9 @@
             "title": "Asset",
             "type": "string"
           },
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3432,6 +3489,7 @@
           "name",
           "enabled",
           "group_id",
+          "broker",
           "asset",
           "duration_s",
           "start_time",
@@ -4028,7 +4086,16 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The balance in use: Quotex's, or the only broker's. See `balances`."
+          },
+          "balances": {
+            "description": "The balance of the account in use on each connected broker (never added up).",
+            "items": {
+              "$ref": "#/components/schemas/BalanceOut"
+            },
+            "title": "Balances",
+            "type": "array"
           },
           "connections": {
             "additionalProperties": {
@@ -4305,6 +4372,9 @@
             "title": "Asset",
             "type": "string"
           },
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
+          },
           "broker_order_id": {
             "anyOf": [
               {
@@ -4436,6 +4506,7 @@
           "duration_s",
           "stake",
           "account_type",
+          "broker",
           "status",
           "created_at",
           "payout_pct",

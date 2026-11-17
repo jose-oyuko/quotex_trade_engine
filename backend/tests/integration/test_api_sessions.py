@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -396,3 +397,34 @@ async def test_a_session_in_candle_mode_opens_pairs_through_the_api(tmp_path: Pa
         assert len(rig.fakes.engine.scheduler._sessions) == 1
         stopped = await rig.client.post(f"{API}/{created['id']}/stop")
         assert stopped.status_code == 200
+
+
+# --- the broker (decision D-75) ---
+
+
+async def test_a_deriv_session_takes_deriv_names_and_its_hidden_group_trades_there(
+    tmp_path: Path,
+) -> None:
+    async with running_api(tmp_path) as rig:
+        created = await create(rig, broker="deriv", asset="R_75", duration_s=60)
+        assert created["broker"] == "deriv" and created["asset"] == "R_75"
+        assert (await create(rig, name="Quotex one", start_time="13:00", end_time="14:00"))[
+            "broker"
+        ] == "quotex"
+        with sqlite3.connect(rig.settings.database_path) as db:
+            brokers = dict(db.execute("SELECT title, broker FROM groups"))
+        assert brokers == {"Session: London open": "deriv", "Session: Quotex one": "quotex"}
+
+
+async def test_a_deriv_session_refuses_otc_pairs_and_quotex_refuses_deriv_names(
+    tmp_path: Path,
+) -> None:
+    async with running_api(tmp_path) as rig:
+        otc = await rig.client.post(
+            API, json=session_body(broker="deriv", asset="EURUSD_otc", duration_s=900)
+        )
+        assert otc.status_code == 422
+        assert "Deriv has none" in otc.json()["error"]["message"]
+        index = await rig.client.post(API, json=session_body(asset="R_75", duration_s=60))
+        assert index.status_code == 422
+        assert "not a Quotex asset name" in index.json()["error"]["message"]

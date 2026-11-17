@@ -138,7 +138,7 @@ async def set_account(
         await auth.confirm_password(user, body.password)
     await engine.switch_account(body.account_type)
     return AccountOut(
-        account_type=engine.adapter.account_type, real_trading_allowed=controller.real_allowed
+        account_type=engine.account_type, real_trading_allowed=controller.real_allowed
     )
 
 

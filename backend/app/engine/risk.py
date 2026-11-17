@@ -33,7 +33,7 @@ import structlog
 
 from app.core.clock import Clock
 from app.core.errors import DomainError
-from app.domain.enums import RESULT_TRADE_STATUSES, AccountType
+from app.domain.enums import RESULT_TRADE_STATUSES, AccountType, Broker
 from app.domain.ids import new_id
 from app.domain.records import AppSettingRecord, JsonScalar, RiskEventRecord, TradeRecord
 from app.events.bus import EventBus
@@ -126,6 +126,7 @@ class OrderRequest:
     account_type: AccountType
     payout_pct: int | None  # None = unknown: the adapter will refuse an unknown asset itself
     min_payout_pct: int = 0
+    broker: Broker = Broker.QUOTEX
 
 
 @dataclass(slots=True, frozen=True)
@@ -142,6 +143,7 @@ ALLOWED = RiskDecision(True)
 class _Open:
     group_id: int
     stake: Decimal
+    broker: Broker
 
 
 @dataclass(slots=True, frozen=True)
@@ -153,13 +155,17 @@ class _Result:
     account_type: AccountType
     group_id: int
     profit: Decimal
+    broker: Broker
 
 
 @dataclass(slots=True)
 class _DayTotals:
+    """The day's results, kept apart per broker (decision D-75): a Quotex loss never counts
+    towards a Deriv limit, and the other way round."""
+
     start: datetime
-    by_group: dict[tuple[AccountType, int], Decimal] = field(default_factory=dict)
-    by_account: dict[AccountType, Decimal] = field(default_factory=dict)
+    by_group: dict[tuple[Broker, AccountType, int], Decimal] = field(default_factory=dict)
+    by_account: dict[tuple[Broker, AccountType], Decimal] = field(default_factory=dict)
 
 
 # How long settled results are remembered in memory (the same window the start-up reads back).
@@ -193,6 +199,8 @@ class RiskGuard:
         self._paused: set[int] = set()
         self._open: dict[UUID, _Open] = {}
         self._open_stake = Decimal(0)
+        self._open_stake_by: dict[Broker, Decimal] = {}
+        self._open_count_by: dict[Broker, int] = {}
         self._ledger: deque[_Result] = deque()
         self._day = _DayTotals(day_start(clock.now(), self._tz, self._limits.reset_time))
 
@@ -261,8 +269,11 @@ class RiskGuard:
         if blocked is not None:
             self._trip(blocked, request)
             return blocked
-        self._open[request.trade_id] = _Open(request.group_id, request.stake)
+        self._open[request.trade_id] = _Open(request.group_id, request.stake, request.broker)
         self._open_stake += request.stake
+        broker = request.broker
+        self._open_stake_by[broker] = self._open_stake_by.get(broker, Decimal(0)) + request.stake
+        self._open_count_by[broker] = self._open_count_by.get(broker, 0) + 1
         return ALLOWED
 
     def release(self, trade_id: UUID) -> None:
@@ -270,27 +281,53 @@ class RiskGuard:
         reserved = self._open.pop(trade_id, None)
         if reserved is not None:
             self._open_stake -= reserved.stake
+            self._open_stake_by[reserved.broker] -= reserved.stake
+            self._open_count_by[reserved.broker] -= 1
 
     def settled(self, trade: TradeRecord) -> None:
         """A trade with a known result: free its reservation and book its profit for the day."""
         self.release(trade.id)
         if trade.status in RESULT_TRADE_STATUSES and trade.profit is not None:
-            self._book(trade.account_type, trade.group_id, trade.profit, self._clock.now())
+            self._book(
+                trade.broker, trade.account_type, trade.group_id, trade.profit, self._clock.now()
+            )
 
     @property
     def open_trades(self) -> int:
+        """Open trades on every broker (for "may the account be switched?")."""
         return len(self._open)
 
     @property
     def open_exposure(self) -> Decimal:
+        """The stakes of the open trades on every broker."""
         return self._open_stake
 
-    def day_pnl(self, account_type: AccountType, group_id: int | None = None) -> Decimal:
-        """Net result of the current day (positive = profit)."""
+    def open_trades_of(self, broker: Broker) -> int:
+        return self._open_count_by.get(broker, 0)
+
+    def open_exposure_of(self, broker: Broker) -> Decimal:
+        return self._open_stake_by.get(broker, Decimal(0))
+
+    def day_pnl(
+        self,
+        account_type: AccountType,
+        group_id: int | None = None,
+        *,
+        broker: Broker | None = None,
+    ) -> Decimal:
+        """Net result of the current day (positive = profit), on one broker, or added up over
+        every broker when `broker` is None (only where the total is labelled as such)."""
         self._roll(self._clock.now())
+        brokers = tuple(Broker) if broker is None else (broker,)
         if group_id is None:
-            return self._day.by_account.get(account_type, Decimal(0))
-        return self._day.by_group.get((account_type, group_id), Decimal(0))
+            return sum(
+                (self._day.by_account.get((b, account_type), Decimal(0)) for b in brokers),
+                Decimal(0),
+            )
+        return sum(
+            (self._day.by_group.get((b, account_type, group_id), Decimal(0)) for b in brokers),
+            Decimal(0),
+        )
 
     @property
     def current_day_start(self) -> datetime:
@@ -317,7 +354,9 @@ class RiskGuard:
         self._roll(now)
         for trade in recent_settled_trades:
             if trade.settled_at is not None and trade.profit is not None:
-                self._book(trade.account_type, trade.group_id, trade.profit, trade.settled_at)
+                self._book(
+                    trade.broker, trade.account_type, trade.group_id, trade.profit, trade.settled_at
+                )
 
     def _restore(self, setting: AppSettingRecord) -> None:
         key, value = setting.key, setting.value
@@ -349,10 +388,12 @@ class RiskGuard:
                 _add(totals, result)
         return totals
 
-    def _book(self, account: AccountType, group_id: int, profit: Decimal, at: datetime) -> None:
+    def _book(
+        self, broker: Broker, account: AccountType, group_id: int, profit: Decimal, at: datetime
+    ) -> None:
         """Remember a settled result (made at `at`); it joins today's totals if it is today's."""
         self._roll(self._clock.now())
-        result = _Result(at, account, group_id, profit)
+        result = _Result(at, account, group_id, profit, broker)
         self._ledger.append(result)
         cutoff = self._clock.now() - LEDGER_WINDOW
         while self._ledger and self._ledger[0].at < cutoff:
@@ -385,12 +426,14 @@ class RiskGuard:
                 f"stake {r.stake} exceeds this group's maximum {group.max_stake}",
             )
         self._roll(self._clock.now())
-        account_pnl = self._day.by_account.get(r.account_type, Decimal(0))
-        group_pnl = self._day.by_group.get((r.account_type, r.group_id), Decimal(0))
+        # Per broker (decision D-75): different accounts, different money
+        account_pnl = self._day.by_account.get((r.broker, r.account_type), Decimal(0))
+        group_pnl = self._day.by_group.get((r.broker, r.account_type, r.group_id), Decimal(0))
+        on = f" on {r.broker.label}"
         if limits.daily_stop_loss is not None and account_pnl <= -limits.daily_stop_loss:
             return _block(
                 BlockKind.DAILY_STOP_LOSS,
-                f"the day's result {account_pnl} has reached the stop-loss "
+                f"the day's result{on} {account_pnl} has reached the stop-loss "
                 f"-{limits.daily_stop_loss}",
             )
         if group.daily_stop_loss is not None and group_pnl <= -group.daily_stop_loss:
@@ -402,7 +445,7 @@ class RiskGuard:
         if limits.daily_profit_target is not None and account_pnl >= limits.daily_profit_target:
             return _block(
                 BlockKind.DAILY_PROFIT_TARGET,
-                f"the day's result {account_pnl} has reached the profit target "
+                f"the day's result{on} {account_pnl} has reached the profit target "
                 f"{limits.daily_profit_target}",
             )
         if group.daily_profit_target is not None and group_pnl >= group.daily_profit_target:
@@ -411,19 +454,21 @@ class RiskGuard:
                 f"this group's result today {group_pnl} has reached its profit target "
                 f"{group.daily_profit_target}",
             )
+        open_count = self.open_trades_of(r.broker)
         if (
             limits.max_concurrent_trades is not None
-            and len(self._open) + 1 > limits.max_concurrent_trades
+            and open_count + 1 > limits.max_concurrent_trades
         ):
             return _block(
                 BlockKind.MAX_CONCURRENT_TRADES,
-                f"{len(self._open)} trades are already open; the limit is "
+                f"{open_count} trades are already open{on}; the limit is "
                 f"{limits.max_concurrent_trades}",
             )
-        if limits.max_exposure is not None and self._open_stake + r.stake > limits.max_exposure:
+        open_stake = self.open_exposure_of(r.broker)
+        if limits.max_exposure is not None and open_stake + r.stake > limits.max_exposure:
             return _block(
                 BlockKind.MAX_EXPOSURE,
-                f"open stakes {self._open_stake} + {r.stake} would exceed the exposure limit "
+                f"open stakes{on} {open_stake} + {r.stake} would exceed the exposure limit "
                 f"{limits.max_exposure}",
             )
         return None
@@ -464,11 +509,10 @@ class RiskGuard:
 
 
 def _add(totals: _DayTotals, result: _Result) -> None:
-    key = (result.account_type, result.group_id)
+    key = (result.broker, result.account_type, result.group_id)
     totals.by_group[key] = totals.by_group.get(key, Decimal(0)) + result.profit
-    totals.by_account[result.account_type] = (
-        totals.by_account.get(result.account_type, Decimal(0)) + result.profit
-    )
+    account = (result.broker, result.account_type)
+    totals.by_account[account] = totals.by_account.get(account, Decimal(0)) + result.profit
 
 
 def _block(kind: BlockKind, message: str) -> RiskDecision:

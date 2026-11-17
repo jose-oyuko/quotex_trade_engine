@@ -153,10 +153,11 @@ def describe_lengths(ranges: list[LengthRange]) -> str:
     """`"15 min to 365 days"` and the like, for the owner."""
     if not ranges:
         return "none (Rise/Fall is not offered on it)"
-    return ", ".join(f"{_human(r.min_s)} to {_human(r.max_s)}" for r in ranges)
+    return ", ".join(f"{human_length(r.min_s)} to {human_length(r.max_s)}" for r in ranges)
 
 
-def _human(seconds: int) -> str:
+def human_length(seconds: int) -> str:
+    """`60` -> `"1 min"`, `86400` -> `"1 day"`."""
     for size, unit in ((86400, "day"), (3600, "hour"), (60, "min"), (1, "s")):
         if seconds % size == 0:
             count = seconds // size

@@ -215,7 +215,7 @@ class EngineController:
         """The owner's permission to switch to the REAL account (decision D-15). Written to the risk
         log. Refused if it would be taken away while REAL is the account in use."""
         engine = self._engine
-        if not allowed and engine is not None and engine.adapter.account_type is AccountType.REAL:
+        if not allowed and engine is not None and engine.account_type is AccountType.REAL:
             raise RealTradingInUseError(
                 "The REAL account is in use. Switch back to the demo account first."
             )
@@ -224,7 +224,7 @@ class EngineController:
         await self._flags.set_allow_real(allowed)
         self._real_allowed = allowed
         if engine is not None:
-            engine.adapter.set_real_allowed(allowed)
+            engine.set_real_allowed(allowed)
         now = self._clock.now()
         self._bus.publish(
             RiskTripped(

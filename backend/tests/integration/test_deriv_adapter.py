@@ -60,6 +60,7 @@ class Rig:
             "sleep": self.no_wait,
             "rng": lambda: 0.5,
             "monitor_interval_s": 0.01,
+            "preload_lengths": False,
             **kwargs,
         }
         return DerivAdapter(self.server.link, **options)  # type: ignore[arg-type]
@@ -484,3 +485,42 @@ async def test_a_connect_that_cannot_reach_deriv_says_so(rig: Rig) -> None:
     with pytest.raises(BrokerConnectionError):
         await adapter.connect()
     assert adapter.state is ConnectionState.DISCONNECTED
+
+
+# ---- what is refused from memory, before a chain starts (Phase 20) ---------------------------
+
+
+async def test_the_trade_lengths_of_every_open_asset_are_learned_in_the_background(
+    rig: Rig,
+) -> None:
+    adapter = rig.adapter(preload_lengths=True, lengths_per_tick=1)
+    await adapter.connect()
+    try:
+        assert adapter.order_refusal("EURUSD", 60) is None  # not known yet: Deriv would decide
+        for _ in range(300):
+            if adapter.order_refusal("EURUSD", 60) is not None:
+                break
+            await asyncio.sleep(0.01)
+        assert adapter.order_refusal("EURUSD", 60) == (
+            "Deriv does not offer 1 min Rise/Fall on EURUSD: it offers 15 min to 365 days"
+        )
+        assert adapter.order_refusal("EURUSD", 900) is None
+        for _ in range(300):
+            if "R_75" in {m["contracts_for"] for m in rig.server.sent("contracts_for")}:
+                break
+            await asyncio.sleep(0.01)
+        assert adapter.order_refusal("R_75", 60) is None
+        # each open asset is asked about once; a closed one is not asked about at all
+        asked = [m["contracts_for"] for m in rig.server.sent("contracts_for")]
+        assert sorted(asked) == ["R_75", "frxEURUSD"]
+    finally:
+        await adapter.disconnect()
+
+
+async def test_assets_deriv_does_not_trade_are_refused_from_memory(deriv: DerivAdapter) -> None:
+    assert deriv.order_refusal("EURUSD_otc", 900) == (
+        "EURUSD_otc is an OTC pair: Deriv has no OTC pairs"
+    )
+    assert deriv.order_refusal("NOPE", 60) == "NOPE is not traded on Deriv"
+    assert deriv.order_refusal("AUDUSD", 900) == "AUDUSD is closed on Deriv"
+    assert deriv.order_refusal("R_75", 60) is None  # lengths not asked for (preloading is off)

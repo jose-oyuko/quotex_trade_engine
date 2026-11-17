@@ -102,6 +102,7 @@ describe('turning the form into requests and back', () => {
       telegram_chat_id: -1001234567890,
       title: 'Alpha',
       enabled: true,
+      broker: 'quotex',
       settings: {
         parser: 'legacy_v1',
         asset_suffix_mode: 'otc',
@@ -187,5 +188,13 @@ describe('server problems', () => {
     expect(serverProblems(new Error('Cannot reach the backend. Is it running?')).message).toBe(
       'Cannot reach the backend. Is it running?',
     )
+  })
+})
+
+describe('the broker (decision D-75)', () => {
+  it('keeps a group on its broker when it is edited (the picker comes in Phase 21)', () => {
+    const values = fromGroup(makeGroup({ broker: 'deriv' }))
+    expect(toUpdate(values).broker).toBe('deriv')
+    expect(toCreate(valid()).broker).toBe('quotex')
   })
 })

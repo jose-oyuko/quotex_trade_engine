@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.db.repositories import GroupRepository
-from app.domain.enums import AssetSuffixMode, GroupSource, Strategy
+from app.domain.enums import AssetSuffixMode, Broker, GroupSource, Strategy
 from app.domain.records import GroupRecord, GroupSettingsRecord
 from app.engine.engine import Engine
 from app.engine.strategies import FLIP_STRATEGIES
@@ -101,7 +101,13 @@ class GroupService:
             return GroupView(group, await repo.get_settings(group_id))
 
     async def create(
-        self, *, telegram_chat_id: int, title: str, enabled: bool, settings: SettingsValues
+        self,
+        *,
+        telegram_chat_id: int,
+        title: str,
+        enabled: bool,
+        settings: SettingsValues,
+        broker: Broker = Broker.QUOTEX,
     ) -> GroupView:
         now = self._clock.now()
         try:
@@ -116,6 +122,7 @@ class GroupService:
                         enabled=enabled,
                         created_at=now,
                         updated_at=now,
+                        broker=broker,
                     )
                 )
                 if group.id is None:
@@ -128,7 +135,13 @@ class GroupService:
         return GroupView(group, record)
 
     async def update(
-        self, group_id: int, *, title: str, enabled: bool, settings: SettingsValues
+        self,
+        group_id: int,
+        *,
+        title: str,
+        enabled: bool,
+        settings: SettingsValues,
+        broker: Broker = Broker.QUOTEX,
     ) -> GroupView:
         now = self._clock.now()
         async with self._factory.begin() as session:
@@ -136,7 +149,8 @@ class GroupService:
             existing = await repo.get(group_id)
             if existing is None or existing.source is not GroupSource.TELEGRAM:
                 raise GroupNotFoundError(f"no group {group_id}")
-            group = replace(existing, title=title, enabled=enabled, updated_at=now)
+            # a new broker applies to chains started from now on; running ones keep theirs
+            group = replace(existing, title=title, enabled=enabled, broker=broker, updated_at=now)
             record = self._settings_record(group_id, settings, now)
             await repo.update(group)
             await repo.save_settings(record)

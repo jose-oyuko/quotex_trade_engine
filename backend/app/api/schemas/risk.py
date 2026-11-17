@@ -75,7 +75,13 @@ class DayOut(BaseModel):
 
     account_type: AccountType
     since: datetime
-    pnl: Decimal = Field(description="Net result since `since`; negative is a loss.")
+    pnl: Decimal = Field(
+        description="Net result since `since` on every broker added up; negative is a loss. Each "
+        "broker's own figure is in `by_broker` (the daily limits count per broker)."
+    )
+    by_broker: dict[str, Decimal] = Field(
+        default_factory=dict, description="Net result since `since` per broker (`quotex`, `deriv`)."
+    )
 
 
 class RiskOut(BaseModel):

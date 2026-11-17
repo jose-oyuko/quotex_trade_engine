@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.domain.enums import (
     AccountType,
+    Broker,
     ChainStatus,
     Direction,
     SignalStatus,
@@ -58,6 +59,7 @@ class ChainOut(BaseModel):
     origin_direction: Direction
     duration_s: int
     account_type: AccountType
+    broker: Broker
     strategy: Strategy
     status: ChainStatus
     step: int
@@ -92,6 +94,7 @@ class TradeOut(BaseModel):
     duration_s: int
     stake: Decimal
     account_type: AccountType
+    broker: Broker
     status: TradeStatus
     created_at: datetime
     payout_pct: int | None
@@ -118,6 +121,7 @@ class RiskEventOut(BaseModel):
 class BalanceOut(BaseModel):
     taken_at: datetime
     account_type: AccountType
+    broker: Broker
     balance: Decimal
 
 
@@ -142,6 +146,7 @@ def trade_out(trade: TradeRecord) -> TradeOut:
         duration_s=trade.duration_s,
         stake=trade.stake,
         account_type=trade.account_type,
+        broker=trade.broker,
         status=trade.status,
         created_at=trade.created_at,
         payout_pct=trade.payout_pct,
@@ -173,5 +178,8 @@ def risk_event_out(event: RiskEventRecord) -> RiskEventOut:
 
 def balance_out(snapshot: BalanceSnapshotRecord) -> BalanceOut:
     return BalanceOut(
-        taken_at=snapshot.taken_at, account_type=snapshot.account_type, balance=snapshot.balance
+        taken_at=snapshot.taken_at,
+        account_type=snapshot.account_type,
+        broker=snapshot.broker,
+        balance=snapshot.balance,
     )

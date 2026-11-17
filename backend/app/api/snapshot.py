@@ -63,6 +63,10 @@ class SnapshotBuilder:
             account_type=account,
             since=engine.guard.current_day_start,
             pnl=engine.guard.day_pnl(account),
+            by_broker={
+                broker.value: engine.guard.day_pnl(account, broker=broker)
+                for broker in engine.adapters
+            },
         )
 
     def build(self) -> SnapshotOut:
@@ -83,6 +87,7 @@ class SnapshotBuilder:
                 for name, status in sorted(live.connections.items())
             },
             balance=balance_out(balance) if balance else None,
+            balances=[balance_out(b) for b in live.balances_in_use()],
             controls=self.controls(),
             day=self.day(),
             open_chains=[

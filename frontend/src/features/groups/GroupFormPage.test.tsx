@@ -44,6 +44,7 @@ describe('adding a group', () => {
       telegram_chat_id: -1001234567890,
       title: 'Alpha signals',
       enabled: true,
+      broker: 'quotex',
       settings: {
         parser: 'legacy_v1',
         asset_suffix_mode: 'otc',

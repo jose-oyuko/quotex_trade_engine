@@ -64,6 +64,8 @@ export const groupSchema = z
       .refine((value) => Number.isSafeInteger(Number(value)), 'That number is too large')
       .refine((value) => Number(value) !== 0, 'The chat id cannot be 0'),
     enabled: z.boolean(),
+    // where its trades are placed; kept as it is until the form gets a picker (Phase 21)
+    broker: z.enum(['quotex', 'deriv']),
     parser: z.string().trim().min(1, 'Choose a parser'),
     asset_suffix_mode: z.enum(['otc', 'none', 'auto']),
     timezone: z.string().trim().min(1, 'Enter a time zone, like UTC-3').max(64),
@@ -98,6 +100,7 @@ export const EMPTY_GROUP: GroupFormValues = {
   title: '',
   telegram_chat_id: '',
   enabled: true,
+  broker: 'quotex',
   parser: 'legacy_v1',
   asset_suffix_mode: 'otc',
   timezone: 'UTC-3',
@@ -111,11 +114,13 @@ export const EMPTY_GROUP: GroupFormValues = {
 
 export function fromGroup(group: Group): GroupFormValues {
   const settings = group.settings
-  if (settings === null) return { ...EMPTY_GROUP, title: group.title, enabled: group.enabled }
+  if (settings === null)
+    return { ...EMPTY_GROUP, title: group.title, enabled: group.enabled, broker: group.broker }
   return {
     title: group.title,
     telegram_chat_id: String(group.telegram_chat_id),
     enabled: group.enabled,
+    broker: group.broker,
     parser: settings.parser,
     asset_suffix_mode: settings.asset_suffix_mode,
     timezone: settings.timezone,
@@ -148,12 +153,18 @@ export function toCreate(values: GroupFormValues): GroupCreate {
     telegram_chat_id: Number(values.telegram_chat_id),
     title: values.title,
     enabled: values.enabled,
+    broker: values.broker,
     settings: settingsOf(values),
   }
 }
 
 export function toUpdate(values: GroupFormValues): GroupUpdate {
-  return { title: values.title, enabled: values.enabled, settings: settingsOf(values) }
+  return {
+    title: values.title,
+    enabled: values.enabled,
+    broker: values.broker,
+    settings: settingsOf(values),
+  }
 }
 
 type FieldName = keyof GroupFormValues | `multipliers.${number}.value` | `root`

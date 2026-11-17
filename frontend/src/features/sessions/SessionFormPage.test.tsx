@@ -40,6 +40,7 @@ describe('adding a session', () => {
     expect(api.to('POST', '/sessions')[0]?.body).toEqual({
       name: 'London open',
       enabled: true,
+      broker: 'quotex',
       asset: 'EURUSD',
       duration_s: 300,
       start_time: '11:00',

@@ -24,7 +24,7 @@ import structlog
 from app.core.backoff import BackoffPolicy, backoff_delay
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
-from app.domain.enums import AccountType, Direction
+from app.domain.enums import AccountType, Broker, Direction
 from app.domain.ids import new_id
 from app.domain.records import BalanceSnapshotRecord
 from app.events.bus import EventBus
@@ -260,6 +260,7 @@ class PyQuotexAdapter:
                         taken_at=snapshot.taken_at,
                         account_type=snapshot.account_type,
                         balance=snapshot.balance,
+                        broker=Broker.QUOTEX,
                     ),
                 )
             )
@@ -279,6 +280,10 @@ class PyQuotexAdapter:
             return False
         row = find_instrument(client.instruments(), asset)
         return row is not None and instrument_is_open(row)
+
+    def order_refusal(self, asset: str, duration_s: int) -> str | None:
+        """Quotex's closed or unknown assets are refused when the order is placed (unchanged)."""
+        return None
 
     async def prepare_asset(self, asset: str, duration_s: int) -> None:
         client = self._require_client()

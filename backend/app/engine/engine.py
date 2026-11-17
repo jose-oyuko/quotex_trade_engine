@@ -1,22 +1,31 @@
-"""The engine: Telegram -> pipeline -> chain manager -> executor -> Quotex adapter, wired together,
+"""The engine: Telegram -> pipeline -> chain manager -> executor -> broker adapters, wired together,
 with the trading-session scheduler (D-71) feeding the same chain manager from a timer.
 
 This is only composition: every rule lives in the component it belongs to. Tests build it with the
-fake Telegram source and the fake adapter; the application builds it with the real ones. Without a
+fake Telegram source and fake adapters; the application builds it with the real ones. Without a
 Telegram source (none is logged in) the engine runs with signals off: trading sessions still work.
+
+There is one adapter per broker that has a login, Quotex and Deriv side by side (decision D-75).
+They share one demo/real switch and one real-money permission.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
+import structlog
+
+from app.brokers.base import BrokerAdapter
+from app.brokers.errors import BrokerError
 from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
-from app.domain.enums import AccountType, GroupSource
+from app.domain.enums import AccountType, Broker, GroupSource
 from app.domain.ids import new_id
 from app.domain.records import GroupRecord, GroupSettingsRecord, RiskEventRecord, SessionRecord
 from app.engine.errors import AccountSwitchRefusedError, TelegramNotConnectedError
@@ -25,7 +34,6 @@ from app.engine.manager import ChainManager, RecoverySummary
 from app.engine.risk import RiskGuard, RiskLimits
 from app.events.bus import EventBus
 from app.events.types import AccountChanged, RiskTripped
-from app.quotex.base import QuotexAdapter
 from app.sessions.scheduler import TICK_S, SessionConfig, SessionScheduler
 from app.signals.parsers.registry import ParserRegistry
 from app.signals.pipeline import GroupRoute, PipelineConfig, SignalPipeline, Sleeper
@@ -33,6 +41,9 @@ from app.telegram.listener import ListenerState, TelegramListener
 from app.telegram.source import DialogKind, TelegramSource
 
 CHAT_LIST_TIMEOUT_S = 30.0  # listing chats is one request to Telegram; never wait longer than this
+DISCONNECT_TIMEOUT_S = 10.0  # the longest one broker may take to close when the engine stops
+
+log = structlog.get_logger()
 
 
 @dataclass(slots=True, frozen=True)
@@ -48,7 +59,8 @@ class Engine:
     def __init__(
         self,
         *,
-        adapter: QuotexAdapter,
+        adapter: BrokerAdapter | None = None,
+        adapters: Mapping[Broker, BrokerAdapter] | None = None,
         source: TelegramSource | None,
         bus: EventBus,
         clock: Clock,
@@ -62,14 +74,21 @@ class Engine:
         session_sleep: Sleeper | None = None,
         session_tick_s: float = TICK_S,
     ) -> None:
-        self.adapter = adapter
+        brokers: dict[Broker, BrokerAdapter] = dict(adapters or {})
+        if adapter is not None:  # the one-broker shorthand (tests): it is Quotex
+            brokers.setdefault(Broker.QUOTEX, adapter)
+        if not brokers:
+            raise ValueError("the engine needs at least one broker")
+        self.adapters: Mapping[Broker, BrokerAdapter] = brokers
+        self._connecting: list[asyncio.Task[None]] = []
+        self._enabled_groups: set[int] = set()  # Telegram groups that are switched on
         self._source = source
         self._tasks = tasks
         self._bus = bus
         self._clock = clock
         self.guard = RiskGuard(clock=clock, bus=bus, limits=risk_limits)
         self.executor = Executor(
-            adapter, guard=self.guard, clock=clock, bus=bus, result_margin_s=result_margin_s
+            brokers, guard=self.guard, clock=clock, bus=bus, result_margin_s=result_margin_s
         )
         self.manager = ChainManager(
             executor=self.executor, guard=self.guard, bus=bus, clock=clock, tasks=tasks
@@ -98,13 +117,24 @@ class Engine:
         self.scheduler = SessionScheduler(
             manager=self.manager,
             guard=self.guard,
-            adapter=adapter,
+            executor=self.executor,
             bus=bus,
             clock=clock,
             tasks=tasks,
             sleep=session_sleep or sleep,
             tick_s=session_tick_s,
         )
+
+    @property
+    def account_type(self) -> AccountType:
+        """The account every broker is on (one switch for all)."""
+        return self.executor.account_type
+
+    def brokers_in_use(self) -> set[Broker]:
+        """The brokers an enabled group or session trades on (for the "not connected" banner)."""
+        used = {self.manager.group_broker(g) for g in self._enabled_groups}
+        used |= {c.session.broker for c in self.scheduler.sessions() if c.session.enabled}
+        return used
 
     @property
     def telegram_enabled(self) -> bool:
@@ -114,7 +144,12 @@ class Engine:
     # --- groups (the API of Phase 6 will call these when a group is created or edited) ---
 
     def set_group(self, group: GroupRecord, settings: GroupSettingsRecord) -> None:
-        self.manager.set_group(settings)
+        self.manager.set_group(settings, group.broker)
+        if group.id is not None and group.source is GroupSource.TELEGRAM:
+            if group.enabled:
+                self._enabled_groups.add(group.id)
+            else:
+                self._enabled_groups.discard(group.id)
         if group.source is GroupSource.SESSION or group.telegram_chat_id is None:
             return  # a session's hidden group has no chat: only its strategy settings matter
         self.pipeline.set_route(GroupRoute.from_records(group, settings))
@@ -132,6 +167,7 @@ class Engine:
                 self.listener.unsubscribe(group.telegram_chat_id)
         if group.id is not None:
             self.manager.remove_group(group.id)
+            self._enabled_groups.discard(group.id)
 
     # --- trading sessions (the API calls these when a session is saved, edited or deleted) ---
 
@@ -154,7 +190,7 @@ class Engine:
                 f"{len(self.manager.active_chains())} chain(s) and {self.guard.open_trades} "
                 "trade(s) are still running: wait for them or end them first"
             )
-        await self.adapter.set_account_type(account_type)
+        await self._switch_all(account_type)
         now = self._clock.now()
         self._bus.publish(AccountChanged(occurred_at=now, account_type=account_type))
         if account_type is AccountType.REAL:  # the one switch that moves real money: on the record
@@ -170,6 +206,29 @@ class Engine:
                     ),
                 )
             )
+
+    async def _switch_all(self, account_type: AccountType) -> None:
+        """Every broker moves, or none does: a broker that cannot (no real login, no permission)
+        refuses the switch, and the ones already moved go back."""
+        moved: list[tuple[BrokerAdapter, AccountType]] = []
+        for broker, adapter in self.adapters.items():
+            before = adapter.account_type
+            try:
+                await adapter.set_account_type(account_type)
+            except BrokerError as exc:
+                for done, previous in reversed(moved):
+                    with contextlib.suppress(BrokerError):
+                        await done.set_account_type(previous)
+                if len(self.adapters) == 1:
+                    raise
+                raise AccountSwitchRefusedError(
+                    f"{broker.label} cannot switch to {account_type.value}: {exc}"
+                ) from exc
+            moved.append((adapter, before))
+
+    def set_real_allowed(self, allowed: bool) -> None:
+        for adapter in self.adapters.values():
+            adapter.set_real_allowed(allowed)
 
     # --- Telegram chats (for the "choose a group" picker) ---
 
@@ -213,8 +272,11 @@ class Engine:
     async def start(self, recovery: RecoveryState) -> RecoverySummary:
         summary = self.load(recovery)
         # Connecting may take long (retries with backoff): it must not hold up start-up, and
-        # orders placed before it succeeds are refused cleanly (the chain ends `failed`).
-        self._tasks.spawn(self.adapter.connect(retry_forever=True), name="quotex-connect")
+        # signals that come before it succeeds are skipped ("... is not connected").
+        for broker, adapter in self.adapters.items():
+            self._connecting.append(
+                self._tasks.spawn(adapter.connect(retry_forever=True), name=f"{broker}-connect")
+            )
         if self.listener is not None:
             self.listener.start()
         self.scheduler.start()
@@ -226,4 +288,17 @@ class Engine:
         if self.listener is not None:
             await self.listener.stop()
         await self.manager.stop()
-        await self.adapter.disconnect()
+        # A broker still trying to log in is told to stop first (otherwise its retry loop would
+        # outlive the engine), then each one closes, with a time limit: Ctrl+C must never hang.
+        for task in self._connecting:
+            task.cancel()
+        for broker, adapter in self.adapters.items():
+            try:
+                await asyncio.wait_for(adapter.disconnect(), DISCONNECT_TIMEOUT_S)
+            except TimeoutError:
+                log.warning("broker_disconnect_timeout", broker=broker.value)
+            except Exception:
+                log.warning("broker_disconnect_failed", broker=broker.value, exc_info=True)
+        if self._connecting:
+            await asyncio.gather(*self._connecting, return_exceptions=True)
+            self._connecting.clear()

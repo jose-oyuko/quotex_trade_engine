@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.schemas.records import BalanceOut, ChainOut, TradeOut
 from app.api.schemas.risk import ControlsOut, DayOut
@@ -32,7 +32,13 @@ class SnapshotOut(BaseModel):
     account_type: AccountType
     real_trading_allowed: bool
     connections: dict[str, ConnectionOut]
-    balance: BalanceOut | None
+    balance: BalanceOut | None = Field(
+        description="The balance in use: Quotex's, or the only broker's. See `balances`."
+    )
+    balances: list[BalanceOut] = Field(
+        default_factory=list,
+        description="The balance of the account in use on each connected broker (never added up).",
+    )
     controls: ControlsOut
     day: DayOut | None
     open_chains: list[ChainOut]

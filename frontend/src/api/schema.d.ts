@@ -1274,6 +1274,7 @@ export interface components {
             account_type: components["schemas"]["AccountType"];
             /** Balance */
             balance: string;
+            broker: components["schemas"]["Broker"];
             /**
              * Taken At
              * Format: date-time
@@ -1319,6 +1320,12 @@ export interface components {
             label: string;
             metrics: components["schemas"]["MetricsOut"];
         };
+        /**
+         * Broker
+         * @description Where a trade is placed (decision D-75). Groups and sessions choose one from Phase 20.
+         * @enum {string}
+         */
+        Broker: "quotex" | "deriv";
         /** ChainAdvancedMessage */
         ChainAdvancedMessage: {
             /**
@@ -1377,6 +1384,7 @@ export interface components {
             asset: string;
             /** Base Stake */
             base_stake: string;
+            broker: components["schemas"]["Broker"];
             /** Consecutive Losses */
             consecutive_losses: number;
             /**
@@ -1555,8 +1563,15 @@ export interface components {
         DayOut: {
             account_type: components["schemas"]["AccountType"];
             /**
+             * By Broker
+             * @description Net result since `since` per broker (`quotex`, `deriv`).
+             */
+            by_broker?: {
+                [key: string]: string;
+            };
+            /**
              * Pnl
-             * @description Net result since `since`; negative is a loss.
+             * @description Net result since `since` on every broker added up; negative is a loss. Each broker's own figure is in `by_broker` (the daily limits count per broker).
              */
             pnl: string;
             /**
@@ -1791,6 +1806,11 @@ export interface components {
         /** GroupCreateIn */
         GroupCreateIn: {
             /**
+             * @description Where its trades are placed: `quotex` or `deriv` (decision D-75).
+             * @default quotex
+             */
+            broker: components["schemas"]["Broker"];
+            /**
              * Enabled
              * @default true
              */
@@ -1808,6 +1828,7 @@ export interface components {
         GroupOut: {
             /** Active Chains */
             active_chains: number;
+            broker: components["schemas"]["Broker"];
             /**
              * Created At
              * Format: date-time
@@ -1916,6 +1937,11 @@ export interface components {
          *     would be a different group.
          */
         GroupUpdateIn: {
+            /**
+             * @description Where its trades are placed: `quotex` or `deriv` (decision D-75).
+             * @default quotex
+             */
+            broker: components["schemas"]["Broker"];
             /** Enabled */
             enabled: boolean;
             settings: components["schemas"]["GroupSettingsIn"];
@@ -1931,6 +1957,7 @@ export interface components {
              * @enum {string}
              */
             database: "ok" | "unavailable";
+            deriv?: components["schemas"]["ConnectionOut"] | null;
             engine: components["schemas"]["EngineStatus"];
             /** Environment */
             environment: string;
@@ -2429,9 +2456,14 @@ export interface components {
         SessionIn: {
             /**
              * Asset
-             * @description The Quotex name: `EURUSD` or `EURUSD_otc`.
+             * @description Quotex: `EURUSD` or `EURUSD_otc`. Deriv: a forex pair (`EURUSD`, 15 minutes or more) or a synthetic index (`R_75`, `1HZ100V`, 1 minute or more).
              */
             asset: string;
+            /**
+             * @description Where its trades are placed: `quotex` or `deriv` (decision D-75).
+             * @default quotex
+             */
+            broker: components["schemas"]["Broker"];
             /**
              * Duration S
              * @description The trade length in seconds, also the candle length: 60, 120, 180, 300, 600, 900, 1800, 3600 or 14400.
@@ -2509,6 +2541,7 @@ export interface components {
             active_run: components["schemas"]["SessionRunOut"] | null;
             /** Asset */
             asset: string;
+            broker: components["schemas"]["Broker"];
             /**
              * Created At
              * Format: date-time
@@ -2805,7 +2838,13 @@ export interface components {
         /** SnapshotOut */
         SnapshotOut: {
             account_type: components["schemas"]["AccountType"];
+            /** @description The balance in use: Quotex's, or the only broker's. See `balances`. */
             balance: components["schemas"]["BalanceOut"] | null;
+            /**
+             * Balances
+             * @description The balance of the account in use on each connected broker (never added up).
+             */
+            balances?: components["schemas"]["BalanceOut"][];
             /** Connections */
             connections: {
                 [key: string]: components["schemas"]["ConnectionOut"];
@@ -2902,6 +2941,7 @@ export interface components {
             account_type: components["schemas"]["AccountType"];
             /** Asset */
             asset: string;
+            broker: components["schemas"]["Broker"];
             /** Broker Order Id */
             broker_order_id: string | null;
             /**

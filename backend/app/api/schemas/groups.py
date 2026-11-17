@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.domain.enums import AssetSuffixMode, Strategy
+from app.domain.enums import AssetSuffixMode, Broker, Strategy
 
 # Bounds keep a typo from becoming a 10,000-step chain or a stake with a stray zero.
 MAX_STEPS = 20
@@ -63,6 +63,10 @@ class GroupCreateIn(BaseModel):
     telegram_chat_id: int = Field(description="Find it with `npm run telegram:dialogs`.")
     title: Title
     enabled: bool = True
+    broker: Broker = Field(
+        default=Broker.QUOTEX,
+        description="Where its trades are placed: `quotex` or `deriv` (decision D-75).",
+    )
     settings: GroupSettingsIn
 
     @field_validator("telegram_chat_id")
@@ -81,6 +85,10 @@ class GroupUpdateIn(BaseModel):
 
     title: Title
     enabled: bool
+    broker: Broker = Field(
+        default=Broker.QUOTEX,
+        description="Where its trades are placed: `quotex` or `deriv` (decision D-75).",
+    )
     settings: GroupSettingsIn
 
 
@@ -102,6 +110,7 @@ class GroupOut(BaseModel):
     telegram_chat_id: int
     title: str
     enabled: bool
+    broker: Broker
     created_at: datetime
     updated_at: datetime
     settings: GroupSettingsOut | None

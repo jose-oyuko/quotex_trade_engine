@@ -120,7 +120,7 @@ async def test_schema_is_current_detects_missing_and_applied_migrations(db_file:
 
 
 def test_there_is_a_single_head() -> None:
-    assert head_revision() == "0006"
+    assert head_revision() == "0007"
 
 
 def test_the_opposite_pair_column_arrives_switched_off_for_existing_groups(db_file: Path) -> None:
@@ -215,3 +215,40 @@ def test_existing_sessions_stay_sequential_when_the_modes_arrive(db_file: Path) 
     with sqlite3.connect(db_file) as connection:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(trading_sessions)")]
     assert "mode" not in columns and "max_open_pairs" not in columns
+
+
+def test_existing_rows_read_as_quotex_when_the_brokers_arrive(db_file: Path) -> None:
+    """Migration 0007 (decision D-75): everything stored before it was on Quotex."""
+    config = alembic_config(url_of(db_file))
+    command.upgrade(config, "0006")
+    with sqlite3.connect(db_file) as connection:
+        connection.execute(
+            "INSERT INTO groups (id, telegram_chat_id, title, enabled, created_at, updated_at, "
+            "source) VALUES (1, 42, 'signals', 1, '2026-11-01 00:00:00', '2026-11-01 00:00:00', "
+            "'telegram')"
+        )
+        connection.execute(
+            "INSERT INTO balance_snapshots (id, taken_at, account_type, balance) VALUES "
+            "('00000000000000000000000000000001', '2026-11-01 00:00:00', 'demo', '1000.00')"
+        )
+    command.upgrade(config, "head")
+    with sqlite3.connect(db_file) as connection:
+        assert connection.execute("SELECT broker FROM groups").fetchall() == [("quotex",)]
+        assert connection.execute("SELECT broker FROM balance_snapshots").fetchall() == [
+            ("quotex",)
+        ]
+        names = {
+            name
+            for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        }
+    assert {
+        "ix_trades_broker_account_type_settled_at",
+        "ix_chains_broker_account_type_created_at",
+        "ix_balance_snapshots_broker_account_type_taken_at",
+    } <= names
+    command.downgrade(config, "0006")
+    with sqlite3.connect(db_file) as connection:
+        for table in ("groups", "trading_sessions", "chains", "trades", "balance_snapshots"):
+            columns = [row[1] for row in connection.execute(f"PRAGMA table_info({table})")]
+            assert "broker" not in columns, table
+        assert connection.execute("SELECT COUNT(*) FROM groups").fetchone() == (1,)

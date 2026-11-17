@@ -1,8 +1,9 @@
 """Health endpoint: is the application alive, and is anything wrong that the owner must know?
 
 `status` is `ok`, or `degraded` with a plain-language `problems` list: the database is unreachable
-or not accepting writes, history was lost to an overflow, or (with the engine running) Quotex or
-Telegram is disconnected. The dashboard shows these at the top of every page.
+or not accepting writes, history was lost to an overflow, or (with the engine running) Telegram or
+a broker that an enabled group or session uses is disconnected. The dashboard shows these at the top
+of every page.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from sqlalchemy import text
 
 from app.api.schemas.status import ConnectionOut, EngineStatus
 from app.api.snapshot import engine_status
+from app.domain.enums import Broker
 from app.engine.controller import EngineState
 
 router = APIRouter(tags=["health"])
@@ -43,6 +45,7 @@ class HealthResponse(BaseModel):
     engine: EngineStatus
     telegram: ConnectionOut | None = None  # null until the engine has reported
     quotex: ConnectionOut | None = None
+    deriv: ConnectionOut | None = None
     last_event_at: datetime | None = None
     ws_clients: int = 0
 
@@ -64,13 +67,21 @@ async def health(request: Request) -> HealthResponse:
         )
 
     database = await _database_status(state.engine)
-    engine_running = state.trading is not None
+    trading = state.trading
+    engine_running = trading is not None
     problems = _problems(
         database=database,
         writer=writer,
         engine_running=engine_running,
         telegram=connections.get("telegram"),
-        quotex=connections.get("quotex"),
+        brokers={}
+        if trading is None
+        else {
+            broker: connections.get(broker.value)
+            for broker in trading.adapters
+            # one broker alone is always shown; with two, only one that something trades on
+            if len(trading.adapters) == 1 or broker in trading.brokers_in_use()
+        },
         engine_failure=(
             state.controller.error
             if state.controller is not None and state.controller.state is EngineState.FAILED
@@ -98,6 +109,7 @@ async def health(request: Request) -> HealthResponse:
         engine=engine_status(state.controller, running=state.trading is not None),
         telegram=component("telegram"),
         quotex=component("quotex"),
+        deriv=component("deriv"),
         last_event_at=live.last_event_at if live is not None else None,
         ws_clients=hub.clients if hub is not None else 0,
     )
@@ -109,7 +121,7 @@ def _problems(
     writer: Any,
     engine_running: bool,
     telegram: Any,
-    quotex: Any,
+    brokers: dict[Broker, Any],
     engine_failure: str | None = None,
     telegram_enabled: bool = True,
 ) -> list[str]:
@@ -134,8 +146,11 @@ def _problems(
                 f"{writer.stats.failed} records could not be stored. See the log (data/logs)."
             )
     if engine_running:
-        if quotex is None or not quotex.connected:
-            problems.append("Quotex is not connected: no trade can be placed until it is.")
+        for broker, status in brokers.items():
+            if status is None or not status.connected:
+                problems.append(
+                    f"{broker.label} is not connected: no trade can be placed on it until it is."
+                )
         if telegram_enabled and (telegram is None or not telegram.connected):
             problems.append("Telegram is not connected: signals are not being read.")
     return problems

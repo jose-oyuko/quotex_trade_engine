@@ -81,6 +81,8 @@ export const sessionSchema = z
   .object({
     name: z.string().trim().min(1, 'Give the session a name').max(80, 'At most 80 characters'),
     enabled: z.boolean(),
+    // where its trades are placed; kept as it is until the form gets a picker (Phase 21)
+    broker: z.enum(['quotex', 'deriv']),
     asset: z
       .string()
       .trim()
@@ -143,6 +145,7 @@ export type SessionFormValues = z.infer<typeof sessionSchema>
 export const EMPTY_SESSION: SessionFormValues = {
   name: '',
   enabled: true,
+  broker: 'quotex',
   asset: 'EURUSD',
   duration_s: 300,
   start_time: '11:00',
@@ -181,6 +184,7 @@ export function fromSession(session: Session): SessionFormValues {
   return {
     name: session.name,
     enabled: session.enabled,
+    broker: session.broker,
     asset: session.asset,
     duration_s: session.duration_s,
     start_time: hhmm(session.start_time),
@@ -222,6 +226,7 @@ export function toInput(values: SessionFormValues): SessionInput {
   return {
     name: values.name,
     enabled: values.enabled,
+    broker: values.broker,
     // the base of the name is upper case (EURUSD); the suffix is written as Quotex does
     asset: `${base.toUpperCase()}${otc.toLowerCase()}`,
     duration_s: values.duration_s,

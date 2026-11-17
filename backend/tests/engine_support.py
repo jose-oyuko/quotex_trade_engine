@@ -1,5 +1,6 @@
 """A complete engine on fakes, for the Phase 4 tests: fake Telegram in, fake Quotex out, the real
-pipeline, chain manager, executor and event bus in between."""
+pipeline, chain manager, executor and event bus in between. With `with_deriv`, a fake Deriv runs
+next to the fake Quotex (decision D-75)."""
 
 from __future__ import annotations
 
@@ -9,11 +10,21 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
+from app.brokers.base import BrokerAdapter
 from app.core.backoff import BackoffPolicy
 from app.core.clock import Clock, SystemClock
 from app.core.tasks import TaskSupervisor
 from app.db.writer import DBWriter
-from app.domain.enums import AssetSuffixMode, ChainStatus, Direction, Strategy, TradeStatus
+from app.deriv.fake import FakeDerivAdapter
+from app.deriv.protocol import LengthRange
+from app.domain.enums import (
+    AssetSuffixMode,
+    Broker,
+    ChainStatus,
+    Direction,
+    Strategy,
+    TradeStatus,
+)
 from app.domain.ids import new_id
 from app.domain.records import (
     ChainRecord,
@@ -53,6 +64,7 @@ class GroupSpec:
     multipliers: tuple[str, ...] = ()
     min_payout_pct: int = 0
     allow_opposite_pair: bool = False
+    broker: Broker = Broker.QUOTEX
 
 
 @dataclass
@@ -66,6 +78,7 @@ class EngineRig:
     feed: Subscription
     events: list[Event] = field(default_factory=list)
     _message_id: int = 0
+    deriv: FakeDerivAdapter | None = None  # set by `make_rig(with_deriv=True)`
 
     # --- setup ---
 
@@ -73,6 +86,7 @@ class EngineRig:
         group: GroupRecord = replace(
             make_group(telegram_chat_id=spec.chat_id, title=f"group {spec.group_id}"),
             id=spec.group_id,
+            broker=spec.broker,
         )
         settings: GroupSettingsRecord = make_settings(
             spec.group_id,
@@ -89,6 +103,8 @@ class EngineRig:
 
     async def start(self) -> None:
         await self.adapter.connect()
+        if self.deriv is not None:
+            await self.deriv.connect()
         self.engine.listener.start()
         assert await self.engine.listener.wait_until_connected(2)
 
@@ -165,15 +181,27 @@ def make_rig(
     session_sleep: Callable[[float], Awaitable[None]] | None = None,
     session_tick_s: float = 30.0,
     with_telegram: bool = True,
+    with_deriv: bool = False,
 ) -> EngineRig:
     clock = clock or ManualClock()
     bus, tasks = EventBus(), TaskSupervisor()
     adapter = FakeQuotexAdapter(clock=clock, bus=bus, hold_results=hold_results)
     for asset in ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "USDCAD"):
         adapter.add_asset(asset, payout=80)
+    adapters: dict[Broker, BrokerAdapter] = {Broker.QUOTEX: adapter}
+    deriv: FakeDerivAdapter | None = None
+    if with_deriv:
+        deriv = FakeDerivAdapter(clock=clock, bus=bus, hold_results=hold_results)
+        for asset in ("EURUSD", "GBPUSD"):  # Rise/Fall from 15 minutes, as on the live demo
+            deriv.add_asset(asset, payout=81)
+            deriv.set_lengths(asset, [LengthRange(900, 365 * 86400)])
+        for asset in ("R_75", "R_100"):  # synthetic indices: from 15 seconds
+            deriv.add_asset(asset, payout=88)
+            deriv.set_lengths(asset, [LengthRange(15, 365 * 86400)])
+        adapters[Broker.DERIV] = deriv
     source = FakeTelegramSource(clock)
     engine = Engine(
-        adapter=adapter,
+        adapters=adapters,
         source=source if with_telegram else None,
         bus=bus,
         clock=clock,
@@ -185,7 +213,7 @@ def make_rig(
         session_tick_s=session_tick_s,
     )
     feed = bus.subscribe(name="test-feed", maxsize=1_000_000)
-    return EngineRig(clock, bus, tasks, adapter, source, engine, feed)
+    return EngineRig(clock, bus, tasks, adapter, source, engine, feed, deriv=deriv)
 
 
 def active_statuses() -> set[ChainStatus]:

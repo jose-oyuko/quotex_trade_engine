@@ -32,7 +32,7 @@ from app.brokers.errors import (
     ResultTimeoutError,
 )
 from app.core.clock import Clock
-from app.domain.enums import AccountType, Direction
+from app.domain.enums import AccountType, Broker, Direction
 from app.domain.ids import new_id
 from app.domain.records import BalanceSnapshotRecord
 from app.events.bus import EventBus
@@ -230,6 +230,9 @@ class FakeBrokerAdapter:
         known = self._assets[asset]
         return known.payout_1m if minutes < 5 else known.payout_5m
 
+    def order_refusal(self, asset: str, duration_s: int) -> str | None:
+        return None
+
     def is_open(self, asset: str) -> bool:
         known = self._assets.get(asset)
         return self._state is ConnectionState.CONNECTED and known is not None and known.open
@@ -337,6 +340,7 @@ class FakeBrokerAdapter:
                         taken_at=now,
                         account_type=self._account_type,
                         balance=balance,
+                        broker=Broker(self.COMPONENT),
                     ),
                 )
             )

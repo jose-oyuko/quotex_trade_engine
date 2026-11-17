@@ -24,6 +24,7 @@ from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
+from app.domain.enums import Broker
 from app.engine.engine import Engine
 from app.engine.flags import EngineFlags
 from app.events.bus import EventBus
@@ -244,7 +245,7 @@ async def _running_api(
 
 def _connected(engine: Engine) -> Callable[[], Awaitable[bool]]:
     async def check() -> bool:
-        return engine.adapter.state is ConnectionState.CONNECTED
+        return engine.adapters[Broker.QUOTEX].state is ConnectionState.CONNECTED
 
     return check
 

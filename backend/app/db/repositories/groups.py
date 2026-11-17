@@ -43,12 +43,13 @@ class GroupRepository:
         return [to_record(GroupRecord, row) for row in await self._session.scalars(stmt)]
 
     async def update(self, group: GroupRecord) -> None:
-        """Update title and enabled flag. Raises LookupError if the group does not exist."""
+        """Update title, enabled flag and broker. Raises LookupError if the group does not exist."""
         row = await self._session.get(Group, group.id)
         if row is None:
             raise LookupError(f"group {group.id} not found")
         row.title = group.title
         row.enabled = group.enabled
+        row.broker = group.broker
         row.updated_at = group.updated_at
         await self._session.flush()
 

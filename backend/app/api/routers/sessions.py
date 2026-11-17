@@ -30,6 +30,7 @@ def _values(body: SessionIn) -> SessionValues:
         max_pairs=body.max_pairs,
         mode=body.mode,
         max_open_pairs=body.max_open_pairs,
+        broker=body.broker,
         strategy=body.strategy.strategy,
         base_stake=body.strategy.base_stake,
         max_steps=body.strategy.max_steps,

@@ -114,8 +114,10 @@ class SessionRig:
         return self.rig.inbox()
 
     async def start(self) -> None:
-        """Connect the fake Quotex and start the scheduler (the way the engine does)."""
+        """Connect the fake brokers and start the scheduler (the way the engine does)."""
         await self.adapter.connect()
+        if self.rig.deriv is not None:
+            await self.rig.deriv.connect()
         if self.engine.listener is not None:
             self.engine.listener.start()
         self.engine.scheduler.start()
@@ -141,6 +143,7 @@ def make_session_rig(
     hold_results: bool = True,
     with_telegram: bool = True,
     limits: RiskLimits | None = None,
+    with_deriv: bool = False,
     **session_overrides: Any,
 ) -> SessionRig:
     clock = ManualClock(now)
@@ -151,6 +154,7 @@ def make_session_rig(
         session_sleep=timers.sleep,
         with_telegram=with_telegram,
         limits=limits,
+        with_deriv=with_deriv,
     )
     group: GroupRecord = replace(
         make_group(telegram_chat_id=None, title="Session: Test", source=GroupSource.SESSION),
@@ -168,6 +172,7 @@ def make_session_rig(
         min_payout_pct=min_payout_pct,
     )
     record = session or make_session(group_id=SESSION_GROUP, once_after=now, **session_overrides)
+    group = replace(group, broker=record.broker)  # the hidden group trades where the session does
     rig.engine.set_group(group, settings)
     rig.engine.set_session(record, settings)
     return SessionRig(rig, timers, record, settings)

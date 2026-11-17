@@ -68,18 +68,19 @@ async def test_a_trade_open_when_telegram_drops_is_not_disturbed() -> None:
     await rig.stop()
 
 
-async def test_an_order_while_quotex_is_down_fails_cleanly_and_the_group_works_again_after() -> (
-    None
-):
+async def test_a_signal_while_quotex_is_down_is_skipped_and_the_group_works_again_after() -> None:
+    """Since Phase 20 (D-75) a signal for a broker that is down is skipped before a chain starts,
+    with the reason in the inbox (it used to start a chain that failed at once)."""
     rig = make_rig()
     rig.add_group(GroupSpec(1, -1001, Strategy.FLIP_EVERY_LOSS, "1.00", ("2.0",)))
     await rig.start()
     rig.adapter.simulate_connection_loss()
     rig.signal(-1001, "EURUSD CALL 1m")
+    await rig.until(lambda: any(s.status is SignalStatus.IGNORED for s in rig.inbox()))
     await rig.idle()
-    [trade] = rig.trades("EURUSD")
-    assert trade.status is TradeStatus.FAILED and "NotConnectedError" in (trade.error or "")
-    assert rig.chains()["EURUSD"].status is ChainStatus.FAILED  # no retry, no half-open chain
+    [skipped] = [s for s in rig.inbox() if s.status is SignalStatus.IGNORED]
+    assert skipped.reason == "Quotex is not connected"
+    assert rig.trades("EURUSD") == [] and "EURUSD" not in rig.chains()  # no half-open chain
     assert rig.adapter.orders == []  # nothing was sent
 
     rig.adapter.simulate_connection_restored()

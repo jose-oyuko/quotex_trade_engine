@@ -8,7 +8,13 @@ from decimal import Decimal
 from app.brokers.base import TradeOutcome
 from app.brokers.errors import DurationNotOfferedError
 from app.brokers.fake import FakeBrokerAdapter
-from app.deriv.protocol import LengthRange, allows, deriv_symbol, describe_lengths
+from app.deriv.protocol import (
+    LengthRange,
+    allows,
+    deriv_symbol,
+    describe_lengths,
+    human_length,
+)
 
 
 class FakeDerivAdapter(FakeBrokerAdapter):
@@ -27,6 +33,20 @@ class FakeDerivAdapter(FakeBrokerAdapter):
 
     def is_open(self, asset: str) -> bool:
         return deriv_symbol(asset) is not None and super().is_open(asset)
+
+    def order_refusal(self, asset: str, duration_s: int) -> str | None:
+        """The same reasons, in the same words, as `DerivAdapter.order_refusal`."""
+        if deriv_symbol(asset) is None:
+            if asset.lower().endswith("_otc"):
+                return f"{asset} is an OTC pair: Deriv has no OTC pairs"
+            return f"{asset} is not traded on Deriv"
+        ranges = (self._lengths or {}).get(asset)
+        if ranges is not None and not allows(ranges, duration_s):
+            return (
+                f"Deriv does not offer {human_length(duration_s)} Rise/Fall on {asset}: it "
+                f"offers {describe_lengths(ranges)}"
+            )
+        return None
 
     async def prepare_asset(self, asset: str, duration_s: int) -> None:
         self._require_connected()

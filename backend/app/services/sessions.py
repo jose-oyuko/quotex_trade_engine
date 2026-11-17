@@ -21,10 +21,11 @@ import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.brokers.base import ConnectionState
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.db.repositories import GroupRepository, SessionRepository
-from app.domain.enums import AssetSuffixMode, GroupSource, RepeatKind, SessionMode, Strategy
+from app.domain.enums import AssetSuffixMode, Broker, GroupSource, RepeatKind, SessionMode, Strategy
 from app.domain.records import (
     GroupRecord,
     GroupSettingsRecord,
@@ -46,6 +47,8 @@ from app.signals.timezones import InvalidTimezoneError, parse_timezone
 log = structlog.get_logger()
 
 _ASSET = re.compile(r"^[A-Z0-9]{3,12}(_otc)?$")
+# Deriv: a forex pair (`EURUSD`) or a synthetic index as Deriv names it (`R_75`, `1HZ100V`)
+_DERIV_ASSET = re.compile(r"^[A-Za-z0-9_]{2,20}$")
 SESSION_PARSER = "session"  # the hidden group has no parser: this only fills the column
 
 
@@ -95,6 +98,7 @@ class SessionValues:
     # how pairs are spaced (decision D-73)
     mode: SessionMode = SessionMode.SEQUENTIAL
     max_open_pairs: int = 1
+    broker: Broker = Broker.QUOTEX  # decision D-75
 
 
 @dataclass(slots=True, frozen=True)
@@ -167,6 +171,7 @@ class SessionService:
                     created_at=now,
                     updated_at=now,
                     source=GroupSource.SESSION,
+                    broker=values.broker,
                 )
             )
             if group.id is None:
@@ -200,7 +205,12 @@ class SessionService:
             group = await groups.get(existing.group_id)
             if group is None:
                 raise RuntimeError("the session's hidden group is missing")
-            group = replace(group, title=f"Session: {values.name.strip()}"[:255], updated_at=now)
+            group = replace(
+                group,
+                title=f"Session: {values.name.strip()}"[:255],
+                broker=values.broker,
+                updated_at=now,
+            )
             settings = self._settings(existing.group_id, values, now)
             await groups.update(group)
             await groups.save_settings(settings)
@@ -268,14 +278,11 @@ class SessionService:
         once_after: datetime,
         created_at: datetime,
     ) -> SessionRecord:
-        if not _ASSET.match(values.asset):
-            raise InvalidSessionError(
-                f"{values.asset!r} is not a Quotex asset name: use letters and digits, "
-                "like EURUSD or EURUSD_otc"
-            )
+        self._check_asset(values)
         if values.duration_s not in TRADE_LENGTHS_S:
             allowed = ", ".join(f"{s // 60} min" for s in TRADE_LENGTHS_S)
             raise InvalidSessionError(f"the trade length must be one of: {allowed}")
+        self._check_offered(values)
         try:
             parse_timezone(values.timezone)
             return SessionRecord(
@@ -296,12 +303,45 @@ class SessionService:
                 max_pairs=values.max_pairs,
                 mode=values.mode,
                 max_open_pairs=values.max_open_pairs,
+                broker=values.broker,
                 once_after=once_after,
                 created_at=created_at,
                 updated_at=now,
             )
         except (InvalidTimezoneError, ValueError) as exc:
             raise InvalidSessionError(str(exc)) from exc
+
+    @staticmethod
+    def _check_asset(values: SessionValues) -> None:
+        if values.broker is Broker.DERIV:
+            if values.asset.lower().endswith("_otc"):
+                raise InvalidSessionError(
+                    f"{values.asset!r} is an OTC pair: Deriv has none. Use the pair itself "
+                    "(EURUSD, 15 minutes or more) or a synthetic index (R_75, 1 minute or more)"
+                )
+            if not _DERIV_ASSET.match(values.asset):
+                raise InvalidSessionError(
+                    f"{values.asset!r} is not a Deriv asset name: use a pair like EURUSD or an "
+                    "index as Deriv names it, like R_75 or 1HZ100V"
+                )
+            return
+        if not _ASSET.match(values.asset):
+            raise InvalidSessionError(
+                f"{values.asset!r} is not a Quotex asset name: use letters and digits, "
+                "like EURUSD or EURUSD_otc"
+            )
+
+    def _check_offered(self, values: SessionValues) -> None:
+        """Refuse an asset or trade length the broker does not offer, when the running engine
+        knows it (Deriv's trade lengths come from the asset). Without that knowledge the session
+        is saved, and a round that cannot trade is skipped with the reason."""
+        engine = self._engine()
+        adapter = None if engine is None else engine.executor.adapter(values.broker)
+        if adapter is None or adapter.state is not ConnectionState.CONNECTED:
+            return
+        refused = adapter.order_refusal(values.asset, values.duration_s)
+        if refused is not None:
+            raise InvalidSessionError(refused)
 
     def _settings(self, group_id: int, values: SessionValues, now: datetime) -> GroupSettingsRecord:
         try:

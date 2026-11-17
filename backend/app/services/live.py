@@ -23,6 +23,7 @@ from app.domain.enums import (
     ACTIVE_CHAIN_STATUSES,
     UNSETTLED_TRADE_STATUSES,
     AccountType,
+    Broker,
 )
 from app.domain.records import (
     AppSettingRecord,
@@ -85,7 +86,7 @@ class LiveState:
     def __init__(self, settings: Iterable[AppSettingRecord] = ()) -> None:
         self.account_type = AccountType.DEMO  # the adapter starts on demo at every launch (D-15)
         self.connections: dict[str, ConnectionStatus] = {}
-        self.balances: dict[AccountType, BalanceSnapshotRecord] = {}
+        self.balances: dict[tuple[Broker, AccountType], BalanceSnapshotRecord] = {}
         self.chains: dict[UUID, ChainRecord] = {}
         self.trades: dict[UUID, TradeRecord] = {}
         self.controls = Controls()
@@ -95,8 +96,17 @@ class LiveState:
 
     @property
     def balance(self) -> BalanceSnapshotRecord | None:
-        """The balance of the account in use now."""
-        return self.balances.get(self.account_type)
+        """The balance of the account in use now: Quotex's, or the only broker's."""
+        in_use = self.balances_in_use()
+        return next((b for b in in_use if b.broker is Broker.QUOTEX), in_use[0] if in_use else None)
+
+    def balances_in_use(self) -> list[BalanceSnapshotRecord]:
+        """The balance of the account in use now on each broker (decision D-75: never added up)."""
+        return [
+            snapshot
+            for (broker, account), snapshot in sorted(self.balances.items())
+            if account is self.account_type
+        ]
 
     def active_chains_of(self, group_id: int) -> int:
         return sum(1 for chain in self.chains.values() if chain.group_id == group_id)
@@ -116,7 +126,7 @@ class LiveState:
                 else:
                     self.trades.pop(trade.id, None)
             case BalanceUpdated(snapshot=snapshot):
-                self.balances[snapshot.account_type] = snapshot
+                self.balances[(snapshot.broker, snapshot.account_type)] = snapshot
             case ConnectionChanged(component=component, connected=connected, detail=detail):
                 self.connections[component] = ConnectionStatus(connected, detail, event.occurred_at)
             case AccountChanged(account_type=account_type):

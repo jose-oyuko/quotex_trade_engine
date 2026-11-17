@@ -126,6 +126,12 @@ class BrokerAdapter(Protocol):
         """True if the asset is known and open for trading, from memory."""
         ...
 
+    def order_refusal(self, asset: str, duration_s: int) -> str | None:
+        """Why the broker would surely refuse an order for this asset and trade length (not
+        traded there, or a length it does not offer), from memory; None when nothing known says
+        so. Used to skip a signal before a chain starts. The connection is checked separately."""
+        ...
+
     async def prepare_asset(self, asset: str, duration_s: int) -> None:
         """Do the one-time per-asset work (price subscription) ahead of the first order, so that
         order does not pay for it. Safe to call repeatedly."""
