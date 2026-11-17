@@ -463,6 +463,102 @@ the stop rules of D-72 apply as before (running chains of all pairs finish); doc
 
 ---
 
+## Phases 19-21 — Deriv as a second broker (decisions D-74 to D-77)
+
+**Why (owner's request):** connecting to Quotex keeps failing (Cloudflare check, unofficial library) and its orders
+are confirmed one at a time. Deriv has an official API. The owner wants **both brokers at once**: each group and
+each trading session picks Quotex or Deriv; strategies, chains, sessions, limits, dashboard and reports work the
+same on both. On Deriv, forex Rise/Fall starts at 15 minutes; the 1- and 5-minute trades are on Deriv's
+**synthetic indices** (Volatility 75 and the like), so both kinds of assets are in these phases.
+
+**Fixed by the owner:** both brokers side by side; forex pairs and synthetic indices both supported, and Deriv
+trades are started from trading sessions on the dashboard (no Telegram signals name synthetic indices, so the
+signal parser is unchanged); Deriv's demo and real accounts each have their own token, the
+demo/real switch picks which one is used, and real money still needs the owner's permission (D-15).
+
+**Before Phase 19:** the owner checks on Deriv's website that Rise/Fall forex is offered in their region. Phase 19's
+`npm run deriv:check` then shows, with a demo token, the forex pairs and synthetic indices offered, the Rise/Fall
+trade lengths each allows, and sample payouts (EURUSD at 15 minutes, Volatility 75 at 1 and 5 minutes).
+
+**Not in these phases:** Higher/Lower or touch contracts, tick-length trades (counted in ticks, not minutes), moving
+existing groups to Deriv in bulk, concurrent orders on Quotex (suggestions for later, not scheduled).
+
+### Phase 19 — The Deriv adapter (backend, not yet in the engine)
+
+**Goal:** a Deriv adapter that does everything the Quotex adapter does, tested against a local fake Deriv server,
+and a check script the owner runs on the demo account.
+
+**Scope**
+- `app/brokers/`: the adapter protocol as `BrokerAdapter` with its value types, and the shared adapter errors
+  (`app/quotex/` keeps its names by re-exporting them). `Broker` enum in `app/domain/enums.py`.
+- `app/deriv/`: `protocol.py` (messages, error codes to our errors, forex name mapping and synthetic index symbols), `connection.py` (one
+  WebSocket, replies matched by `req_id`, subscriptions by id, `ping` every 30 s, reconnect with the backoff of
+  `app/core/backoff.py`), `adapter.py` (`DerivAdapter`: connect and the account checks of D-76, balance stream,
+  the assets (forex pairs and synthetic indices) with the trade lengths each allows, from `contracts_for`, payout from `proposal` streams, `place_order` with `buy`, `await_result` with
+  `proposal_open_contract`), `fake.py` (`FakeDerivAdapter` for engine tests), `factory.py`.
+- Settings fields for the app id and the two tokens (filled from the encrypted store).
+- `npm run deriv:check` (`backend/scripts/deriv_check.py`): demo token only; account, the forex pairs and
+  synthetic indices with their Rise/Fall trade lengths, sample payouts; `-- --order` places one 1.00 demo trade and prints its result.
+
+**Acceptance criteria**
+- Adapter tests against a local fake Deriv server: authorize and its refusal, a real token in the demo slot refused,
+  a token with too many scopes refused, a buy and its result (won, lost, equal exit = lost), **two orders in flight
+  answered in reverse order and matched correctly**, no confirmation = `OrderAckTimeoutError`, a lost connection
+  and reconnect, an unknown or `_otc` asset refused before sending, a synthetic index (`R_75`) bought and settled at 1 minute, a
+  forex pair at a length below its minimum refused before sending with the reason.
+- Architecture test: only `app/deriv/` talks to Deriv.
+- `ruff`, `mypy`, the whole test suite pass.
+- The owner's `npm run deriv:check` output (and one `--order` result) is in the report; if it was not run, the
+  report says so.
+
+### Phase 20 — Two brokers in the engine (backend)
+
+**Goal:** groups and sessions trade on their own broker, both at once, kept apart in limits and figures.
+
+**Scope**
+- Migration `0007`: `broker` on groups, trading sessions, chains, trades and balance snapshots (existing rows:
+  `quotex`); indexes by broker and account type. Records, repositories, writer and recovery carry it.
+- The engine holds one adapter per connected broker; the factory builds those with logins (at least one needed).
+  The demo/real switch and the real-money permission apply to all. Stopping disconnects each adapter with a time
+  limit (also fixes the shutdown that could hang, seen on 2026-11-13).
+- Sessions on Deriv take their trade lengths from the asset (for example 1 and 5 minutes on a synthetic index,
+  15 minutes and more on forex), not from the Quotex list; candle boundaries work the same.
+- Executor, chain manager and session scheduler use the broker of the group or session; skip reasons for a broker
+  that is not connected and an asset it does not offer.
+- Risk: daily figures, global limits and exposure per broker and account type.
+- Events and health: balance and connection per broker; the banner only for a broker that is in use.
+- API: `broker` on groups, sessions, chains and trades; one balance per broker; `openapi.json` regenerated.
+
+**Acceptance criteria**
+- Engine tests with both fakes: a Quotex group and a Deriv group trade at once and their results, limits and
+  figures stay apart; one broker down does not stop the other; a Deriv session on a synthetic index at M1 sends both legs of a pair together; a Deriv group's 1-minute
+  forex signal is skipped with the minimum-length reason.
+- Migration up and down; existing data reads as Quotex.
+- `ruff`, `mypy`, the whole test suite pass.
+
+### Phase 21 — Deriv on the dashboard, in the reports and in the guides
+
+**Goal:** everything about Deriv is set and watched on the dashboard.
+
+**Scope**
+- Settings: a Deriv card (app id, demo token, real token, stored encrypted; "create tokens with Read and Trade
+  only"); a *Check* button that shows the account without trading.
+- Group and session forms: a Broker picker. For a Deriv session the asset is picked from Deriv's list, grouped as
+  forex pairs and synthetic indices with their display names, and only the trade lengths that asset allows are
+  offered; warnings for an `_otc` asset or a length Deriv does not offer.
+- Live and Account pages: one balance and one connection badge per broker; chains and trades show the broker.
+- Reports: a broker filter (each broker separately by default) and a *By broker* breakdown.
+- Docs: ARCHITECTURE, DOMAIN, OPERATIONS (getting an app id and a token), TROUBLESHOOTING, FAILURE_MODES, API,
+  README; CLAUDE.md rule 6 also covers `app/deriv/`.
+
+**Acceptance criteria**
+- Component and form tests for the card, the pickers, the balances and the report filter; every API refusal shown
+  in words.
+- Reports by broker agree with the Trades page totals (test on seeded data).
+- `eslint`, `tsc --noEmit`, `vitest`, `npm run build` and `npm run api:check` pass; no secret appears anywhere.
+
+---
+
 ## Later backlog (not scheduled)
 
 Telegram alerts to the owner; backtester over stored messages; more parsers + "test this message" tool;

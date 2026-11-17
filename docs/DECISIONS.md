@@ -688,6 +688,46 @@ the chains already running finish** their steps. The run is `ended` when the las
   boundary). It follows the same stop rules.
 - A session trades on whichever account the engine is on (demo by default, D-15); it has no switch of its own.
 
+**D-74. Deriv as a second broker, through its official WebSocket API (Phases 19-21).** Connecting to Quotex keeps
+breaking (a Cloudflare check on the sign-in page, an unofficial library), and Quotex confirms orders one at a time
+(D-27). Deriv publishes an official, documented API with demo accounts and API tokens. The adapter talks to
+`wss://ws.derivws.com/websockets/v3?app_id=<the owner's app id>` with the `websockets` library already in use (no
+Deriv SDK), and uses only `authorize`, `balance` (subscribed), `active_symbols`, `contracts_for`, `proposal`
+(subscribed), `buy`, `proposal_open_contract` (subscribed) and `ping`. Only `app/deriv/` talks to Deriv (an
+architecture test, as for pyquotex in D-6). The engine reaches both brokers through one protocol,
+`BrokerAdapter` (`app/brokers/base.py`); `QuotexAdapter` stays as its name in the Quotex package.
+
+**D-75. Both brokers at once.** The owner chose to run Quotex and Deriv side by side: `Broker` = `quotex | deriv`;
+every group and every trading session has a broker (default `quotex`, so nothing changes for an owner who never
+adds Deriv); chains, trades and balance snapshots record it. One demo/real switch and one real-money permission
+cover all brokers (D-15 unchanged). The daily figures, the global limits and the exposure are kept per
+`(broker, account type)`, because they are different accounts with different money; group limits are unchanged.
+Reports never add two brokers' money together unless "all brokers" is chosen, and then they say so. The engine
+starts with whichever brokers have logins and needs at least one; a signal or a session round for a broker that
+is not connected is skipped with that reason. Orders on one broker never wait for the other.
+
+**D-76. Deriv tokens: one per account, Read and Trade only.** Deriv's demo and real accounts each have their own
+API token; both are stored encrypted (D-58), with the owner's registered app id. On connect the adapter checks
+that the demo token belongs to a virtual account and refuses it otherwise, and refuses any token with the
+`payments` or `admin` scope (the guide tells the owner to create tokens with **Read** and **Trade** only). The
+real token is not used unless real money is allowed and chosen.
+
+**D-77. Deriv order rules.** Trades are Rise/Fall (`CALL`/`PUT`) on the stake, with the trade length counted from
+the purchase (like Quotex's `TIMER` mode, so the candle-boundary warning of D-73 still applies to the start time
+only). An exit equal to the entry is a loss: Deriv has no draw on Rise/Fall. The payout percent the hot path
+reads from memory comes from kept-alive `proposal` subscriptions per asset and trade length, started by
+`prepare_asset` (for sessions) and for the assets of enabled Deriv groups; an unknown payout skips the signal
+with that reason. Two kinds of assets are traded: **forex pairs**, named as on Quotex and mapped (`EURUSD` →
+`frxEURUSD`; `_otc` pairs do not exist on Deriv and count as closed there), and **synthetic indices** (the
+Volatility indices, the 1-second Volatility indices, Jump, Step and the others Deriv lists for Rise/Fall), named by
+Deriv's own symbol (`R_75`, `1HZ100V`) and shown with Deriv's display name ("Volatility 75 Index"). Synthetic
+indices trade around the clock. The trade lengths allowed for an asset come from `contracts_for`, never from a
+fixed list: the owner reports (2026-11-17) that forex Rise/Fall starts at 15 minutes while synthetic indices allow
+1 and 5 minutes; a signal, a session round or a form with a length the asset does not offer is skipped or refused
+with that reason. Orders are **not** serialised: every request carries a unique `req_id` and its reply is matched
+by it, so the two legs of a pair go out together. D-27 stays a Quotex rule. An order without a confirmation is
+still `OrderAckTimeoutError` ("may have been placed", never retried).
+
 ---
 
 ## Decisions to be made later (record here when decided)
