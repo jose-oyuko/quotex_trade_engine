@@ -42,6 +42,9 @@ export type Controls = Schemas['ControlsOut']
 export type Account = Schemas['AccountOut']
 export type ChainControl = Schemas['ChainControlOut']
 export type Balance = Schemas['BalanceOut']
+export type DerivAccount = Schemas['DerivAccountOut']
+export type DerivAssets = Schemas['DerivAssetsOut']
+export type DerivAsset = Schemas['DerivAssetOut']
 
 export type ReportSummary = Schemas['SummaryOut']
 export type ReportBreakdown = Schemas['BreakdownOut']
@@ -56,6 +59,7 @@ export type ChainStatus = Schemas['ChainStatus']
 export type TradeStatus = Schemas['TradeStatus']
 export type SignalStatus = Schemas['SignalStatus']
 export type Strategy = Schemas['Strategy']
+export type Broker = Schemas['Broker']
 
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number }
 

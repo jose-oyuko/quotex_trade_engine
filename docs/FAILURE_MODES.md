@@ -14,7 +14,8 @@ a sentence for each problem, and the dashboard shows the same sentence in a bann
 | Failure | Trading | History | You see | Tested |
 |---|---|---|---|---|
 | Telegram connection drops | Pauses (nothing to read); open trades carry on | Messages sent while away are **not** seen | Banner "Telegram is not connected" | `test_connection_loss` |
-| Quotex connection drops | New orders fail cleanly; open trades carry on | Nothing lost | Banner "Quotex is not connected" | `test_connection_loss`, `test_health_degraded` |
+| Quotex connection drops | New signals for it are skipped with the reason; open trades carry on | Nothing lost | Banner "Quotex is not connected" | `test_connection_loss`, `test_health_degraded` |
+| Deriv connection drops | The same for Deriv's groups and sessions; Quotex trades on | Nothing lost | Banner "Deriv is not connected" (when a group or session uses it) | `test_one_broker_down_does_not_stop_the_other`, `test_deriv_adapter` |
 | Database locked / down | Trading continues (never waits for the database) | Held in memory, written when it returns | Banner "database is not accepting writes" | `test_writer_outage` |
 | Database down longer than 10 minutes | Continues | That batch is **dropped**, loudly | Banner "events were dropped" | `test_writer_outage` |
 | Event queue full | Continues | Newest events dropped, counted | Banner "events were dropped" | `test_writer_outage` |
@@ -44,13 +45,28 @@ a sentence for each problem, and the dashboard shows the same sentence in a bann
 - **What happens.** The adapter checks the connection regularly. When it is gone it publishes "Quotex
   not connected", logs in again and keeps trying with the same 1 s to 30 s backoff, for as long as the
   application runs. A stale session is replaced by a fresh login.
-- **An order wanted while it is down** is not queued and not retried: the trade is recorded as `failed`
-  with the reason, the chain ends as `failed`, and the group is released so the next signal works as
-  soon as the connection is back. (Retrying later would enter at a worse price than the signal.)
+- **A signal that arrives while it is down** is skipped before a chain starts, and the Signals page
+  says "Quotex is not connected" (since Phase 20). It is not queued and not retried: retrying later would
+  enter at a worse price than the signal. An order that fails part-way (the connection drops between the
+  check and the order) is recorded as `failed` with the reason, the chain ends as `failed`, and the group
+  is released so the next signal works as soon as the connection is back.
 - **A trade already open** keeps waiting for its result. If the result never arrives within the
   expiry plus a margin, the trade becomes `unknown`, never a guess: check it on Quotex.
-- Tested: `test_an_order_while_quotex_is_down_fails_cleanly_and_the_group_works_again_after`,
+- Tested: `test_a_signal_while_quotex_is_down_is_skipped_and_the_group_works_again_after`,
   `test_a_quotex_drop_while_a_trade_is_open_does_not_disturb_the_waiting_chain`.
+
+## Deriv drops (decisions D-74 to D-77)
+
+- **The same rules as Quotex, for Deriv's groups and sessions only.** The adapter sends a `ping`
+  regularly; a lost socket is reconnected with a fresh one-time link and the same 1 s to 30 s backoff.
+  A refused token is not retried: it is a login problem, shown in words.
+- **The other broker trades on.** One broker down never stops the other (decision D-75).
+- **An order with no confirmation in time** *may* have been placed (`OrderAckTimeoutError`): it is never
+  sent again, and the trade becomes `unknown` if no result arrives: check it on Deriv.
+- **A trade already open** is followed again after a reconnect, so a contract that ended while the socket
+  was down is still reported.
+- **Signals Deriv cannot take** (an OTC pair, a trade length the asset does not offer, a closed asset)
+  are skipped before a chain starts, with the reason.
 
 ## The database is locked, full or unreachable
 
@@ -86,7 +102,7 @@ Nothing can be flushed, so the last fraction of a second of events may not be in
 next start the application reads the database and:
 
 - marks every trade that was open, and its chain, `unknown` (it cannot see Quotex's history to find
-  out how they ended) and records a `risk.tripped` event. **Check those trades on Quotex.**
+  out how they ended) and records a `risk.tripped` event. **Check those trades on the broker's site (Quotex or Deriv).**
 - restores the kill switch, group pauses, risk limits and the day's profit and loss, so a crash never
   lifts a stop-loss or re-enables a stopped group.
 - does not trade on anything it was in the middle of: it does not resend orders.
@@ -99,13 +115,17 @@ Tested: `test_a_hard_crash_leaves_work_in_flight_and_the_restart_flags_it_unknow
 Ctrl+C (or a service stop) runs shutdown in reverse order of startup: the engine stops (it publishes
 its last events), the dashboard feed stops, the writer drains its queue to the database, background
 tasks are cancelled (5 s grace), the database closes. Trades that are open stay open in the database
-and are flagged `unknown` on the next start, like after a crash. Tested:
-`test_a_graceful_shutdown_is_quick_and_flushes_everything_it_knew`.
+and are flagged `unknown` on the next start, like after a crash. Each broker gets at most 10 seconds to
+close, and a login still retrying is cancelled first, so a broker that does not answer cannot hang
+Ctrl+C (fixed in Phase 20). Tested: `test_a_graceful_shutdown_is_quick_and_flushes_everything_it_knew`,
+`test_stopping_gives_up_on_a_broker_that_does_not_close`, `test_stopping_ends_a_login_that_is_still_retrying`.
 
 ## Missing logins
 
-Starting the engine without the Quotex or Telegram logins (or with a stored one that cannot be read)
-fails with the reason, in words; nothing is left half-started and the application keeps running. The
+Starting the engine without the login of at least one broker (Quotex's email and password, or Deriv's
+app id and demo token; decision D-75), or with a stored login that cannot be read, fails with the reason,
+in words. Telegram is optional (signals are off without it). Nothing is left half-started and the
+application keeps running. The
 Settings page shows the reason, `/health` lists it as a problem, and the owner fixes it and presses start
 again. With the engine stopped (the default) the application never touches either service. If the
 application starts with the engine "left running" and a login is then missing, the same happens: it

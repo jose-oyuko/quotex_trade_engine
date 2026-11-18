@@ -103,8 +103,8 @@ class Settings(BaseSettings):
     telegram_session: SecretStr | None = None
 
     # Deriv (decisions D-74 to D-77). A Personal Access Token per account (demo, and optionally
-    # real) with the Trade permission, and the app id registered on Deriv's developer site. Until
-    # the dashboard stores them (Phase 21) they are read from `.env` here.
+    # real) with the Trade permission, and the app id registered on Deriv's developer site. The
+    # ones stored on the dashboard win (Phase 21); these are read from `.env` until they are moved.
     deriv_app_id: str | None = None
     deriv_token_demo: SecretStr | None = None
     deriv_token_real: SecretStr | None = None

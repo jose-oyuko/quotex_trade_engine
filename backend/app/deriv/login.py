@@ -10,10 +10,12 @@ one-time link for the chosen account (`POST options/accounts/{id}/otp`). The lin
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
 
+from app.brokers.base import BrokerAccount
 from app.brokers.errors import BrokerConnectionError, LoginRejectedError
 from app.deriv.protocol import is_demo_account, socket_kind
 from app.domain.enums import AccountType
@@ -43,16 +45,34 @@ class DerivLogin:
         self._timeout_s = timeout_s
         self._transport = transport
 
-    async def socket_url(self, account_type: AccountType) -> str:
-        """A fresh one-time link to the socket of the token's demo or real account. Raises
-        `LoginRejectedError` when Deriv refuses the token or has no such account, and
-        `BrokerConnectionError` when it cannot be reached."""
-        async with httpx.AsyncClient(
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
             base_url=self._api_url,
             headers=self._headers,
             timeout=self._timeout_s,
             transport=self._transport,
-        ) as client:
+        )
+
+    async def account(self, account_type: AccountType) -> BrokerAccount:
+        """Which account the token opens for demo or real, from the account list alone: no
+        socket is opened and nothing is traded (the dashboard's *Check* button). Raises like
+        `socket_url`."""
+        async with self._client() as client:
+            accounts = _data(await self._call(client, "GET", "options/accounts"))
+        found = _pick(accounts, account_type)
+        currency = found.get("currency")
+        return BrokerAccount(
+            account_id=str(found["account_id"]),
+            account_type=account_type,
+            currency=str(currency) if currency else None,
+            balance=_amount(found.get("balance")),
+        )
+
+    async def socket_url(self, account_type: AccountType) -> str:
+        """A fresh one-time link to the socket of the token's demo or real account. Raises
+        `LoginRejectedError` when Deriv refuses the token or has no such account, and
+        `BrokerConnectionError` when it cannot be reached."""
+        async with self._client() as client:
             accounts = _data(await self._call(client, "GET", "options/accounts"))
             account = _pick(accounts, account_type)
             account_id = str(account["account_id"])
@@ -94,6 +114,17 @@ def _data(response: httpx.Response) -> Any:
     if not isinstance(body, Mapping) or "data" not in body:
         raise BrokerConnectionError("Deriv's answer has no `data`.")
     return body["data"]
+
+
+def _amount(value: object) -> Decimal | None:
+    """A balance as Deriv sends it (a number or a numeric string); None when absent or odd."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        amount = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return amount.quantize(Decimal("0.01")) if amount.is_finite() else None
 
 
 def _message(response: httpx.Response) -> str:

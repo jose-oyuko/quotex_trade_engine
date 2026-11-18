@@ -1,5 +1,5 @@
-"""Run the whole application on FAKE Quotex and FAKE Telegram, to try the dashboard without any
-account, login or money.
+"""Run the whole application on FAKE Quotex, FAKE Deriv and FAKE Telegram, to try the dashboard
+without any account, login or money.
 
     npm run demo                      # then open http://127.0.0.1:8000  (after `npm run build`)
     npm run demo -- --interval 4 --reset
@@ -19,6 +19,7 @@ import random
 import shutil
 import sys
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +27,15 @@ import httpx
 import uvicorn
 from alembic import command
 
+from app.brokers.base import BrokerAccount
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
+from app.deriv.fake import FakeDerivAdapter
+from app.deriv.protocol import LengthRange
+from app.domain.enums import AccountType, Broker
 from app.engine.engine import Engine
 from app.engine.flags import EngineFlags
 from app.events.bus import EventBus
@@ -122,6 +127,30 @@ class Fakes:
     adapter: FakeQuotexAdapter
     source: FakeTelegramSource
     engine: Engine
+    deriv: FakeDerivAdapter | None = None
+
+
+# The fake Deriv, with Deriv's own rules: forex Rise/Fall from 15 minutes, synthetic indices from
+# 15 seconds, no OTC pairs (decision D-77): a Deriv trading session can be tried on the dashboard.
+DERIV_FOREX = ("EURUSD", "GBPUSD")
+DERIV_INDICES = ("R_75", "R_100")
+YEAR_S = 365 * 86_400
+
+
+def fake_deriv(clock: SystemClock, bus: EventBus) -> FakeDerivAdapter:
+    deriv = FakeDerivAdapter(clock=clock, bus=bus, result_delay_s=EXPIRY_S)
+    for asset in DERIV_FOREX:
+        deriv.add_asset(asset, payout=81)
+        deriv.set_lengths(asset, [LengthRange(900, YEAR_S)])
+    for asset in DERIV_INDICES:
+        deriv.add_asset(asset, payout=88)
+        deriv.set_lengths(asset, [LengthRange(15, YEAR_S)])
+    return deriv
+
+
+async def demo_account_check(settings: Settings, account_type: AccountType) -> BrokerAccount:
+    """The Deriv *Check* button of the demo: a made-up account, never a call to Deriv."""
+    return BrokerAccount("VRTC-DEMO", account_type, "USD", Decimal("10000.00"))
 
 
 def fake_builder(holder: list[Fakes]) -> Any:
@@ -132,9 +161,16 @@ def fake_builder(holder: list[Fakes]) -> Any:
         adapter = FakeQuotexAdapter(clock=clock, bus=bus, result_delay_s=EXPIRY_S)
         for asset in ASSETS:
             adapter.add_asset(asset, payout=85)
+        deriv = fake_deriv(clock, bus)
         source = FakeTelegramSource(clock)
-        engine = Engine(adapter=adapter, source=source, bus=bus, clock=clock, tasks=tasks)
-        holder.append(Fakes(adapter, source, engine))
+        engine = Engine(
+            adapters={Broker.QUOTEX: adapter, Broker.DERIV: deriv},
+            source=source,
+            bus=bus,
+            clock=clock,
+            tasks=tasks,
+        )
+        holder.append(Fakes(adapter, source, engine, deriv))
         return engine
 
     return build
@@ -190,7 +226,9 @@ async def run(port: int, interval: float, win_rate: float, reset: bool) -> int:
     await asyncio.to_thread(command.upgrade, alembic_config(settings.database_url), "head")
     await leave_engine_running(settings)
     holder: list[Fakes] = []
-    app = create_app(settings, engine_builder=fake_builder(holder))
+    app = create_app(
+        settings, engine_builder=fake_builder(holder), deriv_checker=demo_account_check
+    )
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))
     serving = asyncio.create_task(server.serve())
     while not server.started and not serving.done():  # noqa: ASYNC110

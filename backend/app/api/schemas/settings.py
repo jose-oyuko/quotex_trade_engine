@@ -34,7 +34,7 @@ class SecretItemOut(BaseModel):
     name: str
     label: str
     help: str
-    group: Literal["logins", "telegram"]
+    group: Literal["logins", "telegram", "deriv"]
     is_set: bool
     readable: bool  # False when SECRET_KEY is missing or is not the key it was stored with
     updated_at: datetime | None

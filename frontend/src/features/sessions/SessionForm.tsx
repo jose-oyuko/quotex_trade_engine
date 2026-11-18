@@ -1,9 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
+import { useDerivAssets } from '../../api/queries'
 import { Button } from '../../components/Button'
+import { BROKER_LABEL, BROKERS } from '../../lib/brokers'
 import { formatMoney } from '../../lib/format'
 import { Field } from '../groups/GroupForm'
+import { describeLengths, groupAssets, lengthWarning, offers } from './derivOffer'
 import {
   DEFAULT_MULTIPLIER,
   MAX_STEPS,
@@ -50,6 +53,16 @@ export function SessionForm({
   const steps = values.max_steps
   const noFollowUps = strategy === 'no_martingale'
   const everyCandle = values.mode === 'every_candle'
+  // Deriv: its list of assets and the trade lengths each allows, while the engine knows them
+  const onDeriv = values.broker === 'deriv'
+  const deriv = useDerivAssets(onDeriv)
+  const derivList = deriv.data?.available === true ? deriv.data.items : null
+  const derivReason =
+    deriv.data?.reason !== undefined && deriv.data.reason !== null
+      ? `Deriv's own list appears here while the engine is connected to it (now: ${deriv.data.reason})`
+      : ''
+  const pickedAsset = onDeriv ? derivList?.find((a) => a.asset === values.asset) : undefined
+  const lengthProblem = lengthWarning(pickedAsset, values.duration_s)
 
   useEffect(() => {
     if (noFollowUps) setValue('max_steps', 0)
@@ -123,23 +136,78 @@ export function SessionForm({
       <fieldset>
         <legend>What to trade</legend>
         <Field
-          label="Asset"
-          error={errors.asset}
-          help="The Quotex name: EURUSD, or EURUSD_otc for the over-the-counter market (the only one open at the weekend)."
+          label="Broker"
+          error={errors.broker}
+          help="Where the trades are placed. Its money and daily limits are counted apart from the other broker's."
         >
-          {({ id, describedBy, invalid }) => (
-            <input
-              id={id}
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-              {...register('asset')}
-            />
+          {({ id, describedBy }) => (
+            <select id={id} aria-describedby={describedBy} {...register('broker')}>
+              {BROKERS.map((broker) => (
+                <option key={broker} value={broker}>
+                  {BROKER_LABEL[broker]}
+                </option>
+              ))}
+            </select>
           )}
         </Field>
+        {onDeriv && derivList !== null ? (
+          <Field
+            label="Asset"
+            error={errors.asset}
+            help="Deriv's list, as the running engine knows it. Forex Rise/Fall starts at 15 minutes; the synthetic indices also offer shorter trades."
+          >
+            {({ id, describedBy, invalid }) => (
+              <select
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                {...register('asset')}
+              >
+                {!derivList.some((a) => a.asset === values.asset) && (
+                  <option value={values.asset}>
+                    {values.asset === '' ? 'Choose an asset' : `${values.asset} (not listed)`}
+                  </option>
+                )}
+                {groupAssets(derivList).map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.assets.map((a) => (
+                      <option key={a.asset} value={a.asset}>
+                        {a.name} ({a.asset}){a.is_open ? '' : ', closed now'}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+          </Field>
+        ) : (
+          <Field
+            label="Asset"
+            error={errors.asset}
+            help={
+              onDeriv
+                ? `Deriv's name: EURUSD, or a synthetic index like R_75. ${derivReason}`
+                : 'The Quotex name: EURUSD, or EURUSD_otc for the over-the-counter market (the only one open at the weekend).'
+            }
+          >
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                {...register('asset')}
+              />
+            )}
+          </Field>
+        )}
         <Field
           label="Trade length"
           error={errors.duration_s}
-          help="Every trade lasts this long, and so does a candle."
+          help={
+            pickedAsset?.lengths
+              ? `Every trade lasts this long, and so does a candle. Deriv offers ${describeLengths(pickedAsset)} on ${pickedAsset.asset}.`
+              : 'Every trade lasts this long, and so does a candle.'
+          }
         >
           {({ id, describedBy }) => (
             <select
@@ -148,13 +216,25 @@ export function SessionForm({
               {...register('duration_s', { valueAsNumber: true })}
             >
               {TRADE_LENGTHS.map((t) => (
-                <option key={t.value} value={t.value}>
+                <option
+                  key={t.value}
+                  value={t.value}
+                  disabled={pickedAsset !== undefined && offers(pickedAsset, t.value) === false}
+                >
                   {t.label}
+                  {pickedAsset !== undefined && offers(pickedAsset, t.value) === false
+                    ? ' (not offered)'
+                    : ''}
                 </option>
               ))}
             </select>
           )}
         </Field>
+        {lengthProblem !== null && (
+          <p className="form-error" role="alert">
+            {lengthProblem}
+          </p>
+        )}
       </fieldset>
 
       <fieldset>

@@ -18,7 +18,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
-from app.domain.enums import AccountType, Strategy
+from app.domain.enums import AccountType, Broker, Strategy
 
 # How much data it takes before a number means anything. Below TINY a win rate is noise; below SMALL
 # it is a hint at best. The dashboard repeats these words next to the numbers.
@@ -56,6 +56,9 @@ class ReportFilter:
     utc_offset_minutes: int = 0
     # only the trades of one trading session (its hidden group's), decision D-71
     session_id: int | None = None
+    # only one broker's trades (decision D-75); None adds every broker's together, which the
+    # dashboard does only when "All brokers" is chosen, and says so
+    broker: Broker | None = None
 
     def __post_init__(self) -> None:
         if abs(self.utc_offset_minutes) > MAX_UTC_OFFSET_MINUTES:
@@ -67,6 +70,7 @@ class ReportFilter:
 class BreakdownKind(StrEnum):
     GROUP = "group"
     SESSION = "session"  # trading sessions only (Telegram groups have no session)
+    BROKER = "broker"  # Quotex, Deriv (decision D-75)
     ASSET = "asset"
     STRATEGY = "strategy"
     HOUR = "hour"
@@ -241,3 +245,4 @@ class ExportRow:
     error: str | None
     trade_id: str
     chain_id: str
+    broker: str = "quotex"

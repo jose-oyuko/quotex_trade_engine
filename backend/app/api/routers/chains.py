@@ -13,7 +13,7 @@ from app.api.errors import ApiError
 from app.api.schemas.common import DEFAULT_PAGE_SIZE, LimitParam, OffsetParam, Page
 from app.api.schemas.records import ChainDetailOut, ChainOut, chain_out, signal_out, trade_out
 from app.db.repositories import ChainRepository, SignalRepository, TradeRepository
-from app.domain.enums import AccountType, ChainStatus
+from app.domain.enums import AccountType, Broker, ChainStatus
 from app.engine.errors import UnknownChainError
 
 router = APIRouter(prefix="/chains", tags=["chains"])
@@ -30,6 +30,7 @@ async def list_chains(
     group_id: int | None = None,
     status: ChainStatus | None = None,
     account_type: AccountType | None = None,
+    broker: Broker | None = None,
     limit: LimitParam = DEFAULT_PAGE_SIZE,
     offset: OffsetParam = 0,
 ) -> Page[ChainOut]:
@@ -37,11 +38,18 @@ async def list_chains(
     live picture of what is running right now."""
     repo = ChainRepository(session)
     rows = await repo.list(
-        group_id=group_id, status=status, account_type=account_type, limit=limit, offset=offset
+        group_id=group_id,
+        status=status,
+        account_type=account_type,
+        broker=broker,
+        limit=limit,
+        offset=offset,
     )
     return Page(
         items=[chain_out(c) for c in rows],
-        total=await repo.count(group_id=group_id, status=status, account_type=account_type),
+        total=await repo.count(
+            group_id=group_id, status=status, account_type=account_type, broker=broker
+        ),
         limit=limit,
         offset=offset,
     )

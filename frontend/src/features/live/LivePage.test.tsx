@@ -127,3 +127,63 @@ describe('LivePage', () => {
     expect(await screen.findByText('GBPUSD')).toBeInTheDocument()
   })
 })
+
+describe('LivePage with two brokers (decision D-75)', () => {
+  it('shows one balance and one day’s result per broker, never added up', async () => {
+    mockApi([
+      ...routes().filter(([, path]) => path !== '/risk'),
+      [
+        'GET',
+        '/risk',
+        json({
+          controls: makeSnapshot().controls,
+          day: {
+            account_type: 'demo',
+            since: '2026-11-02T00:00:00Z',
+            pnl: '-2.12',
+            by_broker: { quotex: '-3.00', deriv: '0.88' },
+          },
+          open_trades: 0,
+          open_exposure: '0',
+        }),
+      ],
+    ])
+    renderWith(<LivePage />, {
+      client: testClient(
+        makeSnapshot({
+          brokers: ['quotex', 'deriv'],
+          balances: [
+            {
+              account_type: 'demo',
+              balance: '1000.00',
+              taken_at: '2026-11-02T10:00:00Z',
+              broker: 'quotex',
+            },
+            {
+              account_type: 'demo',
+              balance: '9998.04',
+              taken_at: '2026-11-02T10:00:00Z',
+              broker: 'deriv',
+            },
+          ],
+          open_chains: [makeChain({ broker: 'deriv', asset: 'R_75' })],
+        }),
+      ),
+    })
+    const stats = screen.getByLabelText('Summary')
+    expect(within(stats).getByText('Quotex balance (DEMO)').nextSibling).toHaveTextContent(
+      '1,000.00',
+    )
+    expect(within(stats).getByText('Deriv balance (DEMO)').nextSibling).toHaveTextContent(
+      '9,998.04',
+    )
+    expect(await within(stats).findByText('-3.00')).toHaveClass('money-loss')
+    expect(within(stats).getByText('Deriv today').nextSibling).toHaveTextContent('+0.88')
+    expect(within(stats).queryByText('-2.12')).toBeNull() // the two are not added up
+    expect(within(stats).queryByText('Balance (DEMO)')).toBeNull()
+
+    const chains = screen.getByRole('table', { name: /Chains running/i })
+    expect(within(chains).getByRole('columnheader', { name: 'Broker' })).toBeInTheDocument()
+    expect(within(chains).getByText('Deriv')).toBeInTheDocument()
+  })
+})

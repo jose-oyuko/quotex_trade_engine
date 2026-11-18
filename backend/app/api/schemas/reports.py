@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import AccountType, Strategy
+from app.domain.enums import AccountType, Broker, Strategy
 from app.reports.models import (
     SAMPLE_SMALL,
     SAMPLE_TINY,
@@ -31,6 +31,9 @@ class FilterOut(BaseModel):
     until: datetime | None
     group_id: int | None
     session_id: int | None
+    broker: Broker | None = Field(
+        description="Only this broker's trades; null when every broker's were added together."
+    )
     strategy: Strategy | None
     asset: str | None
     utc_offset_minutes: int
@@ -153,6 +156,7 @@ def filter_out(flt: ReportFilter) -> FilterOut:
         until=flt.until,
         group_id=flt.group_id,
         session_id=flt.session_id,
+        broker=flt.broker,
         strategy=flt.strategy,
         asset=flt.asset,
         utc_offset_minutes=flt.utc_offset_minutes,

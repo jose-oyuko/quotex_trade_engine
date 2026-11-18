@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chain
 from app.db.repositories._mapping import page, to_record, to_values
-from app.domain.enums import ACTIVE_CHAIN_STATUSES, AccountType, ChainStatus
+from app.domain.enums import ACTIVE_CHAIN_STATUSES, AccountType, Broker, ChainStatus
 from app.domain.records import ChainRecord
 
 
@@ -37,12 +37,13 @@ class ChainRepository:
         group_id: int | None = None,
         status: ChainStatus | None = None,
         account_type: AccountType | None = None,
+        broker: Broker | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[ChainRecord]:
         """Newest first."""
         limit, offset = page(limit, offset)
-        stmt = _filtered(select(Chain), group_id, status, account_type)
+        stmt = _filtered(select(Chain), group_id, status, account_type, broker)
         stmt = stmt.order_by(Chain.created_at.desc(), Chain.id).limit(limit).offset(offset)
         return [to_record(ChainRecord, row) for row in await self._session.scalars(stmt)]
 
@@ -52,14 +53,23 @@ class ChainRepository:
         group_id: int | None = None,
         status: ChainStatus | None = None,
         account_type: AccountType | None = None,
+        broker: Broker | None = None,
     ) -> int:
-        stmt = _filtered(select(func.count()).select_from(Chain), group_id, status, account_type)
+        stmt = _filtered(
+            select(func.count()).select_from(Chain), group_id, status, account_type, broker
+        )
         return await self._session.scalar(stmt) or 0
 
 
 def _filtered[S: Select[Any]](
-    stmt: S, group_id: int | None, status: ChainStatus | None, account_type: AccountType | None
+    stmt: S,
+    group_id: int | None,
+    status: ChainStatus | None,
+    account_type: AccountType | None,
+    broker: Broker | None = None,
 ) -> S:
+    if broker is not None:
+        stmt = stmt.where(Chain.broker == broker)
     if group_id is not None:
         stmt = stmt.where(Chain.group_id == group_id)
     if status is not None:

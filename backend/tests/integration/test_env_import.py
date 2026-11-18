@@ -51,6 +51,9 @@ async def test_the_dashboard_lists_what_env_still_holds_and_moves_it_without_a_v
             ("Quotex password", True, False),
             ("Telegram API id", True, False),
             ("Telegram API hash", True, False),
+            ("Deriv app id", False, False),
+            ("Deriv demo token", False, False),
+            ("Deriv real token", False, False),
         ]
         response = await rig.client.post(f"{API}/settings/env-logins/import")
         assert response.status_code == 200
@@ -61,7 +64,7 @@ async def test_the_dashboard_lists_what_env_still_holds_and_moves_it_without_a_v
             "Telegram API id",
             "Telegram API hash",
         ]
-        assert all(i["stored"] for i in body["items"])
+        assert all(i["stored"] for i in body["items"] if i["in_env"])
         for secret in ("env@example.com", "env-password-123", "envhash-abcdef", "4242"):
             assert secret not in response.text
         assert stored_names(rig.settings.database_path) == {

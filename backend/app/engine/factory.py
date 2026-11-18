@@ -9,7 +9,7 @@ from app.brokers.errors import BrokerError
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
-from app.deriv.factory import build_deriv_adapter
+from app.deriv.factory import build_deriv_adapter, check_deriv_account
 from app.domain.enums import Broker
 from app.engine.engine import Engine
 from app.events.bus import EventBus
@@ -18,6 +18,8 @@ from app.telegram.factory import build_telethon_source
 from app.telegram.source import TelegramNotConfiguredError, TelegramSource
 
 log = structlog.get_logger()
+
+__all__ = ["build_engine", "check_deriv_account"]
 
 
 def build_engine(settings: Settings, bus: EventBus, tasks: TaskSupervisor) -> Engine:

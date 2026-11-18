@@ -148,6 +148,9 @@ async def test_the_session_and_phone_are_never_listed_or_settable_through_the_se
             "quotex_password",
             "telegram_api_id",
             "telegram_api_hash",
+            "deriv_app_id",
+            "deriv_token_demo",
+            "deriv_token_real",
         }
         for name in ("telegram_session", "telegram_phone"):
             put = await rig.client.put(f"{API}/secrets/{name}", json={"value": "x"})

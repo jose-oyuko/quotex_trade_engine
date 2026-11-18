@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useFieldArray, useForm, useWatch, type FieldError } from 'react-hook-form'
 import { Button } from '../../components/Button'
+import { BROKER_LABEL, BROKERS } from '../../lib/brokers'
 import {
   DEFAULT_MULTIPLIER,
   FLIP_STRATEGIES,
@@ -81,6 +82,8 @@ export function GroupForm({
 
   const strategy = useWatch({ control, name: 'strategy' })
   const steps = useWatch({ control, name: 'max_steps' })
+  const broker = useWatch({ control, name: 'broker' })
+  const suffixMode = useWatch({ control, name: 'asset_suffix_mode' })
   const noFollowUps = strategy === 'no_martingale'
   const isFlip = FLIP_STRATEGIES.includes(strategy)
 
@@ -174,6 +177,27 @@ export function GroupForm({
             />
           )}
         </Field>
+        <Field
+          label="Broker"
+          error={errors.broker}
+          help="Where this group's signals are traded. Its money and daily limits are counted apart from the other broker's."
+        >
+          {({ id, describedBy }) => (
+            <select id={id} aria-describedby={describedBy} {...register('broker')}>
+              {BROKERS.map((broker) => (
+                <option key={broker} value={broker}>
+                  {BROKER_LABEL[broker]}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        {broker === 'deriv' && (
+          <p className="notice" role="note">
+            On Deriv, forex Rise/Fall starts at 15 minutes and there are no OTC pairs: a signal for
+            a shorter trade or an OTC pair is skipped, with the reason on the Signals page.
+          </p>
+        )}
         <label className="check">
           <input type="checkbox" {...register('enabled')} />
           Enabled (listen to this group)
@@ -286,7 +310,13 @@ export function GroupForm({
             </select>
           )}
         </Field>
-        <Field label="OTC assets" error={errors.asset_suffix_mode}>
+        <Field
+          label="OTC assets"
+          error={errors.asset_suffix_mode}
+          {...(broker === 'deriv' && suffixMode !== 'none'
+            ? { help: 'Deriv has no OTC pairs: choose "Never OTC" for a Deriv group.' }
+            : {})}
+        >
           {({ id, describedBy }) => (
             <select id={id} aria-describedby={describedBy} {...register('asset_suffix_mode')}>
               {SUFFIX_MODES.map((m) => (

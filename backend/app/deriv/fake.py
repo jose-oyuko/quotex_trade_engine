@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.brokers.base import TradeOutcome
+from app.brokers.base import AssetOffer, ConnectionState, TradeOutcome
 from app.brokers.errors import DurationNotOfferedError
 from app.brokers.fake import FakeBrokerAdapter
 from app.deriv.protocol import (
@@ -30,6 +30,24 @@ class FakeDerivAdapter(FakeBrokerAdapter):
         if self._lengths is None:
             self._lengths = {}
         self._lengths[asset] = ranges
+
+    def catalogue(self) -> list[AssetOffer]:
+        """The assets added to the fake, as Deriv's list would show them."""
+        if self.state is not ConnectionState.CONNECTED:
+            return []
+        lengths = self._lengths or {}
+        return [
+            AssetOffer(
+                asset=asset,
+                name=asset,
+                market="forex" if deriv_symbol(asset) != asset else "synthetic_index",
+                is_open=self.is_open(asset),
+                lengths=None
+                if asset not in lengths
+                else tuple((r.min_s, r.max_s) for r in lengths[asset]),
+            )
+            for asset in sorted(self._assets)
+        ]
 
     def is_open(self, asset: str) -> bool:
         return deriv_symbol(asset) is not None and super().is_open(asset)

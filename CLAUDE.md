@@ -32,6 +32,8 @@ The owner is learning the system as it is built. Explain what you did and why, i
 5. **The execution path is sacred.** Between "signal received" and "order sent" there must be no
    database wait, no blocking I/O and no dashboard work (see `docs/ARCHITECTURE.md`, section 4).
 6. **All Quotex access goes through the adapter** (`app/quotex/`). No other module imports `pyquotex`.
+   Likewise **all Deriv access goes through `app/deriv/`** (D-74): no other module opens a socket or
+   an HTTP call to Deriv; only the engine's factory (`app/engine/factory.py`) names it.
 7. **Do not invent scope.** If something is not in the current phase, put it in the report under
    "Suggestions" instead of building it. If a decision is genuinely the owner's, ask.
 8. **No fake success.** If a test fails or something could not be verified (for example anything that

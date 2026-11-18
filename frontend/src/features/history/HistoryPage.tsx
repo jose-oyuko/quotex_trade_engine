@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useGroups, useTrades } from '../../api/queries'
-import type { AccountType, Trade, TradeStatus } from '../../api/types'
+import type { AccountType, Broker, Trade, TradeStatus } from '../../api/types'
 import { Badge, type Tone } from '../../components/Badge'
 import { DataState } from '../../components/DataState'
 import { Money } from '../../components/Money'
 import { Pagination } from '../../components/Pagination'
+import { BROKER_LABEL, BROKERS } from '../../lib/brokers'
 import { formatDateTime, formatMs, titleCase } from '../../lib/format'
 import { useGroupNames } from '../controls/useGroupNames'
 
@@ -30,6 +31,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
             <th scope="col">Time</th>
             <th scope="col">Account</th>
             <th scope="col">Group</th>
+            <th scope="col">Broker</th>
             <th scope="col">Asset</th>
             <th scope="col">Direction</th>
             <th scope="col">Step</th>
@@ -50,6 +52,7 @@ function TradesTable({ trades }: { trades: Trade[] }) {
                 </Badge>
               </td>
               <td>{groupName(trade.group_id)}</td>
+              <td>{BROKER_LABEL[trade.broker]}</td>
               <td>{trade.asset}</td>
               <td>{trade.direction.toUpperCase()}</td>
               <td>{trade.step + 1}</td>
@@ -80,10 +83,18 @@ export default function HistoryPage() {
   const [groupId, setGroupId] = useState<number | undefined>(undefined)
   const [status, setStatus] = useState<TradeStatus | undefined>(undefined)
   const [account, setAccount] = useState<AccountType | undefined>(undefined)
+  const [broker, setBroker] = useState<Broker | undefined>(undefined)
   const [limit, setLimit] = useState(50)
   const [offset, setOffset] = useState(0)
   const groups = useGroups()
-  const trades = useTrades({ limit, offset, group_id: groupId, status, account_type: account })
+  const trades = useTrades({
+    limit,
+    offset,
+    group_id: groupId,
+    status,
+    account_type: account,
+    broker,
+  })
 
   const reset = (apply: () => void) => {
     apply()
@@ -147,6 +158,24 @@ export default function HistoryPage() {
             <option value="">Demo and real</option>
             <option value="demo">Demo</option>
             <option value="real">Real</option>
+          </select>
+        </label>
+        <label>
+          Broker{' '}
+          <select
+            value={broker ?? ''}
+            onChange={(event) => {
+              reset(() => {
+                setBroker(event.target.value === '' ? undefined : (event.target.value as Broker))
+              })
+            }}
+          >
+            <option value="">All brokers</option>
+            {BROKERS.map((value) => (
+              <option key={value} value={value}>
+                {BROKER_LABEL[value]}
+              </option>
+            ))}
           </select>
         </label>
       </div>

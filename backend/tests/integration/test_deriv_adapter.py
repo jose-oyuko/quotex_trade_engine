@@ -524,3 +524,21 @@ async def test_assets_deriv_does_not_trade_are_refused_from_memory(deriv: DerivA
     assert deriv.order_refusal("NOPE", 60) == "NOPE is not traded on Deriv"
     assert deriv.order_refusal("AUDUSD", 900) == "AUDUSD is closed on Deriv"
     assert deriv.order_refusal("R_75", 60) is None  # lengths not asked for (preloading is off)
+
+
+# ---- the asset list for the dashboard (Phase 21) ----------------------------------------------
+
+
+async def test_the_catalogue_lists_every_asset_with_the_lengths_learned_so_far(
+    deriv: DerivAdapter,
+) -> None:
+    before = {a.asset: a for a in deriv.catalogue()}
+    assert set(before) == {"EURUSD", "R_75", "AUDUSD"}
+    assert before["EURUSD"].market == "forex" and before["EURUSD"].lengths is None
+    assert before["AUDUSD"].is_open is False
+    assert before["R_75"].name != "" and before["R_75"].market == "synthetic_index"
+
+    await deriv.trade_lengths("EURUSD")
+    after = {a.asset: a for a in deriv.catalogue()}
+    assert after["EURUSD"].lengths == ((900, 365 * 86400),)
+    assert after["R_75"].lengths is None  # not asked about yet

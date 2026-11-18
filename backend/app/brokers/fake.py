@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.brokers.base import (
+    AssetOffer,
     BalanceSnapshot,
     ConnectionState,
     OrderAck,
@@ -232,6 +233,9 @@ class FakeBrokerAdapter:
 
     def order_refusal(self, asset: str, duration_s: int) -> str | None:
         return None
+
+    def catalogue(self) -> list[AssetOffer]:
+        return []
 
     def is_open(self, asset: str) -> bool:
         known = self._assets.get(asset)

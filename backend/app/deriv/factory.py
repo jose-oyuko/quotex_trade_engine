@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 from pydantic import SecretStr
 
+from app.brokers.base import BrokerAccount
 from app.brokers.errors import BrokerError, RealAccountNotAllowedError
 from app.core.clock import Clock
 from app.core.config import Settings
@@ -62,3 +63,24 @@ def build_deriv_adapter(
         allow_real=settings.quotex_allow_real,
         real_available=bool(real_token),
     )
+
+
+async def check_deriv_account(
+    settings: Settings,
+    account_type: AccountType,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> BrokerAccount:
+    """Which account the token for `account_type` opens, from Deriv's account list only: no
+    socket is opened and nothing is traded. Raises `LoginRejectedError` when a login is missing or
+    refused, `BrokerConnectionError` when Deriv cannot be reached."""
+    token = (
+        settings.deriv_token_demo if account_type is AccountType.DEMO else settings.deriv_token_real
+    )
+    login = DerivLogin(
+        token=_value(token),
+        app_id=(settings.deriv_app_id or "").strip(),
+        api_url=settings.deriv_api_url,
+        transport=transport,
+    )
+    return await login.account(account_type)

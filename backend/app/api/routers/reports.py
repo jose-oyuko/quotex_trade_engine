@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response, StreamingResponse
@@ -26,7 +26,7 @@ from app.api.schemas.reports import (
     equity_out,
     summary_out,
 )
-from app.domain.enums import AccountType, Strategy
+from app.domain.enums import AccountType, Broker, Strategy
 from app.reports import queries
 from app.reports.csvout import Delimiter, breakdown_csv, trades_csv
 from app.reports.models import BreakdownKind, ReportFilter
@@ -59,6 +59,13 @@ def report_filter(
     session_id: Annotated[
         int | None, Query(description="Only the trades of this trading session.")
     ] = None,
+    broker: Annotated[
+        Literal["quotex", "deriv", "all"],
+        Query(
+            description="One broker's trades (Quotex unless chosen), or `all` to add every "
+            "broker's together: their money is in different accounts.",
+        ),
+    ] = "quotex",
     strategy: Strategy | None = None,
     asset: Annotated[str | None, Query(min_length=1, max_length=32)] = None,
     utc_offset_minutes: Annotated[
@@ -79,6 +86,7 @@ def report_filter(
             until=until.astimezone(UTC) if until else None,
             group_id=group_id,
             session_id=session_id,
+            broker=None if broker == "all" else Broker(broker),
             strategy=strategy,
             asset=asset,
             utc_offset_minutes=utc_offset_minutes,

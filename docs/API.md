@@ -35,20 +35,20 @@ trust:
 
 | Method and path | What it does |
 |---|---|
-| `GET /health` | Is the backend alive: database, writer queue, engine, Telegram/Quotex connection, number of dashboards connected. No secrets. |
+| `GET /health` | Is the backend alive: database, writer queue, engine, Telegram/Quotex/Deriv connection, number of dashboards connected. No secrets. |
 | `GET /auth/state` | *No login needed.* Is an owner account still to be created, and is this browser logged in (and as whom). |
 | `POST /auth/setup` | *No login needed.* Create the owner account, once: needs the setup code from the application's log. Logs the browser in. 403 `wrong_setup_code`, 409 `setup_closed`, 422 `invalid_account`. |
 | `POST /auth/login`, `POST /auth/logout` | *No login needed.* Log in with username and password (sets the session cookie); end this browser's session. Wrong login: 401 `invalid_login` (never says which part was wrong); too many failures: 429 `too_many_attempts`. |
 | `POST /auth/password` | Change the password (needs the current one). Every other logged-in browser is logged out. |
-| `GET /status` | The whole picture now: account (demo/real), connections, balance, controls, today's result, open chains and open trades. Same data as the WebSocket's first message. |
+| `GET /status` | The whole picture now: account (demo/real), the brokers the engine has (`brokers`), connections, the balance of each broker (`balances`, never added up), controls, today's result (per broker in `day.by_broker`), open chains and open trades. Same data as the WebSocket's first message. |
 | `GET /settings`, `PUT /settings` | The settings that can be changed in the dashboard (log detail, Quotex address, trade expiry mode), each with its value, the default and where the value comes from (`database`, `environment`, `default`). `PUT` takes `{"values": {key: text or null}}` (`null` removes the stored value); all or none are saved; an unknown key or a bad value is 422 `invalid_setting`. A saved value is used from the next start. |
-| `GET /secrets` | Which stored logins exist (`quotex_email`, `quotex_password`, `telegram_api_id`, `telegram_api_hash`, each with its `group`), whether each can be read with `SECRET_KEY`, and what the key is like (`ok`, `missing`, `invalid`). **Never a value.** |
+| `GET /secrets` | Which stored logins exist (`quotex_email`, `quotex_password`, `telegram_api_id`, `telegram_api_hash`, `deriv_app_id`, `deriv_token_demo`, `deriv_token_real`, each with its `group`: `logins`, `telegram` or `deriv`), whether each can be read with `SECRET_KEY`, and what the key is like (`ok`, `missing`, `invalid`). **Never a value.** |
 | `PUT /secrets/{name}`, `DELETE /secrets/{name}` | Store (encrypted, replacing any earlier value) or remove one. There is no way to read a value back. 503 `secret_key_missing` / `secret_key_invalid` without a usable key, 404 `unknown_secret`, 422 `invalid_secret`. |
-| `GET /groups`, `POST /groups` | List the groups; add one (chat id, title, strategy settings). |
+| `GET /groups`, `POST /groups` | List the groups; add one (chat id, title, `broker`: `quotex` by default or `deriv`, strategy settings). |
 | `GET /groups/{id}`, `PUT /groups/{id}`, `DELETE /groups/{id}` | Read one; replace its title, enabled flag and settings; delete one (only if it has no history — otherwise disable it). |
 | `POST /groups/{id}/pause`, `POST /groups/{id}/resume` | New signals of the group are ignored (and say so) while it is paused; its running chains finish. *Needs the engine.* |
 | `GET /groups/{id}/risk`, `PUT /groups/{id}/risk` | The group's own limits (max stake, daily stop-loss, daily profit target). |
-| `GET /sessions`, `POST /sessions` | List the trading sessions; save one (decision D-71): asset, trade length, window and time zone, repeat rule, strategy, targets. 409 `session_overlap` if its window overlaps another enabled session's, 422 `invalid_session`. Each session shows when it will start next, its warnings and its run in progress. |
+| `GET /sessions`, `POST /sessions` | List the trading sessions; save one (decision D-71): `broker` (`quotex` or `deriv`), asset, trade length, window and time zone, repeat rule, strategy, targets. 409 `session_overlap` if its window overlaps another enabled session's, 422 `invalid_session`. Each session shows when it will start next, its warnings and its run in progress. |
 | `GET /sessions/{id}`, `PUT /sessions/{id}`, `DELETE /sessions/{id}` | Read one; replace it (saving a *once* session arms it again); delete it (only with no runs on record, otherwise disable it). Edits and deletes are refused while it runs: 409 `session_in_use`. |
 | `POST /sessions/{id}/start`, `POST /sessions/{id}/stop` | Begin a run now (the first pair at once, for a window of the session's usual length; 409 `session_run_active` if another run is going, 422 if the session is switched off); stop the run: no new pairs, the chains already running finish (409 `no_active_run`). *Needs the engine.* |
 | `GET /sessions/runs` | The runs of every session (filter `session_id`), newest first: state, pairs opened, rounds skipped, profit, why it ended. |
@@ -57,14 +57,16 @@ trust:
 | `POST /quotex/login/start` | Log in with the stored email and password (demo). Returns when the login needs the PIN, has finished, or is still going (ask again). A refused login is `logged_out` with the reason in `message`, not an HTTP error. 409 `quotex_not_configured`, 409 `engine_running`. |
 | `POST /quotex/login/pin`, `POST /quotex/login/cancel` | `{"pin"}`: the digits Quotex e-mailed (422 `quotex_pin_invalid` if not digits; 409 `quotex_login_step` if Quotex is not asking); drop a login in progress. |
 | `POST /quotex/logout` | Forget the stored Quotex login (email and password stay). Needs the engine stopped. |
+| `POST /deriv/check` | `{"account_type": "demo"\|"real"}`: which Deriv account the stored token opens (number, kind, currency, balance), read from Deriv's account list. **Nothing is traded**; works with the engine running or stopped. 409 `deriv_not_configured` (app id or token not stored), 422 `deriv_login_refused` (Deriv refused the token, or it has no account of that kind), 502 `deriv_unreachable`. |
+| `GET /deriv/assets` | Deriv's assets as the running engine knows them: name, Deriv's display name, market (`forex`, `synthetic_index`, …), open or not, and the Rise/Fall trade lengths it allows (`null` while not learnt yet). Without a connected Deriv: `available: false` with the reason, never an error. |
 | `GET /telegram/login` | Where the Telegram login is: `logged_out`, `code_sent`, `password_needed` or `logged_in`, with the hidden phone number, where the code went, how many resends are left, whether the API id and hash are stored, and whether the engine is running. Safe after a page reload. |
 | `POST /telegram/login/start` | `{"phone"}`: Telegram sends a code. 409 `telegram_not_configured` (store the API id and hash first), 409 `engine_running`, 422 `telegram_login_refused` (bad number, bad API id/hash), 429 `telegram_wait` (flood wait, says how long). |
 | `POST /telegram/login/code`, `POST /telegram/login/password`, `POST /telegram/login/resend`, `POST /telegram/login/cancel` | The next steps. Wrong code: 422 `telegram_code_invalid` (the same step continues); old code: 409 `telegram_code_expired` (starts over); wrong two-step password: 422 `telegram_password_invalid`; a step out of order or a timed-out login: 409 `telegram_login_step`. The session is stored encrypted when the last step succeeds. |
 | `POST /telegram/logout` | Remove the Telegram login (and end it on Telegram's side if reachable). Needs the engine stopped. |
-| `GET /chains`, `GET /chains/{id}` | Chain history (filters `group_id`, `status`, `account_type`); one chain with its trades and the message that started it. |
+| `GET /chains`, `GET /chains/{id}` | Chain history (filters `group_id`, `status`, `account_type`, `broker`); one chain with its trades and the message that started it. |
 | `POST /chains/{id}/stop-after-current` | Let the open trade settle, then end the chain without a further step. *Needs the engine.* |
 | `POST /chains/{id}/end` | End the chain now so the group is free for new signals (the dashboard's "skip to base"). An open trade still settles and is recorded. *Needs the engine.* |
-| `GET /trades`, `GET /trades/{id}` | Trade history (filters `group_id`, `status`, `account_type`), with the signal→order latency of each. |
+| `GET /trades`, `GET /trades/{id}` | Trade history (filters `group_id`, `status`, `account_type`, `broker`), with the signal→order latency of each. |
 | `GET /signals`, `GET /signals/{id}` | The signal inbox: every message, what became of it and why (filters `group_id`, `status`). |
 | `GET /risk` | The global limits, the kill switch, paused groups, today's result and what is open. |
 | `PUT /risk/limits` | Set the global limits. **Works without the engine**, so you can set them before ever enabling it. Today's result is kept. |
@@ -75,7 +77,7 @@ trust:
 | `GET /engine` | The engine's state (`stopped`, `starting`, `running`, `stopping`, `failed`), why the last start failed, whether it starts with the application, and which logins it has (`dashboard`, `.env`, `missing`, `unreadable`: never their values). |
 | `POST /engine/start`, `POST /engine/stop`, `POST /engine/restart` | Start (always on the demo account), stop, or restart the engine without restarting the application. One at a time: while one runs, another is 409 `engine_busy`; a start that cannot work is 409 `engine_start_failed` with the reason. Stopping marks what was in flight `unknown` at once. |
 | `GET /reports/summary` | Profit, win rate, return on stakes, drawdown, streaks, what is not counted, and how the win rate compares with break-even. |
-| `GET /reports/breakdown?by=group\|session\|asset\|strategy\|hour\|weekday` | The same figures split six ways (hour and weekday always list every hour / day; `session` lists the trading sessions only). |
+| `GET /reports/breakdown?by=group\|broker\|session\|asset\|strategy\|hour\|weekday` | The same figures split seven ways (hour and weekday always list every hour / day; `session` lists the trading sessions only). |
 | `GET /reports/equity` | The result of each day and the running total (the profit curve). |
 | `GET /reports/depth` | How far chains go: per step, how many chains got there, what it staked and earned, and how chains that ended there did overall. |
 | `GET /reports/export/trades.csv`, `GET /reports/export/breakdown.csv?by=…` | Spreadsheet downloads (see below). |
@@ -148,7 +150,9 @@ Chains and trades opened by a session carry `session_run_id` and `pair_no` (`GET
 
 Every report takes the same filters as query parameters: `account_type` (`demo` by default; demo
 and real are never mixed), `from` (inclusive) and `to` (exclusive) as ISO times **with a zone**
-(`2026-11-02T00:00:00Z`), `group_id`, `session_id` (only the trades of one trading session), `strategy`, `asset`, and `utc_offset_minutes` (your clock for
+(`2026-11-02T00:00:00Z`), `group_id`, `session_id` (only the trades of one trading session), `broker`
+(`quotex` by default, `deriv`, or `all` to add every broker's trades together: they are different
+accounts, so the dashboard does it only when asked, and says so), `strategy`, `asset`, and `utc_offset_minutes` (your clock for
 hour of day, weekday and days: UTC-3 is `-180`; fixed, daylight saving is not followed). The answer
 echoes the filters used. Rates are numbers from 0 to 1; money is text.
 
@@ -159,7 +163,7 @@ counted". Every figure comes with its sample size: `tiny` is under 10 trades, `s
 **CSV downloads** (`/reports/export/trades.csv`, `/reports/export/breakdown.csv?by=…`) open in Excel:
 UTF-8 with a byte-order mark, CRLF line ends, a dot for decimals, text that could be read as a
 formula defused. Add `delimiter=semicolon` if Excel shows everything in one column (many European
-locales). The trades file has one row per trade in the period, whatever its status (the period there
+locales). The trades file has one row per trade in the period (with its `broker`), whatever its status (the period there
 is when the trade was created).
 
 ## The live feed: `/ws`

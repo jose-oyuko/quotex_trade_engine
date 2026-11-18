@@ -11,6 +11,7 @@ import { sampleLabel } from '../../lib/reportText'
 
 const TABS: { by: BreakdownKind; label: string; chart: string }[] = [
   { by: 'group', label: 'By group', chart: 'Profit by group' },
+  { by: 'broker', label: 'By broker', chart: 'Profit by broker' },
   { by: 'session', label: 'By session', chart: 'Profit by session' },
   { by: 'asset', label: 'By asset', chart: 'Profit by asset' },
   { by: 'strategy', label: 'By strategy', chart: 'Profit by strategy' },
@@ -26,7 +27,7 @@ const TONES: Record<ReportBreakdownRow['metrics']['sample'], Tone> = {
 
 const clip = (text: string) => (text.length > 14 ? `${text.slice(0, 13)}…` : text)
 
-/** The same figures split five ways. Rows with too few trades are faded and labelled. */
+/** The same figures split several ways. Rows with too few trades are faded and labelled. */
 export function BreakdownPanel({ filters }: { filters: ReportFilters }) {
   const [by, setBy] = useState<BreakdownKind>('group')
   const query = useReportBreakdown(by, filters)

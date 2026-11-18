@@ -121,22 +121,30 @@ started on the dashboard, and an old line in `.env` can neither start it nor all
 - **Quotex.** One adapter, demo by default. `npm run quotex:diagnose` connects and shows the balance
   and payout; with `-- --order` it places one demo order. Both command-line tools use the logins stored
   on the dashboard.
-- **Logins on the dashboard.** Telegram (phone, code, two-step password) and Quotex (email, password and the
-  e-mailed PIN), stored encrypted; no terminal, no `.env` editing.
+- **Deriv, next to Quotex.** Each group and each trading session picks its broker, Quotex or Deriv
+  (decisions D-74 to D-77). Deriv is reached through its official API with an app id and one token per
+  account (demo, and optionally real), stored encrypted on the Settings page, where *Check* shows which
+  account a token opens without trading. Forex Rise/Fall on Deriv starts at 15 minutes; its synthetic
+  indices (Volatility 75 and the like) also trade for 1 or 5 minutes. Each broker's money, balance and
+  daily limits are kept apart, and the reports show one broker at a time unless you choose "All
+  brokers". `npm run deriv:check` connects to the demo account and shows the assets, trade lengths and
+  payouts; with `-- --order` it places one demo trade.
+- **Logins on the dashboard.** Telegram (phone, code, two-step password), Quotex (email, password and the
+  e-mailed PIN) and Deriv (app id and tokens), stored encrypted; no terminal, no `.env` editing.
 - **Strategies.** Per group: no martingale, martingale, flip every loss, two-step flip, as chains of steps. Orders
   go out on a short path with no database wait (the result is stored in the background). A flip group can
   optionally run an opposite pair: a second chain for the opposite direction on the same asset (two at most).
 - **Trading sessions.** Trading by the clock, with no signal: one asset, a time window and the strategy you
   choose; while the window is open it opens a pair (a CALL and a PUT together), the loser recovers by the
   strategy, and it stops at the end of the window or a profit or loss target (running chains always finish).
-  One session at a time; needs only the Quotex login. Set up on the **Sessions** page (see `docs/OPERATIONS.md`).
+  One session at a time; needs only the login of its broker (Quotex or Deriv). Set up on the **Sessions** page (see `docs/OPERATIONS.md`).
 - **Safety.** Limits before every order (max stake, exposure, concurrent trades, chain length, minimum
   payout, daily stop-loss and profit target, globally and per group), a kill switch, group pausing, "stop
   after current trade" and "end chain". Kill switch, pauses and limits survive restarts. If the app
-  stops with trades open, the next start marks them `unknown`: check them on Quotex.
+  stops with trades open, the next start marks them `unknown`: check them on the broker's site.
 - **Dashboard.** Live, Signals, Groups, History, Reports, Settings and Account pages, fed over a
   WebSocket, behind an owner login. A banner appears when something is wrong.
-- **Reports.** Profit, win rate, drawdown, streaks, results by group, asset, strategy, hour and weekday,
+- **Reports.** Profit, win rate, drawdown, streaks, results by group, broker, session, asset, strategy, hour and weekday,
   how deep chains go, and a plain verdict comparing the win rate with the break-even line (it refuses
   to conclude from too few trades). Demo and real are never mixed. Every table downloads as an
   Excel-friendly CSV.

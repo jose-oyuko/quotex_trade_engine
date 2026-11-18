@@ -5,11 +5,14 @@ import type {
   AuthState,
   AuthUser,
   AccountType,
+  Broker,
   Chain,
   ChainControl,
   ChainDetail,
   ChainStatus,
   Controls,
+  DerivAccount,
+  DerivAssets,
   EngineInfo,
   EnvImport,
   EnvLogins,
@@ -231,6 +234,13 @@ export const api = {
     logout: () => request<QuotexLoginStatus>('POST', '/quotex/logout'),
   },
 
+  deriv: {
+    /** Which account a stored token opens; reads Deriv's account list only, never trades. */
+    check: (accountType: AccountType) =>
+      request<DerivAccount>('POST', '/deriv/check', { body: { account_type: accountType } }),
+    assets: (signal?: AbortSignal) => request<DerivAssets>('GET', '/deriv/assets', { signal }),
+  },
+
   telegram: {
     chats: (signal?: AbortSignal) =>
       request<{ items: TelegramChat[] }>('GET', '/telegram/chats', { signal }),
@@ -255,6 +265,7 @@ export const api = {
         group_id?: number
         status?: ChainStatus
         account_type?: AccountType
+        broker?: Broker
       } = {},
       signal?: AbortSignal,
     ) => request<Page<Chain>>('GET', '/chains', { query: filters, signal }),
@@ -271,6 +282,7 @@ export const api = {
         group_id?: number
         status?: TradeStatus
         account_type?: AccountType
+        broker?: Broker
       } = {},
       signal?: AbortSignal,
     ) => request<Page<Trade>>('GET', '/trades', { query: filters, signal }),
@@ -341,6 +353,8 @@ export interface ReportFilters {
   to?: string
   group_id?: number
   session_id?: number
+  /** One broker's trades; `all` adds every broker's money together (the page says so). */
+  broker?: Broker | 'all'
   strategy?: Strategy
   asset?: string
   utc_offset_minutes?: number

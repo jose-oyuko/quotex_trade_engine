@@ -15,6 +15,7 @@ from app.core.config import Settings
 from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.services.app_config import ConfigService
+from app.services.deriv import DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
@@ -113,6 +114,11 @@ def get_quotex_login(request: Request) -> QuotexLoginService:
     return service
 
 
+def get_deriv(request: Request) -> DerivService:
+    service: DerivService = request.app.state.deriv
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -141,6 +147,7 @@ AuthDep = Annotated[AuthService, Depends(get_auth)]
 CurrentUserDep = Annotated[UserInfo, Depends(current_user)]
 EnvImportDep = Annotated[EnvImportService, Depends(get_env_import)]
 QuotexLoginDep = Annotated[QuotexLoginService, Depends(get_quotex_login)]
+DerivDep = Annotated[DerivService, Depends(get_deriv)]
 TelegramLoginDep = Annotated[TelegramLoginService, Depends(get_telegram_login)]
 ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -245,5 +245,152 @@ describe('editing a session', () => {
   it('refuses an id that is not a number', () => {
     setup('/sessions/abc/edit')
     expect(screen.getByRole('alert')).toHaveTextContent('That is not a session.')
+  })
+})
+
+describe('a session on Deriv (decision D-75)', () => {
+  const DERIV_ASSETS = {
+    available: true,
+    reason: null,
+    items: [
+      {
+        asset: 'R_75',
+        name: 'Volatility 75 Index',
+        market: 'synthetic_index',
+        is_open: true,
+        lengths: [{ min_s: 15, max_s: 31_536_000 }],
+      },
+      {
+        asset: 'EURUSD',
+        name: 'EUR/USD',
+        market: 'forex',
+        is_open: true,
+        lengths: [{ min_s: 900, max_s: 31_536_000 }],
+      },
+      { asset: 'GBPUSD', name: 'GBP/USD', market: 'forex', is_open: false, lengths: null },
+    ],
+  }
+
+  it('picks the asset from Deriv’s list, grouped by market, and sends the broker', async () => {
+    const api = mockApi([
+      ['GET', '/deriv/assets', json(DERIV_ASSETS)],
+      ['POST', '/sessions', json(makeSession({ broker: 'deriv' }), 201)],
+      listed,
+    ])
+    const user = setup('/sessions/new')
+    await user.type(screen.getByLabelText('Name'), 'Vol 75')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    const asset = await screen.findByRole('combobox', { name: 'Asset' })
+    const groups = within(asset).getAllByRole('group')
+    expect(groups.map((g) => g.getAttribute('label'))).toEqual(['Forex pairs', 'Synthetic indices'])
+    expect(
+      within(asset).getByRole('option', { name: 'GBP/USD (GBPUSD), closed now' }),
+    ).toBeVisible()
+
+    await user.selectOptions(asset, 'R_75')
+    await user.selectOptions(screen.getByLabelText('Trade length'), '60')
+    await user.click(screen.getByRole('button', { name: 'Create session' }))
+    expect(await screen.findByText('the sessions list')).toBeInTheDocument()
+    expect(api.to('POST', '/sessions')[0]?.body).toMatchObject({
+      broker: 'deriv',
+      asset: 'R_75',
+      duration_s: 60,
+    })
+  })
+
+  it('offers only the trade lengths the asset allows, and says why', async () => {
+    mockApi([['GET', '/deriv/assets', json(DERIV_ASSETS)]])
+    const user = setup('/sessions/new')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Asset' }), 'EURUSD')
+    const length = screen.getByLabelText('Trade length')
+    expect(
+      within(length).getByRole('option', { name: '1 minute (M1) (not offered)' }),
+    ).toBeDisabled()
+    expect(within(length).getByRole('option', { name: '15 minutes (M15)' })).toBeEnabled()
+    // the default 5 minutes is not offered on EURUSD: said plainly
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Deriv does not offer 5 min Rise/Fall on EURUSD: it offers 15 min to 365 days',
+    )
+    await user.selectOptions(length, '900')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('without Deriv’s list, the asset is typed and the reason is given', async () => {
+    mockApi([
+      [
+        'GET',
+        '/deriv/assets',
+        json({ available: false, reason: 'The trading engine is not running.', items: [] }),
+      ],
+    ])
+    const user = setup('/sessions/new')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    expect(await screen.findByText(/now: The trading engine is not running\./)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Asset' })).toHaveValue('EURUSD')
+  })
+
+  it('refuses an OTC pair on Deriv before sending anything', async () => {
+    const api = mockApi([
+      [
+        'GET',
+        '/deriv/assets',
+        json({ available: false, reason: 'Deriv is not connected.', items: [] }),
+      ],
+      ['POST', '/sessions', json(makeSession(), 201)],
+    ])
+    const user = setup('/sessions/new')
+    await user.type(screen.getByLabelText('Name'), 'Weekend')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    const asset = await screen.findByRole('textbox', { name: 'Asset' })
+    await user.clear(asset)
+    await user.type(asset, 'EURUSD_otc')
+    await user.click(screen.getByRole('button', { name: 'Create session' }))
+    expect(
+      await screen.findByText('Deriv has no OTC pairs: use EURUSD, or a synthetic index like R_75'),
+    ).toBeInTheDocument()
+    expect(api.to('POST', '/sessions')).toHaveLength(0)
+  })
+
+  it('shows the refusal of the server in words (a length Deriv does not offer)', async () => {
+    mockApi([
+      [
+        'GET',
+        '/deriv/assets',
+        json({ available: false, reason: 'Deriv is not connected.', items: [] }),
+      ],
+      [
+        'POST',
+        '/sessions',
+        apiError(
+          422,
+          'invalid_session',
+          'Deriv does not offer 1 min Rise/Fall on EURUSD: it offers 15 min to 365 days',
+        ),
+      ],
+    ])
+    const user = setup('/sessions/new')
+    await user.type(screen.getByLabelText('Name'), 'Too short')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    await user.click(screen.getByRole('button', { name: 'Create session' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Deriv does not offer 1 min Rise/Fall on EURUSD',
+    )
+  })
+
+  it('keeps a session on Deriv when it is edited, with its asset shown even if Deriv’s list lacks it', async () => {
+    mockApi([
+      [
+        'GET',
+        '/sessions/1',
+        json(makeSession({ broker: 'deriv', asset: '1HZ100V', duration_s: 60 })),
+      ],
+      ['GET', '/deriv/assets', json(DERIV_ASSETS)],
+    ])
+    setup('/sessions/1/edit')
+    const asset = await screen.findByRole('combobox', { name: 'Asset' })
+    expect(asset).toHaveValue('1HZ100V')
+    expect(within(asset).getByRole('option', { name: '1HZ100V (not listed)' })).toBeVisible()
+    expect(screen.getByLabelText('Broker')).toHaveValue('deriv')
   })
 })

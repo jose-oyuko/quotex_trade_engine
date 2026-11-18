@@ -151,7 +151,8 @@ A value saved there wins over `backend/.env`, which wins over the built-in defau
 comes from. **A saved setting is used from the next start of the application.** "Go back to ..." removes
 the saved value.
 
-The page also has **Stored logins** (Quotex email, Quotex password, Telegram API hash): type a value,
+The page also has **Stored logins** (Quotex email and password, the Telegram API id and hash, and Deriv's
+app id and tokens): type a value,
 **Save**, and it is stored encrypted in the database. It is never shown again; the page only says
 *Stored*, *Not set* or *Stored, cannot be read*. **The engine uses them** when it starts (a stored value
 wins over `backend/.env`); after changing one, restart the engine.
@@ -198,6 +199,32 @@ If Telegram says to wait, the box says for how long: wait, do not retry.
 
 (An older `backend/data/telegram.session` file made by `npm run telegram:login` still works when nothing is
 stored on the dashboard; *Log out of Telegram* removes it too.)
+
+**2b. Deriv (optional; instead of Quotex or next to it).** On **Settings > Deriv**:
+1. **The app id.** Register an application on Deriv's developer site, <https://developers.deriv.com>
+   ("Register an application"), and store the app id it gives you.
+2. **The demo token.** In your Deriv account, create a token (a Personal Access Token) for the **demo**
+   account with **only the Read and Trade permissions**: never Payments or Admin. Store it as *Deriv
+   demo token*. (If Deriv's dashboard only shows the real account, switch to the demo account first: the
+   token belongs to the account that is selected when it is made.)
+3. **Check the demo token.** The button asks Deriv which account the token opens and shows its number
+   (`VRTC…` or `DOT…` for a demo account), currency and balance. Nothing is traded and the engine does not
+   need to be stopped.
+4. **The real token** (only if you will trade real money on Deriv): a token of the real account, Read and
+   Trade only. It is used only when real money is allowed (with your password) and REAL is chosen; the
+   switch then moves Quotex and Deriv together, or refuses and moves neither.
+Restart the engine after storing or changing a Deriv login. `DERIV_APP_ID`, `DERIV_TOKEN_DEMO` and
+`DERIV_TOKEN_REAL` in `backend/.env` still work (a stored value wins), and **Move them** on the Settings
+page (or `npm run env:import`) moves them into the store like the other logins.
+
+**Picking the broker.** Each group and each trading session has a **Broker** (Quotex or Deriv) on its
+form. On Deriv, forex Rise/Fall starts at 15 minutes and there are no OTC pairs: give a Deriv group
+"Never OTC", and for 1- or 5-minute trades use a synthetic index (Volatility 75 is `R_75`). The session
+form shows Deriv's own list of assets, grouped as forex pairs and synthetic indices, and greys out the
+trade lengths the chosen asset does not offer; the list is there while the engine is connected to
+Deriv (before that, type the name). A signal its broker cannot take is skipped, and the Signals page
+says why. Each broker's balance and today's result are shown separately on the Live page, and its
+daily limits count its own trades only.
 
 **3. Checking the Quotex connection (optional).** `npm run quotex:diagnose` is still there: it logs in and
 shows the balance from a terminal (demo only; it keeps its own `backend/data/session.json`). The dashboard

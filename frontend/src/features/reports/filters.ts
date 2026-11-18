@@ -17,6 +17,7 @@ export function toFilters(
   }
   const filters: ReportFilters = {
     account_type: controls.account,
+    broker: controls.broker,
     utc_offset_minutes: offsetMinutes,
   }
   if (range.from !== undefined) filters.from = range.from

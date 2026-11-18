@@ -11,7 +11,7 @@ from app.api.errors import ApiError
 from app.api.schemas.common import DEFAULT_PAGE_SIZE, LimitParam, OffsetParam, Page
 from app.api.schemas.records import SignalOut, TradeOut, signal_out, trade_out
 from app.db.repositories import SignalRepository, TradeRepository
-from app.domain.enums import AccountType, SignalStatus, TradeStatus
+from app.domain.enums import AccountType, Broker, SignalStatus, TradeStatus
 
 trades_router = APIRouter(prefix="/trades", tags=["trades"])
 signals_router = APIRouter(prefix="/signals", tags=["signals"])
@@ -22,6 +22,7 @@ async def list_trades(
     session: SessionDep,
     group_id: int | None = None,
     account_type: AccountType | None = None,
+    broker: Broker | None = None,
     status: TradeStatus | None = None,
     limit: LimitParam = DEFAULT_PAGE_SIZE,
     offset: OffsetParam = 0,
@@ -29,11 +30,18 @@ async def list_trades(
     """Newest first."""
     repo = TradeRepository(session)
     rows = await repo.list(
-        group_id=group_id, account_type=account_type, status=status, limit=limit, offset=offset
+        group_id=group_id,
+        account_type=account_type,
+        status=status,
+        broker=broker,
+        limit=limit,
+        offset=offset,
     )
     return Page(
         items=[trade_out(t) for t in rows],
-        total=await repo.count(group_id=group_id, account_type=account_type, status=status),
+        total=await repo.count(
+            group_id=group_id, account_type=account_type, status=status, broker=broker
+        ),
         limit=limit,
         offset=offset,
     )

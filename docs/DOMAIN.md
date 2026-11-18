@@ -197,3 +197,29 @@ daily profit target, kill-switch state.
 - **Telegram login:** phone number must be international (`+<country code><number>`, no leading 0).
   Telethon `get_dialogs()` lists groups/channels; messages arrive through `events.NewMessage(chats=…)`.
   A blocking `input()` inside the event loop freezes Telethon — never do console input on the loop.
+
+## 7. Facts about Deriv (decisions D-74 to D-77; checked live on the demo on 2026-11-17)
+
+- **Official API.** A Personal Access Token and an app id (registered on https://developers.deriv.com)
+  go in the headers of two REST calls: the account list (`GET options/accounts`), then a one-time link
+  for the chosen account (`POST options/accounts/{id}/otp`). The link works once and expires within
+  120 s, so every (re)connect asks for a new one. One token can list both demo and real accounts; the
+  engine uses the demo token for demo and the real token for real, and refuses a link of the wrong kind.
+- **Account numbers.** Demo accounts start `VR` or `DOT`, real ones `CR`, `MF`, `MLT` or `MX`. Deriv's
+  own `account_type` field wins when it is there.
+- **Rise/Fall** is `contract_category = "callput"` with `contract_type` `CALL` or `PUT` (it lists
+  `barriers: 1`, the entry price). Higher/Lower has its own `higherlower` category, and `callputequal`
+  (equal exit wins) is a different contract: both are left out. An equal exit on Rise/Fall is a loss;
+  there is no draw.
+- **Trade lengths are per asset.** Forex pairs offer Rise/Fall from **15 minutes** to 365 days; the
+  synthetic indices (R_75 = Volatility 75 Index, and the like) from **15 seconds**. A signal or a
+  session round with a length the asset does not offer is skipped with the reason ("Deriv does not
+  offer 1 min Rise/Fall on EURUSD: it offers 15 min to 365 days"). The engine learns every open
+  asset's lengths in the background after connecting (five assets per check).
+- **No OTC pairs.** `EURUSD_otc` does not exist on Deriv. A Deriv group should use "Never OTC".
+- **Names.** A forex pair keeps its Quotex name (`EURUSD` ↔ Deriv's `frxEURUSD`); a synthetic index is
+  written with Deriv's own symbol (`R_75`, `1HZ100V`).
+- **Payouts** seen on the demo: EURUSD 15 min 81%; R_75 1 and 5 min 88%. A 1.00 demo trade on R_75 for
+  60 s was confirmed in 510 ms.
+- **Orders are not serialised** (unlike Quotex, D-27): each `buy` waits for its own reply, so both legs
+  of a session pair go out together.

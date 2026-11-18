@@ -98,6 +98,7 @@ async def test_the_filters_are_echoed_back(tmp_path: Path) -> None:
         "until": None,
         "group_id": 1,
         "session_id": None,
+        "broker": "quotex",
         "strategy": None,
         "asset": None,
         "utc_offset_minutes": -180,
@@ -255,10 +256,11 @@ async def test_the_trades_csv_has_one_row_per_demo_trade_with_plain_numbers(tmp_
     async with api(tmp_path) as rig:
         rows = parse((await rig.client.get(f"{API}/export/trades.csv")).content)
     header, *trades = rows
-    assert header[:6] == [
+    assert header[:7] == [
         "created_at_utc",
         "settled_at_utc",
         "account",
+        "broker",
         "group_id",
         "group",
         "strategy",
@@ -297,9 +299,9 @@ async def test_the_semicolon_version_for_excel_in_many_locales(tmp_path: Path) -
             await rig.client.get(f"{API}/export/trades.csv", params={"delimiter": "semicolon"})
         ).content
     header, *trades = parse(raw, ";")
-    assert len(header) == 17 and len(trades) == 12
+    assert len(header) == 18 and len(trades) == 12
     assert (
-        "," not in raw.decode("utf-8-sig").splitlines()[1].split(";")[10]
+        "," not in raw.decode("utf-8-sig").splitlines()[1].split(";")[11]
     )  # money still has a dot
     assert (await running_api_status(tmp_path, {"delimiter": "tab"})) == 422
 

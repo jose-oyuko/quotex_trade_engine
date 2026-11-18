@@ -140,8 +140,8 @@ engine's own connection fails to log in. Reading it:
 **Reset the Quotex login** — stop the engine, then on the Settings page press *Remove the stored login* and log
 in again. (Command line: stop the app, delete `backend/data/session.json`, run `npm run quotex:diagnose`.)
 
-**"Quotex is not connected" banner** — it is reconnecting by itself. While it is down, orders fail and are
-recorded as `failed` (they are not queued); see [FAILURE_MODES.md](FAILURE_MODES.md). If it stays, run
+**"Quotex is not connected" banner** — it is reconnecting by itself. While it is down, its signals are
+skipped with that reason (they are not queued); see [FAILURE_MODES.md](FAILURE_MODES.md). If it stays, run
 `npm run quotex:diagnose` with the app stopped, to see the reason.
 
 **A trade shows `unknown`** — the application could not learn how it ended (it restarted, or the result
@@ -151,6 +151,36 @@ there for safety.
 **Orders are `failed` because the asset is closed or unknown, or the payout is below the minimum** — the
 asset is not open now (an OTC suffix may be needed), or its payout is under the group's minimum. The
 trade's error text says which. Not a fault.
+
+## Deriv
+
+**Check says "Deriv refused the token (401 …)"** — the token or the app id is wrong, or the token has been
+deleted on Deriv. Create a new token (Read and Trade only), store it with *Replace*, and check again. The app
+id must be the one registered on Deriv's developer site for this application.
+
+**"The token has no active demo account on Deriv"** — the token was made while the real account was
+selected. On Deriv, switch to the demo account first, then create the token there.
+
+**"The token reaches several real accounts"** — Deriv lists more than one real account for that token. Make a
+token for the one account you want to trade with.
+
+**"The demo login opened account CR…, which is a real account"** — the demo token belongs to a real account.
+Nothing was traded on it. Replace the demo token with one made on the demo account.
+
+**"Could not reach Deriv"** — no internet, or Deriv's site is down. It is retried by itself while the engine
+runs; *Check* can be pressed again.
+
+**A Deriv signal is skipped: "Deriv does not offer 1 min Rise/Fall on EURUSD: it offers 15 min to 365 days"**
+— Deriv's forex Rise/Fall starts at 15 minutes. Use that group on Quotex, or trade 1- and 5-minute lengths
+on a synthetic index (R_75) with a trading session. Not a fault.
+
+**"EURUSD_otc is an OTC pair: Deriv has no OTC pairs"** — set the group's *OTC assets* to "Never OTC".
+
+**The session form has no list of Deriv's assets** — the list comes from the running engine while it is
+connected to Deriv; the form says why it is not there. Type the name meanwhile (`EURUSD`, `R_75`).
+
+**"Deriv is not connected" banner** — it is reconnecting by itself; Quotex trades on. If it stays, stop the
+app and run `npm run deriv:check` to see the reason.
 
 ## Trading sessions
 

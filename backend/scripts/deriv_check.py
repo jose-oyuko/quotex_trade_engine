@@ -31,6 +31,8 @@ from app.core.tasks import TaskSupervisor
 from app.deriv.factory import build_deriv_adapter
 from app.deriv.protocol import describe_lengths
 from app.domain.enums import AccountType, Direction
+from app.engine.errors import EngineStartError
+from scripts._store import with_stored_logins
 
 # (asset, trade length in seconds) whose payout is shown: forex starts at 15 minutes on Deriv,
 # synthetic indices offer 1 and 5 minutes (owner, 2026-11-17).
@@ -57,10 +59,11 @@ async def run(args: argparse.Namespace) -> int:
         return 2
     tasks = TaskSupervisor()
     try:
+        settings = await with_stored_logins(Settings())  # the dashboard's, else `.env`
         adapter = build_deriv_adapter(
-            Settings(), tasks=tasks, clock=SystemClock(), account_type=AccountType.DEMO
+            settings, tasks=tasks, clock=SystemClock(), account_type=AccountType.DEMO
         )
-    except (ValidationError, BrokerError) as exc:
+    except (ValidationError, BrokerError, EngineStartError) as exc:
         print(f"Cannot start: {exc}")
         return 2
 

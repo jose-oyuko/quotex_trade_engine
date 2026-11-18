@@ -139,3 +139,38 @@ def test_a_token_and_an_app_id_are_both_needed() -> None:
         DerivLogin(token=" ", app_id="1")
     with pytest.raises(LoginRejectedError):
         DerivLogin(token="t", app_id="")
+
+
+# --- the dashboard's Check button (Phase 21): the account list only ---
+
+
+async def test_the_check_reads_the_account_from_the_list_without_asking_for_a_link() -> None:
+    seen: list[httpx.Request] = []
+    accounts = [
+        {"account_id": "VRTC100", "currency": "USD", "status": "active", "balance": "10000"},
+        {"account_id": "CR200", "currency": "EUR", "status": "active", "balance": 12.5},
+    ]
+    demo = await login(deriv(accounts, seen=seen)).account(AccountType.DEMO)
+    assert (demo.account_id, demo.account_type, demo.currency) == (
+        "VRTC100",
+        AccountType.DEMO,
+        "USD",
+    )
+    assert str(demo.balance) == "10000.00"
+    real = await login(deriv(accounts)).account(AccountType.REAL)
+    assert (real.account_id, real.currency, str(real.balance)) == ("CR200", "EUR", "12.50")
+    assert [(r.method, r.url.path) for r in seen] == [("GET", "/trading/v1/options/accounts")]
+
+
+async def test_the_check_copes_with_a_list_without_balance_or_currency() -> None:
+    found = await login(deriv([{"account_id": "VRTC100", "balance": "n/a"}])).account(
+        AccountType.DEMO
+    )
+    assert found.currency is None and found.balance is None
+
+
+async def test_the_check_refuses_like_the_login_does() -> None:
+    with pytest.raises(LoginRejectedError, match="401"):
+        await login(deriv(status=401)).account(AccountType.DEMO)
+    with pytest.raises(LoginRejectedError, match="no active real account"):
+        await login(deriv([ACCOUNTS[0]])).account(AccountType.REAL)

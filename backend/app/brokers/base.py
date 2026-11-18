@@ -58,6 +58,28 @@ class TradeResult:
     profit: Decimal
 
 
+@dataclass(slots=True, frozen=True)
+class AssetOffer:
+    """One asset a broker lists, for the dashboard's asset picker (Phase 21). `lengths` are the
+    trade lengths it allows, as (shortest, longest) in seconds; None while not known yet."""
+
+    asset: str  # our name: EURUSD, R_75
+    name: str  # the broker's display name: "EUR/USD", "Volatility 75 Index"
+    market: str  # forex, synthetic_index, ...
+    is_open: bool
+    lengths: tuple[tuple[int, int], ...] | None
+
+
+@dataclass(slots=True, frozen=True)
+class BrokerAccount:
+    """Which account a login opens, read without trading (the dashboard's *Check* button)."""
+
+    account_id: str
+    account_type: AccountType
+    currency: str | None
+    balance: Decimal | None
+
+
 def classify_profit(profit: Decimal) -> TradeOutcome:
     """Map a profit figure to an outcome.
 
@@ -124,6 +146,11 @@ class BrokerAdapter(Protocol):
 
     def is_open(self, asset: str) -> bool:
         """True if the asset is known and open for trading, from memory."""
+        ...
+
+    def catalogue(self) -> list[AssetOffer]:
+        """Every asset the broker lists, from memory, for the dashboard; empty when the broker
+        has no such list (Quotex) or is not connected yet."""
         ...
 
     def order_refusal(self, asset: str, duration_s: int) -> str | None:

@@ -222,6 +222,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/deriv/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assets
+         * @description Every asset Deriv lists, with the Rise/Fall trade lengths it allows, as the running engine
+         *     knows them. Empty, with the reason, while the engine is not connected to Deriv.
+         */
+        get: operations["assets_api_v1_deriv_assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/deriv/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check
+         * @description Which Deriv account the stored demo (or real) token opens. Reads Deriv's account list
+         *     only: nothing is traded, and the engine does not need to be stopped.
+         */
+        post: operations["check_api_v1_deriv_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engine": {
         parameters: {
             query?: never;
@@ -1304,7 +1346,7 @@ export interface components {
          * BreakdownKind
          * @enum {string}
          */
-        BreakdownKind: "group" | "session" | "asset" | "strategy" | "hour" | "weekday";
+        BreakdownKind: "group" | "session" | "broker" | "asset" | "strategy" | "hour" | "weekday";
         /** BreakdownOut */
         BreakdownOut: {
             by: components["schemas"]["BreakdownKind"];
@@ -1629,6 +1671,67 @@ export interface components {
             /** Wins */
             wins: number;
         };
+        /** DerivAccountOut */
+        DerivAccountOut: {
+            /**
+             * Account Id
+             * @description Deriv's account number, like VRTC1234 or CR5678.
+             */
+            account_id: string;
+            account_type: components["schemas"]["AccountType"];
+            /**
+             * Balance
+             * @description When Deriv's account list gives it.
+             */
+            balance: string | null;
+            /** Currency */
+            currency: string | null;
+        };
+        /** DerivAssetOut */
+        DerivAssetOut: {
+            /**
+             * Asset
+             * @description The name to use in a session: EURUSD, R_75.
+             */
+            asset: string;
+            /** Is Open */
+            is_open: boolean;
+            /**
+             * Lengths
+             * @description The Rise/Fall trade lengths it allows; null while they are not known yet.
+             */
+            lengths: components["schemas"]["LengthOut"][] | null;
+            /**
+             * Market
+             * @description forex, synthetic_index, ...
+             */
+            market: string;
+            /**
+             * Name
+             * @description Deriv's own name: EUR/USD, Volatility 75 Index.
+             */
+            name: string;
+        };
+        /** DerivAssetsOut */
+        DerivAssetsOut: {
+            /** Available */
+            available: boolean;
+            /** Items */
+            items: components["schemas"]["DerivAssetOut"][];
+            /**
+             * Reason
+             * @description Why there is no list, in words.
+             */
+            reason: string | null;
+        };
+        /** DerivCheckIn */
+        DerivCheckIn: {
+            /**
+             * @description Which stored token to check: demo or real.
+             * @default demo
+             */
+            account_type: components["schemas"]["AccountType"];
+        };
         /**
          * Direction
          * @enum {string}
@@ -1791,6 +1894,8 @@ export interface components {
             account_type: components["schemas"]["AccountType"];
             /** Asset */
             asset: string | null;
+            /** @description Only this broker's trades; null when every broker's were added together. */
+            broker: components["schemas"]["Broker"] | null;
             /** Group Id */
             group_id: number | null;
             /** Session Id */
@@ -2012,6 +2117,13 @@ export interface components {
              * @default false
              */
             stop_chains: boolean;
+        };
+        /** LengthOut */
+        LengthOut: {
+            /** Max S */
+            max_s: number;
+            /** Min S */
+            min_s: number;
         };
         /** LoginIn */
         LoginIn: {
@@ -2423,7 +2535,7 @@ export interface components {
              * Group
              * @enum {string}
              */
-            group: "logins" | "telegram";
+            group: "logins" | "telegram" | "deriv";
             /** Help */
             help: string;
             /** Is Set */
@@ -2845,6 +2957,11 @@ export interface components {
              * @description The balance of the account in use on each connected broker (never added up).
              */
             balances?: components["schemas"]["BalanceOut"][];
+            /**
+             * Brokers
+             * @description The brokers the running engine has (a login for each); empty when stopped.
+             */
+            brokers?: components["schemas"]["Broker"][];
             /** Connections */
             connections: {
                 [key: string]: components["schemas"]["ConnectionOut"];
@@ -3657,6 +3774,7 @@ export interface operations {
                 group_id?: number | null;
                 status?: components["schemas"]["ChainStatus"] | null;
                 account_type?: components["schemas"]["AccountType"] | null;
+                broker?: components["schemas"]["Broker"] | null;
                 /** @description Rows per page. */
                 limit?: number;
                 /** @description Rows to skip. */
@@ -3903,6 +4021,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChainControlOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    assets_api_v1_deriv_assets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DerivAssetsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    check_api_v1_deriv_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DerivCheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DerivAccountOut"];
                 };
             };
             /** @description Not Found */
@@ -5565,6 +5835,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5653,6 +5925,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5741,6 +6015,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5831,6 +6107,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -5921,6 +6199,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -6009,6 +6289,8 @@ export interface operations {
                 group_id?: number | null;
                 /** @description Only the trades of this trading session. */
                 session_id?: number | null;
+                /** @description One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts. */
+                broker?: "quotex" | "deriv" | "all";
                 strategy?: components["schemas"]["Strategy"] | null;
                 asset?: string | null;
                 /** @description Your clock for hour of day, weekday and days: minutes from UTC (UTC-3 is -180). A fixed offset: daylight saving is not followed. */
@@ -8303,6 +8585,7 @@ export interface operations {
             query?: {
                 group_id?: number | null;
                 account_type?: components["schemas"]["AccountType"] | null;
+                broker?: components["schemas"]["Broker"] | null;
                 status?: components["schemas"]["TradeStatus"] | null;
                 /** @description Rows per page. */
                 limit?: number;

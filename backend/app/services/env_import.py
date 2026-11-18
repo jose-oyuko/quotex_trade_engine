@@ -24,6 +24,9 @@ ENV_LOGINS = (
     ("quotex_password", "quotex_password", "Quotex password"),
     ("telegram_api_id", "telegram_api_id", "Telegram API id"),
     ("telegram_api_hash", "telegram_api_hash", "Telegram API hash"),
+    ("deriv_app_id", "deriv_app_id", "Deriv app id"),
+    ("deriv_token_demo", "deriv_token_demo", "Deriv demo token"),
+    ("deriv_token_real", "deriv_token_real", "Deriv real token"),
 )
 
 

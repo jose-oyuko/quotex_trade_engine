@@ -174,6 +174,7 @@ async def running_api(
     builder: EngineBuilder | None = None,
     login_source: Any = None,
     quotex_login: Any = None,
+    deriv_checker: Any = None,
     allow_real: bool = False,
     **settings: Any,
 ) -> AsyncIterator[ApiRig]:
@@ -191,6 +192,7 @@ async def running_api(
             builder=builder,
             login_source=login_source,
             quotex_login=quotex_login,
+            deriv_checker=deriv_checker,
             allow_real=allow_real,
             settings=settings,
         ) as rig:
@@ -208,6 +210,7 @@ async def _running_api(
     builder: EngineBuilder | None,
     login_source: Any,
     quotex_login: Any,
+    deriv_checker: Any,
     allow_real: bool,
     settings: dict[str, Any],
 ) -> AsyncIterator[ApiRig]:
@@ -227,6 +230,7 @@ async def _running_api(
         engine_builder=builder or fake_builder(parts, hold_results=hold_results),
         login_source=login_source,
         quotex_login=quotex_login,
+        deriv_checker=deriv_checker,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with (

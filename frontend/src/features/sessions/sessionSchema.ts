@@ -81,15 +81,9 @@ export const sessionSchema = z
   .object({
     name: z.string().trim().min(1, 'Give the session a name').max(80, 'At most 80 characters'),
     enabled: z.boolean(),
-    // where its trades are placed; kept as it is until the form gets a picker (Phase 21)
+    // where its trades are placed (decision D-75); the asset's rules depend on it, below
     broker: z.enum(['quotex', 'deriv']),
-    asset: z
-      .string()
-      .trim()
-      .regex(
-        /^[A-Za-z0-9]{3,12}(_otc)?$/,
-        'Use the Quotex name: letters and digits, like EURUSD or EURUSD_otc',
-      ),
+    asset: z.string().trim().min(1, 'Choose or type an asset'),
     duration_s: z
       .number({ error: 'Choose a trade length' })
       .refine((value) => TRADE_LENGTHS.some((t) => t.value === value), 'Choose a trade length'),
@@ -117,6 +111,10 @@ export const sessionSchema = z
     min_payout_pct: whole('Enter a whole number from 0 to 100', 0, 100),
   })
   .superRefine((values, context) => {
+    const assetProblem = assetProblemFor(values.broker, values.asset)
+    if (assetProblem !== null) {
+      context.addIssue({ code: 'custom', path: ['asset'], message: assetProblem })
+    }
     if (values.start_time === values.end_time) {
       context.addIssue({
         code: 'custom',
@@ -221,14 +219,38 @@ function daysOf(values: SessionFormValues): number[] {
   }
 }
 
+/** Why the asset cannot be traded on the broker, as the form says it; null when it can. */
+export function assetProblemFor(broker: SessionFormValues['broker'], asset: string): string | null {
+  const name = asset.trim()
+  if (name === '') return null // "Choose or type an asset" is said already
+  if (broker === 'quotex') {
+    return /^[A-Za-z0-9]{3,12}(_otc)?$/.test(name)
+      ? null
+      : 'Use the Quotex name: letters and digits, like EURUSD or EURUSD_otc'
+  }
+  if (/_otc$/i.test(name)) {
+    return 'Deriv has no OTC pairs: use EURUSD, or a synthetic index like R_75'
+  }
+  return /^[A-Za-z0-9_]{2,20}$/.test(name)
+    ? null
+    : "Use Deriv's name: letters, digits and _, like EURUSD or R_75"
+}
+
+/** The asset as the API wants it. Quotex: EURUSD or EURUSD_otc. Deriv: its own name, as listed
+ * (R_75, 1HZ100V); a forex pair typed in small letters is written in capitals. */
+function assetName(values: SessionFormValues): string {
+  const name = values.asset.trim()
+  if (values.broker === 'deriv') return /^[A-Za-z]{6}$/.test(name) ? name.toUpperCase() : name
+  const [base = name, otc = ''] = name.split(/(?=_otc$)/i)
+  return `${base.toUpperCase()}${otc.toLowerCase()}`
+}
+
 export function toInput(values: SessionFormValues): SessionInput {
-  const [base = values.asset, otc = ''] = values.asset.trim().split(/(?=_otc$)/i)
   return {
     name: values.name,
     enabled: values.enabled,
     broker: values.broker,
-    // the base of the name is upper case (EURUSD); the suffix is written as Quotex does
-    asset: `${base.toUpperCase()}${otc.toLowerCase()}`,
+    asset: assetName(values),
     duration_s: values.duration_s,
     start_time: values.start_time,
     end_time: values.end_time,

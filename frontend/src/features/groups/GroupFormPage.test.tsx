@@ -185,3 +185,28 @@ describe('editing a group', () => {
     expect(screen.getByLabelText('Name')).toHaveValue('Alpha signals')
   })
 })
+
+describe('the broker of a group (decision D-75)', () => {
+  it('sends the broker chosen, and says what Deriv does not trade', async () => {
+    const api = mockApi([
+      ['POST', '/groups', json(makeGroup({ broker: 'deriv' }), 201)],
+      ['GET', '/groups', json(page([makeGroup()]))],
+    ])
+    const user = setup('/groups/new')
+    await user.type(screen.getByLabelText('Name'), 'Deriv signals')
+    await user.type(screen.getByLabelText('Telegram chat id'), '-1001234567890')
+    expect(screen.queryByText(/forex Rise\/Fall starts at 15 minutes/)).toBeNull()
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    expect(screen.getByText(/forex Rise\/Fall starts at 15 minutes/)).toBeVisible()
+    expect(screen.getByText(/Deriv has no OTC pairs: choose "Never OTC"/)).toBeVisible()
+    await user.selectOptions(screen.getByLabelText('OTC assets'), 'none')
+    expect(screen.queryByText(/choose "Never OTC"/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Create group' }))
+
+    expect(await screen.findByText('the groups list')).toBeInTheDocument()
+    expect(api.to('POST', '/groups')[0]?.body).toMatchObject({
+      broker: 'deriv',
+      settings: { asset_suffix_mode: 'none' },
+    })
+  })
+})

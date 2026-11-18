@@ -6,6 +6,7 @@ import { api, type ReportFilters } from './client'
 import type {
   AccountType,
   BreakdownKind,
+  Broker,
   ChainStatus,
   SignalStatus,
   Snapshot,
@@ -38,6 +39,7 @@ export const keys = {
   quotexLogin: ['quotex', 'login'] as const,
   envLogins: ['settings', 'env-logins'] as const,
   secrets: ['secrets'] as const,
+  derivAssets: ['deriv', 'assets'] as const,
 }
 
 export function useStatus() {
@@ -83,6 +85,16 @@ export function useSettings() {
 
 export function useSecrets() {
   return useQuery({ queryKey: keys.secrets, queryFn: ({ signal }) => api.secrets.list(signal) })
+}
+
+/** Deriv's assets for the session form, as the running engine knows them. */
+export function useDerivAssets(enabled = true) {
+  return useQuery({
+    queryKey: keys.derivAssets,
+    queryFn: ({ signal }) => api.deriv.assets(signal),
+    enabled,
+    staleTime: 60_000,
+  })
 }
 
 export function useRisk() {
@@ -141,6 +153,7 @@ export interface TradeFilters extends Paging {
   group_id?: number
   status?: TradeStatus
   account_type?: AccountType
+  broker?: Broker
 }
 
 export function useTrades(filters: TradeFilters) {

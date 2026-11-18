@@ -44,6 +44,8 @@ EXPECTED_OPERATIONS = {
     ("POST", "/api/v1/quotex/login/pin"),
     ("POST", "/api/v1/quotex/login/cancel"),
     ("POST", "/api/v1/quotex/logout"),
+    ("POST", "/api/v1/deriv/check"),
+    ("GET", "/api/v1/deriv/assets"),
     ("GET", "/api/v1/settings"),
     ("GET", "/api/v1/settings/env-logins"),
     ("POST", "/api/v1/settings/env-logins/import"),

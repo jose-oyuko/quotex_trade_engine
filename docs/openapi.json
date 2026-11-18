@@ -195,6 +195,7 @@
         "enum": [
           "group",
           "session",
+          "broker",
           "asset",
           "strategy",
           "hour",
@@ -948,6 +949,142 @@
         "title": "DepthRowOut",
         "type": "object"
       },
+      "DerivAccountOut": {
+        "properties": {
+          "account_id": {
+            "description": "Deriv's account number, like VRTC1234 or CR5678.",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When Deriv's account list gives it.",
+            "title": "Balance"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          }
+        },
+        "required": [
+          "account_id",
+          "account_type",
+          "currency",
+          "balance"
+        ],
+        "title": "DerivAccountOut",
+        "type": "object"
+      },
+      "DerivAssetOut": {
+        "properties": {
+          "asset": {
+            "description": "The name to use in a session: EURUSD, R_75.",
+            "title": "Asset",
+            "type": "string"
+          },
+          "is_open": {
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "lengths": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LengthOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Rise/Fall trade lengths it allows; null while they are not known yet.",
+            "title": "Lengths"
+          },
+          "market": {
+            "description": "forex, synthetic_index, ...",
+            "title": "Market",
+            "type": "string"
+          },
+          "name": {
+            "description": "Deriv's own name: EUR/USD, Volatility 75 Index.",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset",
+          "name",
+          "market",
+          "is_open",
+          "lengths"
+        ],
+        "title": "DerivAssetOut",
+        "type": "object"
+      },
+      "DerivAssetsOut": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DerivAssetOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no list, in words.",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "items"
+        ],
+        "title": "DerivAssetsOut",
+        "type": "object"
+      },
+      "DerivCheckIn": {
+        "additionalProperties": false,
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType",
+            "default": "demo",
+            "description": "Which stored token to check: demo or real."
+          }
+        },
+        "title": "DerivCheckIn",
+        "type": "object"
+      },
       "Direction": {
         "enum": [
           "call",
@@ -1380,6 +1517,17 @@
             ],
             "title": "Asset"
           },
+          "broker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Broker"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only this broker's trades; null when every broker's were added together."
+          },
           "group_id": {
             "anyOf": [
               {
@@ -1447,6 +1595,7 @@
           "until",
           "group_id",
           "session_id",
+          "broker",
           "strategy",
           "asset",
           "utc_offset_minutes"
@@ -1984,6 +2133,24 @@
           }
         },
         "title": "KillSwitchIn",
+        "type": "object"
+      },
+      "LengthOut": {
+        "properties": {
+          "max_s": {
+            "title": "Max S",
+            "type": "integer"
+          },
+          "min_s": {
+            "title": "Min S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "min_s",
+          "max_s"
+        ],
+        "title": "LengthOut",
         "type": "object"
       },
       "LoginIn": {
@@ -3024,7 +3191,8 @@
           "group": {
             "enum": [
               "logins",
-              "telegram"
+              "telegram",
+              "deriv"
             ],
             "title": "Group",
             "type": "string"
@@ -4095,6 +4263,14 @@
               "$ref": "#/components/schemas/BalanceOut"
             },
             "title": "Balances",
+            "type": "array"
+          },
+          "brokers": {
+            "description": "The brokers the running engine has (a login for each); empty when stopped.",
+            "items": {
+              "$ref": "#/components/schemas/Broker"
+            },
+            "title": "Brokers",
             "type": "array"
           },
           "connections": {
@@ -5372,6 +5548,22 @@
             }
           },
           {
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Broker"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Broker"
+            }
+          },
+          {
             "description": "Rows per page.",
             "in": "query",
             "name": "limit",
@@ -5755,6 +5947,180 @@
         "summary": "Stop After Current",
         "tags": [
           "chains"
+        ]
+      }
+    },
+    "/api/v1/deriv/assets": {
+      "get": {
+        "description": "Every asset Deriv lists, with the Rise/Fall trade lengths it allows, as the running engine\nknows them. Empty, with the reason, while the engine is not connected to Deriv.",
+        "operationId": "assets_api_v1_deriv_assets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivAssetsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Assets",
+        "tags": [
+          "deriv"
+        ]
+      }
+    },
+    "/api/v1/deriv/check": {
+      "post": {
+        "description": "Which Deriv account the stored demo (or real) token opens. Reads Deriv's account list\nonly: nothing is traded, and the engine does not need to be stopped.",
+        "operationId": "check_api_v1_deriv_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DerivCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DerivAccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Check",
+        "tags": [
+          "deriv"
         ]
       }
     },
@@ -7717,6 +8083,23 @@
             }
           },
           {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -7932,6 +8315,23 @@
             }
           },
           {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8144,6 +8544,23 @@
               ],
               "description": "Only the trades of this trading session.",
               "title": "Session Id"
+            }
+          },
+          {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
             }
           },
           {
@@ -8379,6 +8796,23 @@
             }
           },
           {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8601,6 +9035,23 @@
             }
           },
           {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
+            }
+          },
+          {
             "in": "query",
             "name": "strategy",
             "required": false,
@@ -8809,6 +9260,23 @@
               ],
               "description": "Only the trades of this trading session.",
               "title": "Session Id"
+            }
+          },
+          {
+            "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "default": "quotex",
+              "description": "One broker's trades (Quotex unless chosen), or `all` to add every broker's together: their money is in different accounts.",
+              "enum": [
+                "quotex",
+                "deriv",
+                "all"
+              ],
+              "title": "Broker",
+              "type": "string"
             }
           },
           {
@@ -11656,6 +12124,22 @@
                 }
               ],
               "title": "Account Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "broker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Broker"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Broker"
             }
           },
           {

@@ -9,6 +9,7 @@ from app.api.schemas.risk import ControlsOut, DayOut
 from app.api.schemas.status import ConnectionOut, EngineStatus, SnapshotOut
 from app.api.views import controls_out
 from app.core.config import Settings
+from app.domain.enums import Broker
 from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.services.groups import EngineProvider
@@ -86,6 +87,7 @@ class SnapshotBuilder:
                 )
                 for name, status in sorted(live.connections.items())
             },
+            brokers=[] if engine is None else [b for b in Broker if b in engine.adapters],
             balance=balance_out(balance) if balance else None,
             balances=[balance_out(b) for b in live.balances_in_use()],
             controls=self.controls(),

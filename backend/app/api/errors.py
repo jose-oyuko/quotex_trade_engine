@@ -38,6 +38,11 @@ from app.engine.errors import (
 from app.engine.risk import RiskConfigError
 from app.quotex.errors import NotConnectedError, QuotexError, RealAccountNotAllowedError
 from app.services.app_config import InvalidSettingError
+from app.services.deriv import (
+    DerivNotConfiguredError,
+    DerivRefusedError,
+    DerivUnreachableError,
+)
 from app.services.groups import (
     GroupExistsError,
     GroupInUseError,
@@ -131,6 +136,9 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     QuotexNotConfiguredError: (409, "quotex_not_configured"),
     PinInvalidError: (422, "quotex_pin_invalid"),
     NoPinWantedError: (409, "quotex_login_step"),
+    DerivNotConfiguredError: (409, "deriv_not_configured"),
+    DerivRefusedError: (422, "deriv_login_refused"),
+    DerivUnreachableError: (502, "deriv_unreachable"),
 }
 
 HTTP_CODES = {

@@ -776,6 +776,22 @@ schemas on 2026-11-17).** Deriv has replaced the API these decisions were writte
 - **Stopping** cancels every broker's connect loop first, then closes each broker with a 10 s limit, so a
   broker that does not answer can no longer keep the application from stopping (the hang of 2026-11-13).
 
+**D-75, D-76 settled in Phase 21 (Deriv on the dashboard and in the reports).**
+- **Deriv's logins are stored like the others** (D-60, D-67): `deriv_app_id`, `deriv_token_demo` and
+  `deriv_token_real` in the encrypted store, under their own part of the Settings page; a stored value wins
+  over `.env`, and "move the logins out of `.env`" covers them. `npm run deriv:check` reads the stored ones too.
+- **Check without trading.** The *Check* button reads Deriv's account list only (the REST call that comes before
+  the one-time link): the account number, its kind, currency and balance. No socket is opened, nothing is
+  traded, and the engine need not be stopped.
+- **Reports show one broker unless "all" is asked for.** The API's `broker` filter is `quotex` by default (the
+  answers of earlier dashboards stay what they were), `deriv`, or `all`; the dashboard starts on the engine's
+  only broker when it has one, else Quotex, and puts a note above the figures when "All brokers" is chosen.
+  The trades CSV gains a `broker` column (after `account`). The old account-type indexes stay: queries
+  without a broker filter ("all") still use them, and the broker ones serve the rest.
+- **Deriv's asset list comes from the running engine** (`GET /deriv/assets`), never from a call of its own:
+  with the engine stopped or Deriv not connected the form says why and the asset is typed. The trade lengths
+  an asset does not offer are shown but cannot be chosen, and the server still refuses them (D-75).
+
 ---
 
 ## Decisions to be made later (record here when decided)

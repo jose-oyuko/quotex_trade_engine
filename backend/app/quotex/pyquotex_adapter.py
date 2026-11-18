@@ -21,6 +21,7 @@ from decimal import Decimal
 
 import structlog
 
+from app.brokers.base import AssetOffer
 from app.core.backoff import BackoffPolicy, backoff_delay
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
@@ -284,6 +285,10 @@ class PyQuotexAdapter:
     def order_refusal(self, asset: str, duration_s: int) -> str | None:
         """Quotex's closed or unknown assets are refused when the order is placed (unchanged)."""
         return None
+
+    def catalogue(self) -> list[AssetOffer]:
+        """Quotex's asset list is not offered to the dashboard: its assets are typed."""
+        return []
 
     async def prepare_asset(self, asset: str, duration_s: int) -> None:
         client = self._require_client()

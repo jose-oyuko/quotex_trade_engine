@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.api.schemas.records import BalanceOut, ChainOut, TradeOut
 from app.api.schemas.risk import ControlsOut, DayOut
-from app.domain.enums import AccountType
+from app.domain.enums import AccountType, Broker
 
 
 class ConnectionOut(BaseModel):
@@ -32,6 +32,10 @@ class SnapshotOut(BaseModel):
     account_type: AccountType
     real_trading_allowed: bool
     connections: dict[str, ConnectionOut]
+    brokers: list[Broker] = Field(
+        default_factory=list,
+        description="The brokers the running engine has (a login for each); empty when stopped.",
+    )
     balance: BalanceOut | None = Field(
         description="The balance in use: Quotex's, or the only broker's. See `balances`."
     )

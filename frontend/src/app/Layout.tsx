@@ -6,6 +6,7 @@ import { Badge, type Tone } from '../components/Badge'
 import { useLogout } from '../features/auth/useLogout'
 import { AccountBadge } from '../features/controls/AccountBadge'
 import { KillSwitch } from '../features/controls/KillSwitch'
+import { BROKER_LABEL, brokersShown } from '../lib/brokers'
 import { useLiveStatus } from '../live/liveStatus'
 import { ErrorBoundary } from './ErrorBoundary'
 import { HealthBanner } from './HealthBanner'
@@ -97,7 +98,9 @@ export function Layout() {
             <>
               <AccountBadge account={status.account_type} />
               <Connection name="Telegram" status={status} />
-              <Connection name="Quotex" status={status} />
+              {brokersShown(status.brokers).map((broker) => (
+                <Connection key={broker} name={BROKER_LABEL[broker]} status={status} />
+              ))}
             </>
           ) : (
             <Badge tone={isError ? 'bad' : 'muted'}>

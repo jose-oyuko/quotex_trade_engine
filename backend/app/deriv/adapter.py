@@ -25,6 +25,7 @@ from typing import Any
 import structlog
 
 from app.brokers.base import (
+    AssetOffer,
     BalanceSnapshot,
     ConnectionState,
     OrderAck,
@@ -462,6 +463,21 @@ class DerivAdapter:
                     f"offers {describe_lengths(lengths or [])}"
                 )
         return None
+
+    def catalogue(self) -> list[AssetOffer]:
+        """Every asset Deriv listed, with the Rise/Fall lengths learnt so far (None: not yet)."""
+        return [
+            AssetOffer(
+                asset=a.asset,
+                name=a.display_name,
+                market=a.market,
+                is_open=a.is_open,
+                lengths=None
+                if (ranges := self._lengths.get(a.symbol)) is None
+                else tuple((r.min_s, r.max_s) for r in ranges),
+            )
+            for a in self.assets()
+        ]
 
     def assets(self) -> list[DerivAsset]:
         """Every asset Deriv listed, open or not (for the dashboard and the check script)."""

@@ -38,6 +38,8 @@ Non-goals for now: user accounts, multi-tenant hosting, mobile app, other broker
 | `SessionScheduler` | Trading sessions (D-71 to D-73): on a timer, opens a pair of opposite chains (CALL and PUT) on the session's asset and hands them to the `ChainManager` as signals of the session's hidden group, with no Telegram message. It works *before* the hot path (a timer and in-memory checks) and ends a run by the soft-stop rules. Lives in its own package, `sessions/` (`scheduler.py`, and the pure schedule rules in `schedule.py`), because the engine package never waits on a timer (D-13). |
 | `Executor` | The hot path: take a decided trade, check limits, send the order through the adapter, then await the result and hand it back to the `ChainManager`. |
 | `QuotexAdapter` | The only module that imports `pyquotex`. Interface in `app/quotex/base.py`; real implementation and a `FakeQuotexAdapter` for tests/demos. |
+| `DerivAdapter` | Deriv's official API (D-74): a token and app id give a one-time WebSocket link (REST, `app/deriv/login.py`), then one socket for balance, assets, price quotes, orders and results (`app/deriv/`). Only `app/deriv/` talks to Deriv; the engine's factory is the one place outside it that names it. Fake: `FakeDerivAdapter`. |
+| Brokers side by side (D-75) | The interface both adapters implement is `BrokerAdapter` (`app/brokers/base.py`). The engine holds one adapter per broker that has a login (`Engine.adapters`); the executor, chain manager and session scheduler pick the adapter by the group's or session's broker. A signal its broker cannot take (not connected, an OTC pair on Deriv, a trade length Deriv does not offer) is skipped before a chain starts, with the reason. The demo/real switch moves every broker or none. |
 | `RiskGuard` | Global and per-group limits (max stake, max concurrent trades, exposure cap, daily stop-loss / profit target, kill switch). Consulted synchronously and from memory only. |
 | `EventBus` | In-memory publish/subscribe. Every state change is an event (`signal.received`, `trade.opened`, `trade.settled`, `chain.advanced`, `chain.ended`, `risk.tripped`, `connection.changed` …). |
 | `DBWriter` | Subscribes to events, batches them, writes to the database in a background task. Never awaited by the hot path. |
@@ -141,9 +143,9 @@ Rules:
 ## 9. Configuration and secrets
 
 - Settings via `pydantic-settings`: environment variables / `.env` (git-ignored). Examples in `.env.example`.
-- Secrets: Telegram API id/hash and session, Quotex email/password. Stored in a local data directory
-  (`data/`, git-ignored). Encrypted storage is a "later" item; until then file permissions + git-ignore
-  and a loud note in the README.
+- Secrets: Telegram API id/hash and session, Quotex email/password and session, Deriv app id and tokens.
+  Stored encrypted in the database with `SECRET_KEY` from `backend/.env` (D-60, D-67); a value in `.env`
+  is used only while none is stored. The API says whether a secret is set, never what it is.
 - Never log secrets; they are masked in every log line (D-51). Backups include the session files unless
   asked not to (D-56).
 

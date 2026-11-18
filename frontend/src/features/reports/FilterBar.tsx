@@ -1,9 +1,12 @@
 import { useGroups, useSessions } from '../../api/queries'
-import type { AccountType, Strategy } from '../../api/types'
+import type { AccountType, Broker, Strategy } from '../../api/types'
+import { BROKER_LABEL, BROKERS } from '../../lib/brokers'
 import type { DateRange, RangePreset } from '../../lib/dates'
 
 export interface ReportControls {
   account: AccountType
+  /** One broker, or every broker's money added together (only when chosen; decision D-75). */
+  broker: Broker | 'all'
   range: DateRange
   groupId: number | undefined
   sessionId: number | undefined
@@ -59,6 +62,22 @@ export function FilterBar({
         >
           <option value="demo">Demo</option>
           <option value="real">Real money</option>
+        </select>
+      </label>
+      <label>
+        Broker{' '}
+        <select
+          value={value.broker}
+          onChange={(event) => {
+            set({ broker: event.target.value as Broker | 'all' })
+          }}
+        >
+          {BROKERS.map((broker) => (
+            <option key={broker} value={broker}>
+              {BROKER_LABEL[broker]}
+            </option>
+          ))}
+          <option value="all">All brokers (added together)</option>
         </select>
       </label>
       <label>

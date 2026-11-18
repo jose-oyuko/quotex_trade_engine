@@ -37,6 +37,9 @@ async def test_a_new_installation_lists_the_secrets_as_not_set(tmp_path: Path) -
             "quotex_password",
             "telegram_api_id",
             "telegram_api_hash",
+            "deriv_app_id",
+            "deriv_token_demo",
+            "deriv_token_real",
         ]
         assert {i["name"]: i["group"] for i in body["items"]}["telegram_api_hash"] == "telegram"
         assert all(i["is_set"] is False and i["readable"] is False for i in body["items"])

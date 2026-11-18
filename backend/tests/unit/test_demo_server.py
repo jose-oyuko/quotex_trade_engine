@@ -24,14 +24,19 @@ FORBIDDEN_IMPORTS = (
     "app.telegram.telethon_source",
     "app.telegram.factory",
     "app.engine.factory",
+    "app.deriv.adapter",  # the demo's Deriv is the simulator too
+    "app.deriv.connection",
+    "app.deriv.login",
+    "app.deriv.factory",
+    "websockets",
     "telethon",
     "pyquotex",
 )
 
 
 def test_the_demo_can_only_ever_use_the_simulators() -> None:
-    """No import of the real Quotex adapter or Telegram wrapper, and the real `.env` is never read
-    (so the owner's credentials cannot reach it)."""
+    """No import of the real Quotex or Deriv adapter or Telegram wrapper, and the real `.env` is
+    never read (so the owner's credentials cannot reach it)."""
     source = Path(demo_server.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
     imported = {n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}

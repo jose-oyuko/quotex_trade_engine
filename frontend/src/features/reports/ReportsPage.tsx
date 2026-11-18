@@ -17,7 +17,7 @@ function Downloads({ filters }: { filters: ReportFilters }) {
       <h2 id="downloads-heading">Download</h2>
       <p className="lead">
         Spreadsheet files for Excel (UTF-8). Every trade in the period, whatever its result, or the
-        figures split by group, asset, strategy, hour or weekday.
+        figures split by broker, group, asset, strategy, hour or weekday.
       </p>
       <p>
         <label>
@@ -37,7 +37,7 @@ function Downloads({ filters }: { filters: ReportFilters }) {
         <a className="btn btn-default" href={reportCsvUrl('trades', filters, delimiter)} download>
           Download all trades (CSV)
         </a>
-        {(['group', 'asset', 'strategy', 'hour', 'weekday'] as const).map((by) => (
+        {(['broker', 'group', 'asset', 'strategy', 'hour', 'weekday'] as const).map((by) => (
           <a
             key={by}
             className="btn btn-default"
@@ -54,14 +54,16 @@ function Downloads({ filters }: { filters: ReportFilters }) {
 
 export default function ReportsPage() {
   const { data: status } = useStatus()
-  const [controls, setControls] = useState<ReportControls>({
+  const [controls, setControls] = useState<ReportControls>(() => ({
     account: 'demo',
+    // the broker in use; with two (or none known yet) Quotex first, never both added together
+    broker: status?.brokers?.length === 1 ? (status.brokers[0] ?? 'quotex') : 'quotex',
     range: { preset: 'all' },
     groupId: undefined,
     sessionId: undefined,
     strategy: undefined,
     asset: '',
-  })
+  }))
   const offset = useMemo(() => browserOffsetMinutes(), [])
   const { filters, error } = useMemo(
     () => toFilters(controls, new Date(), offset),
@@ -77,6 +79,12 @@ export default function ReportsPage() {
         {status?.account_type === 'real' && ' (You are connected to the real account.)'}
       </p>
       <FilterBar value={controls} onChange={setControls} rangeError={error} />
+      {controls.broker === 'all' && (
+        <p className="notice" role="note">
+          These figures add every broker’s trades together. Quotex and Deriv are different accounts
+          with different money: choose one broker to see what each really did.
+        </p>
+      )}
       {filters === null ? null : <Results filters={filters} />}
     </section>
   )

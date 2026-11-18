@@ -8,10 +8,11 @@ import {
   makeGroup,
   makeMetrics,
   makeSession,
+  makeSnapshot,
   makeSummary,
   page,
 } from '../../test/fixtures'
-import { apiError, json, mockApi, renderWith } from '../../test/utils'
+import { apiError, json, mockApi, renderWith, testClient } from '../../test/utils'
 import ReportsPage from './ReportsPage'
 
 afterEach(() => {
@@ -453,5 +454,65 @@ describe('ReportsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong')
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
     expect(await screen.findByRole('img', { name: /Running total/ })).toBeInTheDocument()
+  })
+})
+
+describe('reports by broker (decision D-75)', () => {
+  it('report on Quotex by default and on Deriv when chosen, every report alike', async () => {
+    const api = mockApi(routes())
+    const user = userEvent.setup()
+    renderWith(<ReportsPage />)
+    await screen.findByLabelText('Report figures')
+    expect(lastQuery(api, '/reports/summary').get('broker')).toBe('quotex')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'deriv')
+    for (const path of [
+      '/reports/summary',
+      '/reports/equity',
+      '/reports/depth',
+      '/reports/breakdown',
+    ]) {
+      await waitFor(() => {
+        expect(lastQuery(api, path).get('broker')).toBe('deriv')
+      })
+    }
+    expect(screen.queryByText(/different accounts with different money/)).toBeNull()
+  })
+
+  it('add the brokers together only when asked, and say so', async () => {
+    const api = mockApi(routes())
+    const user = userEvent.setup()
+    renderWith(<ReportsPage />)
+    await screen.findByLabelText('Report figures')
+    await user.selectOptions(screen.getByLabelText('Broker'), 'all')
+    await waitFor(() => {
+      expect(lastQuery(api, '/reports/summary').get('broker')).toBe('all')
+    })
+    expect(
+      screen.getByText(/Quotex and Deriv are different accounts with different money/),
+    ).toHaveAttribute('role', 'note')
+  })
+
+  it('start on Deriv when it is the only broker the engine has', async () => {
+    const api = mockApi(routes())
+    renderWith(<ReportsPage />, { client: testClient(makeSnapshot({ brokers: ['deriv'] })) })
+    await screen.findByLabelText('Report figures')
+    expect(lastQuery(api, '/reports/summary').get('broker')).toBe('deriv')
+    expect(screen.getByLabelText('Broker')).toHaveValue('deriv')
+  })
+
+  it('split the result by broker', async () => {
+    const api = mockApi(routes())
+    const user = userEvent.setup()
+    renderWith(<ReportsPage />)
+    await screen.findByLabelText('Report figures')
+    await user.click(screen.getByRole('tab', { name: 'By broker' }))
+    await waitFor(() => {
+      expect(lastQuery(api, '/reports/breakdown').get('by')).toBe('broker')
+    })
+    expect((await breakdownTable(/Profit by broker/)).getByText('broker one')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'By broker (CSV)' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('by=broker'),
+    )
   })
 })

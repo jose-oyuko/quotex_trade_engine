@@ -2,6 +2,7 @@ import type { Trade } from '../../api/types'
 import { Badge } from '../../components/Badge'
 import { Countdown } from '../../components/Countdown'
 import { Money } from '../../components/Money'
+import { BROKER_LABEL } from '../../lib/brokers'
 import { formatMs, titleCase } from '../../lib/format'
 import { useGroupNames } from '../controls/useGroupNames'
 
@@ -16,6 +17,7 @@ export function OpenTradesPanel({ trades }: { trades: Trade[] }) {
         <thead>
           <tr>
             <th scope="col">Group</th>
+            <th scope="col">Broker</th>
             <th scope="col">Asset</th>
             <th scope="col">Direction</th>
             <th scope="col">Step</th>
@@ -29,6 +31,7 @@ export function OpenTradesPanel({ trades }: { trades: Trade[] }) {
           {trades.map((trade) => (
             <tr key={trade.id}>
               <td>{groupName(trade.group_id)}</td>
+              <td>{BROKER_LABEL[trade.broker]}</td>
               <td>{trade.asset}</td>
               <td>
                 <Badge tone={trade.direction === 'call' ? 'good' : 'bad'}>

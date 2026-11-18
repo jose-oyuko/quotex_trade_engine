@@ -7,6 +7,7 @@ import {
   useTelegramLogin,
 } from '../../api/queries'
 import { DataState } from '../../components/DataState'
+import { DerivPanel } from './DerivPanel'
 import { EnginePanel } from './EnginePanel'
 import { EnvLoginsNotice } from './EnvLoginsNotice'
 import { QuotexPanel } from './QuotexPanel'
@@ -35,6 +36,7 @@ export default function SettingsPage() {
       <DataState query={settings}>{(data) => <SettingsForm data={data} />}</DataState>
       <DataState query={secrets}>{(data) => <SecretsPanel data={data} />}</DataState>
       <DataState query={quotex}>{(data) => <QuotexPanel status={data} />}</DataState>
+      <DataState query={secrets}>{(data) => <DerivPanel data={data} />}</DataState>
     </section>
   )
 }

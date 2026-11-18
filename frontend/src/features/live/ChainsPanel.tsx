@@ -6,6 +6,7 @@ import type { Chain } from '../../api/types'
 import { Badge } from '../../components/Badge'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { BROKER_LABEL } from '../../lib/brokers'
 import { errorMessage } from '../../lib/errors'
 import { titleCase } from '../../lib/format'
 import { useGroupNames } from '../controls/useGroupNames'
@@ -72,6 +73,7 @@ export function ChainsPanel({ chains }: { chains: Chain[] }) {
           <thead>
             <tr>
               <th scope="col">Group</th>
+              <th scope="col">Broker</th>
               <th scope="col">Asset</th>
               <th scope="col">Direction</th>
               <th scope="col">Strategy</th>
@@ -85,6 +87,7 @@ export function ChainsPanel({ chains }: { chains: Chain[] }) {
             {chains.map((chain) => (
               <tr key={chain.id}>
                 <td>{groupName(chain.group_id)}</td>
+                <td>{BROKER_LABEL[chain.broker]}</td>
                 <td>{chain.asset}</td>
                 <td>
                   <Direction value={chain.origin_direction} />

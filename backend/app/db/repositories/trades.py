@@ -13,6 +13,7 @@ from app.domain.enums import (
     RESULT_TRADE_STATUSES,
     UNSETTLED_TRADE_STATUSES,
     AccountType,
+    Broker,
     TradeStatus,
 )
 from app.domain.records import TradeRecord
@@ -59,13 +60,14 @@ class TradeRepository:
         *,
         group_id: int | None = None,
         account_type: AccountType | None = None,
+        broker: Broker | None = None,
         status: TradeStatus | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[TradeRecord]:
         """Newest first."""
         limit, offset = page(limit, offset)
-        stmt = _filtered(select(Trade), group_id, account_type, status)
+        stmt = _filtered(select(Trade), group_id, account_type, status, broker)
         stmt = stmt.order_by(Trade.created_at.desc(), Trade.id).limit(limit).offset(offset)
         return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
 
@@ -74,15 +76,24 @@ class TradeRepository:
         *,
         group_id: int | None = None,
         account_type: AccountType | None = None,
+        broker: Broker | None = None,
         status: TradeStatus | None = None,
     ) -> int:
-        stmt = _filtered(select(func.count()).select_from(Trade), group_id, account_type, status)
+        stmt = _filtered(
+            select(func.count()).select_from(Trade), group_id, account_type, status, broker
+        )
         return await self._session.scalar(stmt) or 0
 
 
 def _filtered[S: Select[Any]](
-    stmt: S, group_id: int | None, account_type: AccountType | None, status: TradeStatus | None
+    stmt: S,
+    group_id: int | None,
+    account_type: AccountType | None,
+    status: TradeStatus | None,
+    broker: Broker | None = None,
 ) -> S:
+    if broker is not None:
+        stmt = stmt.where(Trade.broker == broker)
     if group_id is not None:
         stmt = stmt.where(Trade.group_id == group_id)
     if account_type is not None:

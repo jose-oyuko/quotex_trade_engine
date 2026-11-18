@@ -46,9 +46,9 @@ class SecretKind:
     check: Callable[[str], str] | None = None
 
 
-# What can be stored. The owner types the first five through the dashboard; the Telegram session and
-# phone are written by the application itself when a login succeeds (and are never accepted from,
-# or shown by, the API).
+# What can be stored. The owner types the first seven through the dashboard; the Telegram session
+# and phone are written by the application itself when a login succeeds (and are never accepted
+# from, or shown by, the API).
 KINDS: tuple[SecretKind, ...] = (
     SecretKind("quotex_email", "Quotex email", "The email you log in to Quotex with."),
     SecretKind("quotex_password", "Quotex password", "Your Quotex password."),
@@ -64,6 +64,25 @@ KINDS: tuple[SecretKind, ...] = (
         "Telegram API hash",
         "From https://my.telegram.org, 'API development tools'.",
         group="telegram",
+    ),
+    SecretKind(
+        "deriv_app_id",
+        "Deriv app id",
+        "From Deriv's developer site (https://developers.deriv.com), 'Register an application'.",
+        group="deriv",
+    ),
+    SecretKind(
+        "deriv_token_demo",
+        "Deriv demo token",
+        "A token of your Deriv demo account, with the Read and Trade permissions only.",
+        group="deriv",
+    ),
+    SecretKind(
+        "deriv_token_real",
+        "Deriv real token",
+        "Optional. A token of your Deriv real-money account, with Read and Trade only. It is used "
+        "only when real money is allowed and chosen.",
+        group="deriv",
     ),
     SecretKind("quotex_session", "Quotex login", "Set by the login.", "logins", True),
     SecretKind("telegram_phone", "Telegram phone", "Set by the login.", "telegram", True),

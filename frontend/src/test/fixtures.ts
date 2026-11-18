@@ -176,6 +176,7 @@ const FILTER = {
   until: null,
   group_id: null,
   session_id: null,
+  broker: 'quotex',
   strategy: null,
   asset: null,
   utc_offset_minutes: 0,

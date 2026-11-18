@@ -18,6 +18,7 @@ from app.api.routers import (
     auth,
     chains,
     control,
+    deriv,
     engine,
     groups,
     quotex,
@@ -43,13 +44,14 @@ from app.db.writer import DBWriter
 from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.engine.errors import EngineStartError
-from app.engine.factory import build_engine
+from app.engine.factory import build_engine, check_deriv_account
 from app.engine.flags import EngineFlags
 from app.engine.logins import resolve_settings
 from app.events.bus import EventBus
 from app.quotex.base import LoginRequest, QuotexLogin
 from app.quotex.factory import new_quotex_login
 from app.services.app_config import ConfigService
+from app.services.deriv import AccountChecker, DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
@@ -82,6 +84,7 @@ def create_app(
     engine_builder: EngineBuilder = build_engine,
     login_source: LoginSourceFactory | None = None,
     quotex_login: QuotexLoginFactory | None = None,
+    deriv_checker: AccountChecker | None = None,
 ) -> FastAPI:
     """Build the application. Tests pass their own settings (and a fake-backed engine builder)."""
     settings = settings or get_settings()
@@ -193,6 +196,12 @@ def create_app(
         app.state.sessions = SessionService(session_factory, clock, lambda: app.state.trading)
         app.state.auth = AuthService(session_factory, clock)
         app.state.env_import = EnvImportService(app.state.vault, lambda: cfg)
+        app.state.deriv = DerivService(
+            vault=app.state.vault,
+            settings=lambda: cfg,
+            checker=deriv_checker or check_deriv_account,
+            engine=lambda: app.state.trading,
+        )
         app.state.quotex_login = QuotexLoginService(
             vault=app.state.vault,
             settings=lambda: cfg,
@@ -277,6 +286,7 @@ def create_app(
     app.state.telegram_login = None
     app.state.quotex_login = None
     app.state.env_import = None
+    app.state.deriv = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -310,6 +320,7 @@ def create_app(
         settings_router.router,
         engine.router,
         quotex.router,
+        deriv.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

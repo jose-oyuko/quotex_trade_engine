@@ -19,7 +19,7 @@ from sqlalchemy import BigInteger, ColumnElement, Select, String, case, func, se
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Chain, Group, Trade, TradingSession
-from app.domain.enums import RESULT_TRADE_STATUSES, ChainStatus, TradeStatus
+from app.domain.enums import RESULT_TRADE_STATUSES, Broker, ChainStatus, TradeStatus
 from app.reports.models import (
     EMPTY_METRICS,
     BreakdownKind,
@@ -58,6 +58,8 @@ def _range(column: Any, flt: ReportFilter) -> list[ColumnElement[bool]]:
 def _selectors(flt: ReportFilter) -> list[ColumnElement[bool]]:
     """The filters that are not about time or result."""
     conditions: list[ColumnElement[bool]] = [Trade.account_type == flt.account_type]
+    if flt.broker is not None:
+        conditions.append(Trade.broker == flt.broker)
     if flt.group_id is not None:
         conditions.append(Trade.group_id == flt.group_id)
     if flt.session_id is not None:
@@ -124,6 +126,8 @@ async def breakdown(
             key, labels = Trade.group_id, Group.title
         case BreakdownKind.SESSION:
             key, labels = TradingSession.id, TradingSession.name
+        case BreakdownKind.BROKER:
+            key = labels = Trade.broker
         case BreakdownKind.ASSET:
             key = labels = Trade.asset
         case BreakdownKind.STRATEGY:
@@ -167,6 +171,8 @@ def _label(kind: BreakdownKind, key: object, label: object) -> str:
         return f"{int(str(key)):02d}:00"
     if kind is BreakdownKind.WEEKDAY:
         return WEEKDAYS[int(str(key))]
+    if kind is BreakdownKind.BROKER:
+        return Broker(_key_text(key)).label
     return _key_text(label)
 
 
@@ -292,6 +298,8 @@ async def depth(session: AsyncSession, flt: ReportFilter) -> DepthReport:
         Chain.status.notin_((ChainStatus.PENDING, ChainStatus.OPEN)),
         *_range(Chain.created_at, flt),
     ]
+    if flt.broker is not None:
+        chain_filter.append(Chain.broker == flt.broker)
     if flt.group_id is not None:
         chain_filter.append(Chain.group_id == flt.group_id)
     if flt.session_id is not None:
@@ -434,6 +442,7 @@ async def export_trades(session: AsyncSession, flt: ReportFilter) -> AsyncIterat
             type_coerce(Trade.status, String),
             type_coerce(Trade.profit, BigInteger),
             Trade.error,
+            type_coerce(Trade.broker, String),
         )
         .select_from(Trade)
         .join(Chain, Chain.id == Trade.chain_id)
@@ -462,6 +471,7 @@ async def export_trades(session: AsyncSession, flt: ReportFilter) -> AsyncIterat
                 status=r[14],
                 profit=_cents_text(r[15]),
                 error=r[16],
+                broker=r[17],
             )
             for r in rows
         ]

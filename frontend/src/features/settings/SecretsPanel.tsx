@@ -29,7 +29,7 @@ function StatusBadge({ item, keyOk }: { item: SecretItem; keyOk: boolean }) {
   return <Badge tone="good">Stored</Badge>
 }
 
-function SecretRow({ item, keyOk }: { item: SecretItem; keyOk: boolean }) {
+export function SecretRow({ item, keyOk }: { item: SecretItem; keyOk: boolean }) {
   const client = useQueryClient()
   const id = useId()
   const [editing, setEditing] = useState(false)
