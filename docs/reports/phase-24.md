@@ -1,8 +1,8 @@
 # Phase 24 — Settle faster, so martingale steps stop drifting — Report
 
 **Date:** 2026-11-19
-**Status:** Done, with the early result switched **off**. It is switched on after your live measurement
-(section 7).
+**Status:** Done. The live timeline (section 7b) agreed 3 of 3 and saved a median 2.0 s per result; the
+early result is ready to be switched ON on the Settings page (it is still OFF until you do).
 
 ## 1. Summary
 
@@ -145,7 +145,21 @@ and the price tick comes first. The fake Deriv sends the live names; new tests c
 (`OrderAckTimeoutError`: that 1.00 demo order may exist on Deriv). At the time the laptop was on battery and
 Windows had logged 6 Wi-Fi "missed beacons" in 30 minutes, the same pattern as on 2026-11-18.
 
-**Still to do:** one complete 3-trade timeline with the fixed code
+**With the fix, on the owner's other network (same day): 3 of 3 complete.**
+
+| | trade 1 (won) | trade 2 (lost) | trade 3 (lost) |
+|---|---|---|---|
+| tick at the end second arrives | −1.29 s | −1.35 s | −1.36 s |
+| **result used by the engine** | **−1.29 s** | **−1.35 s** | **−1.36 s** |
+| Deriv's update "sold" | −0.09 s | +0.63 s | +0.81 s |
+| saved | 1.2 s | 2.0 s | 2.2 s |
+| Deriv's result = the engine's | yes (+0.88) | yes (−1.00) | yes (−1.00) |
+
+The engine knew each result the moment the tick of the end second arrived, a median **2.0 s earlier** than
+Deriv's "sold" update, and all three agreed with Deriv (no correction). Connected in 3.8 s, no failure.
+**Verdict: the early result can be switched ON.**
+
+~~Still to do:~~ (done above) one complete 3-trade timeline with the fixed code
 (`npm run deriv:check -- --asset 1HZ75V --order --timeline`), on a steady connection (laptop plugged in, or a
 cable). If all three show "result used by the engine" about 2 s before "sold" and "agrees", switch *Deriv early
 result* ON. It stays OFF until then.

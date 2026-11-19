@@ -29,7 +29,7 @@ agent to start the next phase.
 | 21 | Deriv on the dashboard, in the reports and in the guides | Done — committed; live check pending |
 | 22 | Never freeze on a dropped connection; continue chains when nothing was missed | Done — committed (`2a75d06`); live check pending |
 | 23 | Turn a broker on or off without stopping the engine | Done — committed (`5febc99`); live check pending |
-| 24 | Settle faster, so martingale steps stop drifting | Done — committed; early result OFF until the owner's live timeline |
+| 24 | Settle faster, so martingale steps stop drifting | Done — committed; live timeline 3/3 agreed (2.0 s saved); early result OFF until the owner switches it on |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
