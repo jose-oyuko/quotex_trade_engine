@@ -6,8 +6,10 @@ one at a time (a second request while one is in progress is refused, not queued)
 order, and always leaving a state the dashboard can describe in words.
 
 Starting builds a fresh engine, so nothing of the old one is reused: the risk guard, the chains and
-the connections are all new, rebuilt from the database like after a restart (D-35). Stopping marks
-whatever was in flight as `unknown` at once, which is what the next start would have done.
+the connections are all new, rebuilt from the database like after a restart (D-35, D-79). The owner
+stopping the engine marks whatever was in flight as `unknown` at once (the owner chose to stop
+trading; the next start still reads the Deriv results of those trades, D-78). The application
+closing (Ctrl+C) leaves what was in flight as it is, so the next start carries it on (D-79).
 
 The engine itself is untouched by this: the path from a signal to an order is the same code.
 """
@@ -155,7 +157,7 @@ class EngineController:
             engine, self._engine = self._engine, None
             if engine is not None:
                 self._set_trading(None)
-                await engine.stop()
+                await engine.stop(closing=True)
         finally:
             self._busy = False
 
@@ -203,7 +205,7 @@ class EngineController:
             self._set_trading(None)
         # What was in flight can no longer be followed: say so now, as the next start would.
         await self._flush()
-        engine.manager.recover(await self._recovery())
+        engine.manager.recover(await self._recovery(), carry_on=False)
         if remember:
             self._desired = False
             await self._flags.set_desired(False)

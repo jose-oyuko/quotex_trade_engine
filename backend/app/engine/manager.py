@@ -16,6 +16,11 @@ it does not trade, a trade length it does not offer): all read from memory.
 A signal is handled synchronously (`on_signal` never waits): it creates the chain in memory,
 publishes `chain.started` and starts the task. The task's first act is the order. Nothing here
 touches the database; every change is an event for the DB writer.
+
+A chain carries on through a lost connection, and on Deriv through a restart, as long as no trade
+time was missed (decision D-79): its next step is due when its open trade expires, so if the
+connection in use was made after that moment, the step was due while it was down and the chain
+ends ("missed"). A step is never sent late.
 """
 
 from __future__ import annotations
@@ -27,13 +32,20 @@ from uuid import UUID
 
 import structlog
 
-from app.brokers.base import TradeOutcome
+from app.brokers.base import BrokerAdapter, ConnectionState, TradeOutcome
+from app.brokers.errors import BrokerError
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.db.recovery import RecoveryState
 from app.domain.enums import Broker, ChainStatus, SignalStatus, TradeStatus
 from app.domain.ids import new_id
-from app.domain.records import GroupSettingsRecord, RiskEventRecord, SignalRecord
+from app.domain.records import (
+    ChainRecord,
+    GroupSettingsRecord,
+    RiskEventRecord,
+    SignalRecord,
+    TradeRecord,
+)
 from app.engine.chain import Chain, ChainSpec
 from app.engine.errors import UnknownChainError
 from app.engine.executor import Executor, PlacedTrade, Stamps, StepKind, StepOutcome
@@ -44,6 +56,7 @@ from app.events.types import (
     ChainAdvanced,
     ChainEnded,
     ChainStarted,
+    ConnectionChanged,
     Event,
     RiskTripped,
     SignalReceived,
@@ -54,12 +67,17 @@ from app.signals.models import Signal
 log = structlog.get_logger()
 
 RESTART_REASON = "the application stopped while this was in progress; the outcome is unknown"
+LOOKUP_NOTE = "result read from the broker after a restart"
+LATE_LOOKUP_TIMEOUT_S = 30.0  # the longest the broker is asked about a contract that ended long ago
+RESUMABLE = frozenset({Broker.DERIV})  # brokers that report a past contract by its id (D-78)
 
 
 @dataclass(slots=True, frozen=True)
 class RecoverySummary:
     chains_marked_unknown: int
     trades_marked_unknown: int
+    chains_resumed: int = 0  # Deriv chains carried on after the restart (decision D-79)
+    trades_looked_up: int = 0  # Deriv trades whose result is read from Deriv (decision D-78)
 
 
 _KIND_OUTCOME = {
@@ -118,6 +136,8 @@ class ChainManager:
         self._first_sent_ns: dict[UUID, int] = {}
         # `chain.started` events waiting for the signal's inbox row to be published first
         self._unannounced: dict[UUID, ChainStarted] = {}
+        # results read from the broker after a restart
+        self._lookups: set[asyncio.Task[None]] = set()
 
     # --- group settings (in memory; updated when a group is edited) ---
 
@@ -143,12 +163,12 @@ class ChainManager:
 
     async def stop(self) -> None:
         """Cancel every running chain. Their open trades stay open in the database; the next
-        start flags them `unknown` (recovery), which is the truth: we stopped watching them."""
-        drivers = list(self._drivers.values())
-        for driver in drivers:
-            driver.cancel()
-        if drivers:
-            await asyncio.gather(*drivers, return_exceptions=True)
+        start deals with them (recovery): Deriv ones are looked up, the others flagged `unknown`."""
+        tasks = [*self._drivers.values(), *self._lookups]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def wait_idle(self, timeout_s: float | None = None) -> None:
         """Wait until every running chain has ended (used by tests and orderly shutdown)."""
@@ -290,11 +310,24 @@ class ChainManager:
 
     # --- driving a chain ---
 
-    async def _drive(self, chain: Chain, plan: StepPlan, stamps: Stamps) -> None:
+    async def _drive(
+        self,
+        chain: Chain,
+        plan: StepPlan,
+        stamps: Stamps,
+        *,
+        already_open: PlacedTrade | None = None,
+    ) -> None:
+        """Place each step and wait for its result until the chain ends. `already_open` is a
+        trade placed before a restart: the chain starts by waiting for its result."""
         self._announce(chain.id)
         try:
             while chain.active:
-                placed = await self._executor.place(chain, plan, stamps)
+                placed: PlacedTrade | StepOutcome
+                if already_open is not None:
+                    placed, already_open = already_open, None
+                else:
+                    placed = await self._executor.place(chain, plan, stamps)
                 if isinstance(placed, PlacedTrade):
                     self._note_order_sent(chain, placed)
                     if chain.status is ChainStatus.PENDING:
@@ -307,7 +340,7 @@ class ChainManager:
                     outcome = placed
                 if not chain.active:
                     return  # the owner ended the chain while this trade was open; it is recorded
-                next_plan = self._apply(chain, outcome)
+                next_plan = self._apply(chain, outcome, self._missed(chain, outcome.trade))
                 if next_plan is None:
                     return
                 # A follow-up goes out the moment the loss is known: the only work in between is
@@ -345,7 +378,25 @@ class ChainManager:
                 gap_ms=round(abs(sent - other) / 1_000_000, 1),
             )
 
-    def _apply(self, chain: Chain, outcome: StepOutcome) -> StepPlan | None:
+    def _missed(self, chain: Chain, trade: TradeRecord) -> str | None:
+        """Why the step after `trade` can no longer go out on time, or None (decision D-79). It
+        was due when `trade` expired; if the connection in use now was made after that, it was
+        due while the connection was down."""
+        expires = trade.expires_at
+        if expires is None:
+            return None
+        adapter = self._executor.adapter(chain.spec.broker)
+        since = adapter.connected_since if adapter is not None else None
+        if since is not None and since <= expires:
+            return None
+        return (
+            f"missed: step {chain.step + 1} was due at {expires:%H:%M:%S} UTC, while the "
+            f"connection to {chain.spec.broker.label} was down; a step is never sent late"
+        )
+
+    def _apply(
+        self, chain: Chain, outcome: StepOutcome, missed: str | None = None
+    ) -> StepPlan | None:
         now = self._clock.now()
         next_plan: StepPlan | None = None
         if outcome.kind is StepKind.BLOCKED and outcome.stop:
@@ -355,7 +406,7 @@ class ChainManager:
         elif outcome.kind is StepKind.UNKNOWN:
             chain.mark_unknown(outcome.detail or "outcome unknown", now)
         else:
-            next_plan = chain.apply_result(_KIND_OUTCOME[outcome.kind], now)
+            next_plan = chain.apply_result(_KIND_OUTCOME[outcome.kind], now, missed=missed)
         event_type = ChainAdvanced if chain.active else ChainEnded
         self._bus.publish(event_type(occurred_at=now, chain=chain.to_record()))
         return next_plan
@@ -424,22 +475,69 @@ class ChainManager:
 
     # --- startup recovery ---
 
-    def recover(self, state: RecoveryState) -> RecoverySummary:
+    def recover(self, state: RecoveryState, *, carry_on: bool = True) -> RecoverySummary:
         """Deal with what was in flight when the application stopped.
 
-        We cannot see the broker's history, and a follow-up placed minutes late is not the trade the
-        strategy asked for, so everything unfinished is marked `unknown`, loudly (a `risk.tripped`
-        event per affected group) and never continued or retried (decision D-35).
+        On Deriv, which reports any past contract by its id, nothing is left to guess (decisions
+        D-78, D-79): a chain whose trade is still open is carried on (if Deriv connects before
+        that trade expires the chain simply continues; otherwise its next step was missed and it
+        ends), an open trade without a chain to carry on gets its real result, and so do the
+        trades an earlier restart left `unknown`.
+
+        Elsewhere (Quotex) we cannot see the broker's history, and a follow-up placed minutes late
+        is not the trade the strategy asked for, so everything unfinished is marked `unknown`,
+        loudly (a `risk.tripped` event per affected group) and never continued (decision D-35).
+        Must run inside the event loop: it starts the tasks that carry the Deriv chains on.
+
+        `carry_on=False` (the owner stopped the engine from the dashboard): nothing is carried on
+        or looked up now, everything in flight is marked `unknown`; the next start then reads the
+        Deriv results of those trades.
         """
+
+        def can(broker: Broker) -> bool:
+            return carry_on and self._resumable(broker)
+
         now = self._clock.now()
-        trades = 0
+        open_trade = {
+            t.chain_id: t
+            for t in state.unsettled_trades
+            if t.status is TradeStatus.OPEN and t.broker_order_id
+        }
+        resumed: list[tuple[ChainRecord, TradeRecord]] = []
+        for chain in state.open_chains:
+            trade = open_trade.get(chain.id)
+            if (
+                trade is not None
+                and can(chain.broker)
+                and trade.broker is chain.broker
+                and trade.step == chain.step
+                and chain.account_type is self._executor.account_type
+            ):
+                resumed.append((chain, trade))
+        resumed_trades = {trade.id for _, trade in resumed}
+        resumed_chains = {chain.id for chain, _ in resumed}
+
+        trades = looked_up = 0
         for trade in state.unsettled_trades:
+            if trade.id in resumed_trades:
+                continue
+            if trade.status is TradeStatus.OPEN and trade.broker_order_id and can(trade.broker):
+                self._look_up(trade, late=False)
+                looked_up += 1
+                continue
             ended = replace(trade, status=TradeStatus.UNKNOWN, error=RESTART_REASON, settled_at=now)
             self._bus.publish(TradeSettled(occurred_at=now, trade=ended))
             trades += 1
+        for trade in state.unknown_trades:
+            if trade.broker_order_id and can(trade.broker):
+                self._look_up(trade, late=True)
+                looked_up += 1
+
         affected: dict[int, int] = defaultdict(int)
         where: dict[int, Broker] = {}
         for chain in state.open_chains:
+            if chain.id in resumed_chains:
+                continue
             ended_chain = replace(
                 chain,
                 status=ChainStatus.UNKNOWN,
@@ -464,4 +562,90 @@ class ChainManager:
                     ),
                 )
             )
-        return RecoverySummary(sum(affected.values()), trades)
+        for chain, trade in resumed:
+            self._resume(chain, trade)
+        if resumed or looked_up:
+            log.info("restart_recovered", chains_resumed=len(resumed), trades_looked_up=looked_up)
+        return RecoverySummary(sum(affected.values()), trades, len(resumed), looked_up)
+
+    def _resumable(self, broker: Broker) -> bool:
+        return broker in RESUMABLE and self._executor.adapter(broker) is not None
+
+    def _resume(self, record: ChainRecord, trade: TradeRecord) -> None:
+        """Carry on a chain whose trade was open when the application stopped."""
+        settings = self._settings.get(record.group_id)
+        chain = Chain.resume(
+            record, min_payout_pct=settings.min_payout_pct if settings is not None else 0
+        )
+        self._register(chain)
+        self._guard.adopt(trade)
+        self._drivers[chain.id] = self._tasks.spawn(
+            self._drive_resumed(chain, trade), name=f"chain-{chain.id}"
+        )
+
+    async def _drive_resumed(self, chain: Chain, trade: TradeRecord) -> None:
+        adapter = self._executor.adapter(chain.spec.broker)
+        if adapter is not None:
+            await self._until_connected(adapter)
+        stamps = Stamps(None, None, self._clock.monotonic_ns())
+        await self._drive(chain, chain.plan(), stamps, already_open=PlacedTrade(trade))
+
+    def _look_up(self, trade: TradeRecord, *, late: bool) -> None:
+        task = self._tasks.spawn(self._read_result(trade, late=late), name=f"lookup-{trade.id}")
+        self._lookups.add(task)
+        task.add_done_callback(self._lookups.discard)
+
+    async def _read_result(self, trade: TradeRecord, *, late: bool) -> None:
+        """Ask the broker how a trade ended and record it. `late`: an earlier restart marked it
+        `unknown`; its result keeps the time it was first recorded (the day it counts on), and
+        it stays `unknown` if the broker cannot say."""
+        adapter = self._executor.adapter(trade.broker)
+        if adapter is None:
+            return
+        await self._until_connected(adapter)
+        timeout = LATE_LOOKUP_TIMEOUT_S
+        if not late and trade.expires_at is not None:
+            remaining = (trade.expires_at - self._clock.now()).total_seconds()
+            timeout = max(remaining, 0.0) + self._executor.result_margin_s
+        try:
+            result = await adapter.await_result(trade.broker_order_id or "", timeout)
+        except BrokerError as exc:
+            log.warning("restart_lookup_failed", trade_id=str(trade.id), error=str(exc)[:200])
+            if not late:
+                now = self._clock.now()
+                ended = replace(
+                    trade, status=TradeStatus.UNKNOWN, error=RESTART_REASON, settled_at=now
+                )
+                self._bus.publish(TradeSettled(occurred_at=now, trade=ended))
+            return
+        now = self._clock.now()
+        settled = replace(
+            trade,
+            status=_OUTCOME_STATUS[result.outcome],
+            profit=result.profit,
+            settled_at=trade.settled_at if late and trade.settled_at else now,
+            error=LOOKUP_NOTE,
+        )
+        self._guard.settled(settled, at=settled.settled_at)
+        self._bus.publish(TradeSettled(occurred_at=now, trade=settled))
+
+    async def _until_connected(self, adapter: BrokerAdapter) -> None:
+        """Wait for the broker's `ConnectionChanged` events until it is connected (an event, never
+        a timed wait: decision D-13)."""
+        changes = self._bus.subscribe(ConnectionChanged, maxsize=1_000, name="wait-for-broker")
+        try:
+            while not _connected(adapter):
+                await changes.get()
+        finally:
+            self._bus.unsubscribe(changes)
+
+
+def _connected(adapter: BrokerAdapter) -> bool:
+    return adapter.state is ConnectionState.CONNECTED
+
+
+_OUTCOME_STATUS = {
+    TradeOutcome.WON: TradeStatus.WON,
+    TradeOutcome.LOST: TradeStatus.LOST,
+    TradeOutcome.DRAW: TradeStatus.DRAW,
+}

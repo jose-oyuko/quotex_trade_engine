@@ -52,6 +52,13 @@ class FakeDerivAdapter(FakeBrokerAdapter):
     def is_open(self, asset: str) -> bool:
         return deriv_symbol(asset) is not None and super().is_open(asset)
 
+    def payout(self, asset: str, minutes: int) -> int | None:
+        """Like Deriv: a payout is known only once a price quote was asked for that asset and
+        length (`prepare_asset`), and is forgotten when the connection is made again."""
+        if not any(a == asset and d // 60 == minutes for a, d in self._prepared):
+            return None
+        return super().payout(asset, minutes)
+
     def order_refusal(self, asset: str, duration_s: int) -> str | None:
         """The same reasons, in the same words, as `DerivAdapter.order_refusal`."""
         if deriv_symbol(asset) is None:

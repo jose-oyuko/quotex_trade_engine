@@ -15,15 +15,16 @@ a sentence for each problem, and the dashboard shows the same sentence in a bann
 |---|---|---|---|---|
 | Telegram connection drops | Pauses (nothing to read); open trades carry on | Messages sent while away are **not** seen | Banner "Telegram is not connected" | `test_connection_loss` |
 | Quotex connection drops | New signals for it are skipped with the reason; open trades carry on | Nothing lost | Banner "Quotex is not connected" | `test_connection_loss`, `test_health_degraded` |
-| Deriv connection drops | The same for Deriv's groups and sessions; Quotex trades on | Nothing lost | Banner "Deriv is not connected" (when a group or session uses it) | `test_one_broker_down_does_not_stop_the_other`, `test_deriv_adapter` |
+| Deriv connection drops | The same for Deriv's groups and sessions; Quotex trades on. Open trades are followed again; a chain carries on if the connection is back before its open trade expires, else it ends as *missed* | Nothing lost | Banner "Deriv is not connected" (when a group or session uses it) | `test_one_broker_down_does_not_stop_the_other`, `test_deriv_adapter`, `test_engine_continuity` |
 | Database locked / down | Trading continues (never waits for the database) | Held in memory, written when it returns | Banner "database is not accepting writes" | `test_writer_outage` |
 | Database down longer than 10 minutes | Continues | That batch is **dropped**, loudly | Banner "events were dropped" | `test_writer_outage` |
 | Event queue full | Continues | Newest events dropped, counted | Banner "events were dropped" | `test_writer_outage` |
 | A record the database refuses | Continues | Only that record is lost | Banner "records could not be stored" | `test_writer_outage` |
 | Dashboard too slow | Unaffected | Unaffected | The dashboard reloads itself | `test_ws_hub`, `test_ws_socket` |
-| Application crashes / power cut | Stops | Last moments may be missing | On next start: trades and chains `unknown` | `test_restart` |
+| Application crashes / power cut | Stops | Last moments may be missing | On next start: Quotex trades and chains `unknown`; Deriv trades get their real result and Deriv chains carry on if nothing was missed | `test_restart`, `test_engine_continuity` |
+| The engine freezes (stops responding) | Stops | — | Log line `engine_stalled` saying where it is stuck; Ctrl+C ends the program within 15 s | `test_watchdog` |
 | Shutdown (Ctrl+C) | Stops | Everything queued is written first | Log line `shutdown` | `test_restart` |
-| A trading session's run is in progress at a crash | Stops; the run is **not** resumed | The run ends as `interrupted` at the next start | Past runs: "The application stopped while it ran" | `test_a_run_found_still_going_at_start_up_ends_as_interrupted_and_is_not_resumed` |
+| A trading session's run is in progress at a crash or Ctrl+C | Stops | The run carries on at the next start if its window is still open (rounds missed meanwhile count as skipped); otherwise it ends as `interrupted` | The run's note says which | `test_a_run_found_going_after_a_restart_carries_on_in_its_window`, `test_a_run_whose_window_passed_while_the_app_was_down_ends_as_interrupted` |
 | Random mix of all of the above | Rules hold | Books balance | — | `test_chaos` (14 seeds) |
 
 ## Telegram drops
@@ -64,7 +65,20 @@ a sentence for each problem, and the dashboard shows the same sentence in a bann
 - **An order with no confirmation in time** *may* have been placed (`OrderAckTimeoutError`): it is never
   sent again, and the trade becomes `unknown` if no result arrives: check it on Deriv.
 - **A trade already open** is followed again after a reconnect, so a contract that ended while the socket
-  was down is still reported.
+  was down is still reported. The adapter knows the moment the socket closes and waits for the next
+  connection; it never retries a closed socket (decision D-78: on 2026-11-18 a retry loop that never
+  waited froze the whole engine twice, both times when Deriv dropped with trades open).
+- **The chain carries on if nothing was missed (decision D-79).** A chain's next step is due when its
+  open trade expires. If the connection is back before that, the result comes in as usual and the next
+  step goes out on time. If it comes back later, the trade still gets its real result, but the step that
+  was due is **missed**: the chain ends (`failed`, reason "missed: step N was due at ... while the
+  connection to Deriv was down"). A step is never sent late, and a loss before a missed step stays a loss.
+  The same holds on Quotex, except that our Quotex adapter waits for a result on the connection that
+  placed the order, so a Quotex trade open across a reconnect usually ends `unknown`.
+- Tested: `test_a_deriv_restart_with_five_contracts_open_never_freezes_the_engine`,
+  `test_a_network_cut_with_contracts_open_never_freezes_the_engine`,
+  `test_back_before_the_trade_expires_the_chain_simply_continues`,
+  `test_back_after_the_trade_expired_the_step_is_missed_and_the_chain_ends`.
 - **Signals Deriv cannot take** (an OTC pair, a trade length the asset does not offer, a closed asset)
   are skipped before a chain starts, with the reason.
 
@@ -101,8 +115,14 @@ Nothing here can slow the engine. Closing and reopening the page is always safe.
 Nothing can be flushed, so the last fraction of a second of events may not be in the database. On the
 next start the application reads the database and:
 
-- marks every trade that was open, and its chain, `unknown` (it cannot see Quotex's history to find
-  out how they ended) and records a `risk.tripped` event. **Check those trades on the broker's site (Quotex or Deriv).**
+- **on Deriv** (decisions D-78, D-79), asks Deriv about every trade that was open: a chain whose trade is
+  still running is carried on (if Deriv connects before that trade expires it continues as if nothing
+  happened; otherwise it ends as *missed*), and every other open trade gets its real result. Trades an
+  earlier restart left `unknown` in the last 7 days are looked up too, and keep the day they were first
+  recorded on. A trade Deriv cannot report stays `unknown`.
+- **on Quotex**, marks every trade that was open, and its chain, `unknown` (it cannot see Quotex's
+  history to find out how they ended) and records a `risk.tripped` event. **Check those trades on Quotex.**
+- carries a trading session's run on if its window is still open (see the table above).
 - restores the kill switch, group pauses, risk limits and the day's profit and loss, so a crash never
   lifts a stop-loss or re-enables a stopped group.
 - does not trade on anything it was in the middle of: it does not resend orders.
@@ -115,10 +135,26 @@ Tested: `test_a_hard_crash_leaves_work_in_flight_and_the_restart_flags_it_unknow
 Ctrl+C (or a service stop) runs shutdown in reverse order of startup: the engine stops (it publishes
 its last events), the dashboard feed stops, the writer drains its queue to the database, background
 tasks are cancelled (5 s grace), the database closes. Trades that are open stay open in the database
-and are flagged `unknown` on the next start, like after a crash. Each broker gets at most 10 seconds to
-close, and a login still retrying is cancelled first, so a broker that does not answer cannot hang
-Ctrl+C (fixed in Phase 20). Tested: `test_a_graceful_shutdown_is_quick_and_flushes_everything_it_knew`,
+and are dealt with on the next start, like after a crash (Deriv: carried on or looked up; Quotex:
+`unknown`), and a session run is left going for the next start to carry on. The brokers close at the same
+time, each with at most 10 seconds, and a login still retrying is cancelled first, so a broker that does
+not answer cannot hang Ctrl+C (fixed in Phase 20). If the program has still not ended 15 seconds after
+Ctrl+C, the stall watchdog ends it (Phase 22).
+
+**Stop on the dashboard is different:** the owner chose to stop trading, so the session run ends
+(`engine_stopped`) and whatever was in flight is marked `unknown` at once; the next start still reads the
+Deriv results of those trades. Tested: `test_a_graceful_shutdown_is_quick_and_flushes_everything_it_knew`,
 `test_stopping_gives_up_on_a_broker_that_does_not_close`, `test_stopping_ends_a_login_that_is_still_retrying`.
+
+## The engine freezes (decision D-80)
+
+Everything runs on one event loop, so one piece of code that never waits can freeze it all: no log line,
+no dashboard, no reconnect, and Ctrl+C did nothing (this happened twice on 2026-11-18, now fixed). A
+watchdog thread outside the loop now checks every second that the loop still turns. After 10 seconds
+without a turn it writes `engine_stalled` to the log with the place in the code where it is stuck (again
+every 60 s while it lasts, then `engine_unstalled`). Ctrl+C asks for a normal stop; if the program has not
+ended 15 seconds later, the watchdog ends it (`engine_forced_exit`), and the next start deals with what was
+in flight. It never restarts anything by itself. Tested: `test_watchdog.py`.
 
 ## Missing logins
 

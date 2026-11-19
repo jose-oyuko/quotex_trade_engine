@@ -26,6 +26,7 @@ log = structlog.get_logger()
 type Message = dict[str, Any]
 type OnUpdate = Callable[[Message], None]
 type Spawn = Callable[[Coroutine[Any, Any, Any], str], asyncio.Task[Any]]
+type OnLost = Callable[["DerivConnection"], None]
 
 
 class ConnectionLostError(BrokerConnectionError):
@@ -33,7 +34,7 @@ class ConnectionLostError(BrokerConnectionError):
 
 
 class DerivConnection:
-    def __init__(self, ws: ClientConnection) -> None:
+    def __init__(self, ws: ClientConnection, *, on_lost: OnLost | None = None) -> None:
         self._ws = ws
         self._ids = count(1)
         self._waiting: dict[int, asyncio.Future[Message]] = {}
@@ -41,12 +42,17 @@ class DerivConnection:
         self._by_subscription: dict[str, OnUpdate] = {}
         self._closed = asyncio.Event()
         self._reader: asyncio.Task[None] | None = None
+        self._on_lost = on_lost
 
     @classmethod
-    async def open(cls, url: str, *, spawn: Spawn, timeout_s: float) -> DerivConnection:
-        """Open the socket and start reading. The link is used once (it holds a one-time code)."""
+    async def open(
+        cls, url: str, *, spawn: Spawn, timeout_s: float, on_lost: OnLost | None = None
+    ) -> DerivConnection:
+        """Open the socket and start reading. The link is used once (it holds a one-time code).
+        `on_lost` is called once, the moment the socket is found closed (decision D-78: whoever
+        uses the connection must know at once that it is gone, not on the monitor's next look)."""
         ws = await connect(url, open_timeout=timeout_s, max_size=2**22)
-        connection = cls(ws)
+        connection = cls(ws, on_lost=on_lost)
         connection._reader = spawn(connection._read(), "deriv_reader")
         return connection
 
@@ -167,6 +173,12 @@ class DerivConnection:
                 future.set_exception(ConnectionLostError("the connection to Deriv was lost"))
         self._streams.clear()
         self._by_subscription.clear()
+        on_lost, self._on_lost = self._on_lost, None
+        if on_lost is not None:
+            try:
+                on_lost(self)
+            except Exception:
+                log.error("deriv_on_lost_failed", exc_info=True)
 
 
 def _subscription_id(message: Message) -> str | None:

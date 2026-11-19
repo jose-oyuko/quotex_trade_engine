@@ -160,6 +160,9 @@ Rules:
   masked (D-51).
 - Failure behaviour of every part is in `docs/FAILURE_MODES.md`; each row has a test.
 - Latency timestamps per trade (section 4) are first-class data, not log lines.
+- A stall watchdog (`app/core/watchdog.py`, D-80): a thread outside the event loop that logs
+  `engine_stalled` with the loop's stack when the loop has not turned for 10 s, and ends the process
+  if it has not stopped 15 s after Ctrl+C. Nothing on the loop can report its own freeze; this can.
 
 ## 11. Repository layout (target; created progressively by the phases)
 

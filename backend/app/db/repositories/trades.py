@@ -46,6 +46,21 @@ class TradeRepository:
         )
         return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
 
+    async def list_unknown_since(self, since: datetime, broker: Broker) -> list[TradeRecord]:
+        """Trades on `broker` whose result was never learned (`unknown`) and that have a broker
+        order id, created at or after `since`: a restart asks the broker for them (D-78)."""
+        stmt = (
+            select(Trade)
+            .where(
+                Trade.status == TradeStatus.UNKNOWN,
+                Trade.broker == broker,
+                Trade.broker_order_id.is_not(None),
+                Trade.created_at >= since,
+            )
+            .order_by(Trade.created_at)
+        )
+        return [to_record(TradeRecord, row) for row in await self._session.scalars(stmt)]
+
     async def list_settled_since(self, since: datetime) -> list[TradeRecord]:
         """Trades with a known result settled at or after `since` (rebuilds the daily totals)."""
         stmt = (

@@ -792,14 +792,14 @@ schemas on 2026-11-17).** Deriv has replaced the API these decisions were writte
   with the engine stopped or Deriv not connected the form says why and the asset is typed. The trade lengths
   an asset does not offer are shown but cannot be chosen, and the server still refuses them (D-75).
 
-**D-78. A dropped broker connection never stops the engine (Phase 22, proposed).** Seen twice on 2026-11-18:
+**D-78. A dropped broker connection never stops the engine (Phase 22).** Seen twice on 2026-11-18:
 a Deriv drop with trades open froze the whole engine. No retry loop in an adapter may run again without waiting
 (for the drop to be seen, for the next connection, or a backoff). A trade waiting for its result follows its
 contract again after a reconnect, within its time limit. A Deriv trade left `open` or `unknown` by a drop, a crash
 or a stop is settled from Deriv by its contract id (Deriv keeps every contract), so `unknown` is only for what
 Deriv itself cannot report. **Amends D-35 for Deriv**; Quotex trades keep D-35.
 
-**D-79. A chain continues unless a trade time was missed; no margin (Phase 22, proposed; owner's rule).** A
+**D-79. A chain continues unless a trade time was missed; no margin (Phase 22; owner's rule).** A
 chain's next trade is due when its open trade expires (a step goes out as soon as the result is known); a
 session pair is due at its candle. If the connection, or on Deriv the program, is back before that, the chain
 continues as if nothing happened. If not, the open trade still gets its real result, but the chain ends with
@@ -807,7 +807,7 @@ the reason "a step was due while the connection was down"; a due step is never s
 session run whose window is still open resumes with its counters read back, and the rounds missed meanwhile
 count as skipped. **Amends D-73** ("no resume"); one run at a time and no catch-up still hold.
 
-**D-80. A stall watchdog (Phase 22, proposed).** A thread outside the event loop checks every second that the
+**D-80. A stall watchdog (Phase 22).** A thread outside the event loop checks every second that the
 loop still turns. After 10 s without a turn it logs `engine_stalled` with the loop's stack trace (then every 60
 s while stalled). Ctrl+C asks for a normal stop; if the loop has not stopped 15 s later, the process ends
 anyway, and the next start settles what was in flight (D-78). It never restarts the engine by itself: the
@@ -825,6 +825,31 @@ for the owner ("needs you"); network and Cloudflare errors keep the backoff.
 the exit price is known (from the contract update that carries it, or from the asset's price stream, chosen
 after the owner's live measurement), by Deriv's Rise/Fall rule (equal is a loss). Deriv's own result is the one
 stored; a disagreement is marked on the trade and logged. The early path can be switched off in the settings.
+
+**D-78 to D-80 settled in Phase 22.**
+- **How "missed" is decided.** Each adapter says when the connection in use was made
+  (`connected_since`). A settled loss whose trade expired before that moment had its next step due while
+  the connection was down: the chain ends (`failed`, "missed: ..."). A step that comes due while the broker
+  is not connected is not sent ("missed: step N was due while Deriv was not connected"). No new chain
+  status: `failed` with that reason.
+- **Ctrl+C is not Stop.** The application closing (Ctrl+C, a service stop, a crash) leaves chains, trades
+  and a session run as they are, so the next start carries them on (Deriv chains, session runs) or looks
+  them up (Deriv trades). The owner pressing *Stop* on the dashboard ends the run (`engine_stopped`) and
+  marks what was in flight `unknown` at once, as before; the next start still reads the Deriv results of
+  those trades.
+- **Where a run carries on.** A run carries on only when it was `running` (not `stopping`), its window is
+  still open, its session exists and is switched on, the kill switch is off and the account is the same.
+  Missed rounds are counted on the every-candle mode (each candle is a round); a one-pair-at-a-time run
+  first lets a pair it carried on finish.
+- **Quotex** keeps D-35 after a restart. During a reconnect inside a running engine the same "missed"
+  rule applies, but its open trade usually ends `unknown`, because our Quotex adapter waits for a result
+  on the connection that placed the order, and that connection is gone.
+- **Payout before the first round.** Every run asks the broker for the asset's payout before its first
+  round (a no-op when a scheduled start did it a minute ahead), and a round that finds no payout asks for
+  it in the background. The fake Deriv now knows a payout only after it was asked for, like Deriv.
+- **The watchdog** checks every second and reports after 10 s without a turn; Ctrl+C (SIGINT, and SIGBREAK
+  and SIGTERM where they exist) also starts its 15 s exit clock. The brokers now close at the same time
+  when the engine stops, so a normal stop takes at most 10 s.
 
 ---
 

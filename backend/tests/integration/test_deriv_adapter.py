@@ -542,3 +542,83 @@ async def test_the_catalogue_lists_every_asset_with_the_lengths_learned_so_far(
     after = {a.asset: a for a in deriv.catalogue()}
     assert after["EURUSD"].lengths == ((900, 365 * 86400),)
     assert after["R_75"].lengths is None  # not asked about yet
+
+
+# ---- a drop with contracts open (decision D-78; the freezes of 2026-11-18) -------------------
+
+
+class Heartbeat:
+    """Counts turns of the event loop while it runs: a frozen loop stops counting."""
+
+    def __init__(self) -> None:
+        self.beats = 0
+        self._task = asyncio.ensure_future(self._run())
+
+    async def _run(self) -> None:
+        while True:
+            self.beats += 1
+            await asyncio.sleep(0.01)
+
+    def stop(self) -> None:
+        self._task.cancel()
+
+
+async def drop_with_open_contracts(rig: Rig, count: int, cut: bool) -> None:
+    rig.server.settle_after_s = None
+    # The monitor looks once a second, as in production: before the fix a wait for a result
+    # retried the closed socket in a loop that never yielded, so the monitor never got to run.
+    deriv = rig.adapter(monitor_interval_s=1.0, sleep=asyncio.sleep)
+    await deriv.connect()
+    acks = [await deriv.place_order("R_75", Direction.CALL, 60, D("1.00")) for _ in range(count)]
+    waiting = [asyncio.ensure_future(deriv.await_result(a.order_id, 20)) for a in acks]
+    await asyncio.sleep(0.05)
+    beat = Heartbeat()
+
+    if cut:
+        rig.server.cut_clients()
+    else:
+        await rig.server.drop_clients_with_a_restart()
+    await asyncio.sleep(0.2)
+    assert deriv.state is not ConnectionState.CONNECTED  # known at once, not a second later
+    before = beat.beats
+    await asyncio.sleep(0.5)
+    assert beat.beats - before >= 10  # the loop keeps turning during the outage
+
+    for _ in range(400):  # the monitor reconnects
+        if deriv.state is ConnectionState.CONNECTED:
+            break
+        await asyncio.sleep(0.01)
+    assert deriv.state is ConnectionState.CONNECTED
+    for index, ack in enumerate(acks):
+        await rig.server.settle(int(ack.order_id), D("0.95") if index % 2 else D("-1.00"))
+    results = await asyncio.wait_for(asyncio.gather(*waiting), 10)
+    assert [r.profit for r in results] == [D("0.95") if i % 2 else D("-1.00") for i in range(count)]
+    beat.stop()
+    await deriv.disconnect()
+
+
+async def test_a_deriv_restart_with_one_contract_open_never_freezes_the_engine(rig: Rig) -> None:
+    await drop_with_open_contracts(rig, 1, cut=False)
+
+
+async def test_a_deriv_restart_with_five_contracts_open_never_freezes_the_engine(
+    rig: Rig,
+) -> None:
+    await drop_with_open_contracts(rig, 5, cut=False)
+
+
+async def test_a_network_cut_with_contracts_open_never_freezes_the_engine(rig: Rig) -> None:
+    await drop_with_open_contracts(rig, 3, cut=True)
+
+
+async def test_the_connection_time_is_known_and_cleared_when_the_socket_goes(
+    rig: Rig, deriv: DerivAdapter
+) -> None:
+    first = deriv.connected_since
+    assert first is not None
+    await rig.server.drop_clients_with_a_restart()
+    for _ in range(300):
+        if deriv.connected_since is not None and deriv.connected_since > first:
+            break
+        await asyncio.sleep(0.01)
+    assert deriv.connected_since is not None and deriv.connected_since > first

@@ -154,6 +154,16 @@ class FakeDerivServer:
         for client in list(self._clients):
             await client.close()
 
+    async def drop_clients_with_a_restart(self) -> None:
+        """What Deriv's proxy did on 2026-11-18: close every socket with 1001 (going away)."""
+        for client in list(self._clients):
+            await client.close(code=1001, reason="CloudFlare WebSocket proxy restarting")
+
+    def cut_clients(self) -> None:
+        """The network goes away: the sockets die without a closing handshake."""
+        for client in list(self._clients):
+            client.transport.abort()
+
     def sent(self, name: str) -> list[dict[str, Any]]:
         return [message for message in self.received if name in message]
 

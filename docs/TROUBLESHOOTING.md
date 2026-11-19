@@ -182,6 +182,22 @@ connected to Deriv; the form says why it is not there. Type the name meanwhile (
 **"Deriv is not connected" banner** — it is reconnecting by itself; Quotex trades on. If it stays, stop the
 app and run `npm run deriv:check` to see the reason.
 
+**A chain ended with "missed: step 1 was due at 19:18:00 UTC, while the connection to Deriv was down"** — the
+connection (or the program) came back after that trade expired, so its next step could not go out on time and
+was not sent late (decision D-79). The trade itself has its real result. Not a fault of the app; if it happens
+often, see "A steadier connection on a home PC" in [OPERATIONS.md](OPERATIONS.md).
+
+**A trade says "result read from the broker after a restart"** — it was open (or `unknown`) when the program
+stopped, and Deriv told us how it ended at the next start (decision D-78).
+
+**The log says `engine_stalled`** — the engine stopped responding; the line says where in the code it is stuck.
+Press Ctrl+C: the program ends within 15 seconds even if it is frozen, and the next start deals with the open
+trades. Please keep that log line: it shows exactly what to fix.
+
+**"the payout of R_75 is not known" on every round** — fixed in Phase 22: *Start now* now asks Deriv for the
+payout before its first pair, and a round that finds none asks for it so the next round can trade. If it stays,
+Deriv is not answering price quotes for that asset: check `npm run deriv:check`.
+
 ## Trading sessions
 
 **A session did not start at its time** — open **Sessions**: *Next start* shows when it will start by itself, and

@@ -3,7 +3,8 @@
     pending ──ack──► open ──win/draw──► completed
                       │ └──loss, more steps──► open (next step)
                       │ └──loss, no more steps──► exhausted
-        any active ───┴──► stopped (owner) / failed (order refused) / unknown (outcome unclear)
+        any active ───┴──► stopped (owner) / failed (order refused, or a step missed: D-79)
+                                                 / unknown (outcome unclear)
 
 A `Chain` is mutated only on the event loop and never awaits, so a read followed by a write cannot
 be interleaved with another task (docs/ARCHITECTURE.md section 5). It knows nothing about Quotex:
@@ -69,6 +70,33 @@ class Chain:
         self.end_reason: str | None = None
         self.stop_requested = False
 
+    @classmethod
+    def resume(cls, record: ChainRecord, *, min_payout_pct: int = 0) -> Chain:
+        """The chain as it was stored, to carry it on after a restart (decision D-79)."""
+        spec = ChainSpec(
+            id=record.id,
+            group_id=record.group_id,
+            signal_id=record.signal_id,
+            asset=record.asset,
+            origin_direction=record.origin_direction,
+            duration_s=record.duration_s,
+            account_type=record.account_type,
+            strategy=record.strategy,
+            base_stake=record.base_stake,
+            multipliers=record.multipliers,
+            max_steps=record.max_steps,
+            min_payout_pct=min_payout_pct,
+            session_run_id=record.session_run_id,
+            pair_no=record.pair_no,
+            broker=record.broker,
+        )
+        chain = cls(spec, record.created_at)
+        chain.status = record.status
+        chain.step = record.step
+        chain.consecutive_losses = record.consecutive_losses
+        chain.updated_at = record.updated_at
+        return chain
+
     @property
     def id(self) -> UUID:
         return self.spec.id
@@ -92,9 +120,12 @@ class Chain:
         self.status = ChainStatus.OPEN
         self.updated_at = now
 
-    def apply_result(self, outcome: TradeOutcome, now: datetime) -> StepPlan | None:
+    def apply_result(
+        self, outcome: TradeOutcome, now: datetime, *, missed: str | None = None
+    ) -> StepPlan | None:
         """Record how the current trade ended. Returns the next step to place, or None when the
-        chain is over (its status and reason are then set)."""
+        chain is over (its status and reason are then set). `missed` says why a next step, if
+        one was due, can no longer be sent on time: the chain then ends (decision D-79)."""
         self._require_active()
         self.updated_at = now
         if outcome is TradeOutcome.WON:
@@ -111,6 +142,9 @@ class Chain:
             return None
         if self.stop_requested:
             self._end(ChainStatus.STOPPED, f"stopped after trade {self.step} as requested", now)
+            return None
+        if missed is not None:
+            self._end(ChainStatus.FAILED, missed, now)
             return None
         self.step += 1
         self.status = ChainStatus.OPEN

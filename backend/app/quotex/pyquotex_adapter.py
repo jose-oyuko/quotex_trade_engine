@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import random
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from decimal import Decimal
 
 import structlog
@@ -92,6 +93,7 @@ class PyQuotexAdapter:
 
         self._state = ConnectionState.DISCONNECTED
         self._client: QuotexClient | None = None
+        self._connected_since: datetime | None = None
         self._wanted = False
         self._monitor: asyncio.Task[None] | None = None
         self._order_lock = asyncio.Lock()
@@ -107,6 +109,10 @@ class PyQuotexAdapter:
     @property
     def account_type(self) -> AccountType:
         return self._account_type
+
+    @property
+    def connected_since(self) -> datetime | None:
+        return self._connected_since
 
     def _set_state(self, state: ConnectionState, detail: str | None = None) -> None:
         if state is self._state and detail is None:
@@ -172,10 +178,12 @@ class PyQuotexAdapter:
             raise
         self._client = client
         self._prepared.clear()
+        self._connected_since = self._clock.now()
         self._set_state(ConnectionState.CONNECTED)
 
     async def _drop_client(self) -> None:
         client, self._client = self._client, None
+        self._connected_since = None
         if client is not None:
             await _close_quietly(client)
 

@@ -318,7 +318,7 @@ async def test_the_session_routes_need_a_login(tmp_path: Path) -> None:
             assert response.status_code == 401, (method, path)
 
 
-async def test_a_run_found_still_going_at_start_up_ends_as_interrupted_and_is_not_resumed(
+async def test_a_run_whose_window_passed_while_the_app_was_down_ends_as_interrupted(
     tmp_path: Path,
 ) -> None:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -343,7 +343,10 @@ async def test_a_run_found_still_going_at_start_up_ends_as_interrupted_and_is_no
         async def interrupted() -> bool:
             runs = (await rig.client.get(f"{API}/runs")).json()["items"]
             return any(
-                r["id"] == ids["run"] and r["state"] == "ended" and r["end_reason"] == "interrupted"
+                r["id"] == ids["run"]
+                and r["state"] == "ended"
+                and r["end_reason"] == "interrupted"
+                and "its window ended in the meantime" in (r["note"] or "")
                 for r in runs
             )
 

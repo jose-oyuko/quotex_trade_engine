@@ -11,7 +11,10 @@ own broker (decision D-75); the checks before a pair ask that broker.
                       '- a stop reason (window end, a target, Stop...): no more pairs; the
                          chains already running finish; then the run is `ended`
 
-One run at a time. A run never resumes: what was in progress at a restart ends as `interrupted`.
+One run at a time. After a restart a run whose window is still open carries on (decision D-79,
+which amends D-73): its counters are read back, its chains that the manager carried on stay its
+own, and the rounds missed while the application was down count as skipped. A run that cannot carry
+on (its window ended, the kill switch, the session switched off...) ends as `interrupted`.
 All waiting goes through the injected `sleep` and the injected clock, so tests drive time by hand.
 """
 
@@ -141,6 +144,8 @@ class SessionScheduler:
         self._wake = asyncio.Event()
         self._subscription: Subscription | None = None
         self._background: list[asyncio.Task[Any]] = []
+        self._resumed: _Run | None = None  # a run carried on after a restart, started by `start`
+        self._preparing: asyncio.Task[None] | None = None  # a payout asked for by a round
 
     # --- what the dashboard and the API ask ---
 
@@ -183,28 +188,49 @@ class SessionScheduler:
             self._tasks.spawn(self._consume(self._subscription), name="sessions-events"),
             self._tasks.spawn(self._loop(), name="sessions-loop"),
         ]
+        resumed, self._resumed = self._resumed, None
+        if resumed is not None:
+            self._launch(resumed)
 
-    async def stop(self) -> None:
+    async def stop(self, *, end_run: bool = True) -> None:
         """No more pairs and no more timers. A run in progress ends as `engine_stopped` (its
-        chains are stopped by the manager, which the engine does next)."""
+        chains are stopped by the manager, which the engine does next); with `end_run=False` (the
+        application is closing) it is left going, for the next start to carry on (D-79)."""
         if self._subscription is not None:
             self._bus.unsubscribe(self._subscription)
             self._subscription = None
         run = self._run
-        tasks = [*self._background, *([run.task] if run and run.task else [])]
+        preparing, self._preparing = self._preparing, None
+        tasks = [
+            *self._background,
+            *([run.task] if run and run.task else []),
+            *([preparing] if preparing is not None else []),
+        ]
         self._background = []
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
-        if run is not None and run.record.state is not RunState.ENDED:
+        if run is None or run.record.state is RunState.ENDED:
+            return
+        if end_run:
             self._end_run(run, RunEndReason.ENGINE_STOPPED)
+        else:
+            self._update(run, note="the application closed while this run was going")
+            self._run = None
 
     def recover(self, unfinished: list[SessionRunRecord]) -> int:
-        """Runs still marked as going at start-up belong to a process that died: they end as
-        `interrupted` and are never resumed (decision D-73). Returns how many."""
+        """Runs still marked as going at start-up belong to the application that stopped. One whose
+        window is still open carries on (decision D-79; it starts with `start`); the others end as
+        `interrupted`, saying why. Call it after the chain manager's recovery, so the chains it
+        carried on are known. Returns how many runs ended."""
         now = self._clock.now()
+        ended = 0
         for record in unfinished:
+            reason = self._resume_refusal(record, now)
+            if reason is None:
+                self._resumed = self._resume(record, now)
+                continue
             self._bus.publish(
                 SessionRunChanged(
                     occurred_at=now,
@@ -214,11 +240,65 @@ class SessionScheduler:
                         end_reason=RunEndReason.INTERRUPTED,
                         ended_at=now,
                         updated_at=now,
-                        note="the application stopped while this run was in progress",
+                        note=f"the application stopped while this run was in progress; {reason}",
                     ),
                 )
             )
-        return len(unfinished)
+            ended += 1
+        return ended
+
+    def _resume_refusal(self, record: SessionRunRecord, now: datetime) -> str | None:
+        """Why a run found going at start-up cannot carry on, or None if it can."""
+        config = self._sessions.get(record.session_id)
+        if self._run is not None or self._resumed is not None:
+            return "another run is already going"
+        if config is None:
+            return "its session no longer exists"
+        if not config.session.enabled:
+            return "its session is switched off"
+        if record.state is not RunState.RUNNING:
+            return "it was already stopping"
+        if now >= record.window_end:
+            return "its window ended in the meantime"
+        if self._guard.kill_switch:
+            return "the kill switch is on"
+        if record.account_type is not self._executor.account_type:
+            return "the account is not the one it traded on"
+        return None
+
+    def _resume(self, record: SessionRunRecord, now: datetime) -> _Run:
+        config = self._sessions[record.session_id]
+        session = config.session
+        run = _Run(
+            record=record,
+            cfg=config,
+            first_at=next_boundary(now, session.duration_s, after=True),
+            window_end=record.window_end,
+        )
+        self._run = run
+        for chain in self._manager.active_chains(session.group_id):
+            if chain.spec.session_run_id == record.id and chain.spec.pair_no is not None:
+                run.chains[chain.id] = chain.spec.pair_no
+                run.legs[chain.spec.pair_no] = run.legs.get(chain.spec.pair_no, 0) + 1
+                self._chain_run[chain.id] = run
+        missed = (
+            _candles_between(record.updated_at, now, run.window_end, session.duration_s)
+            if session.mode is SessionMode.EVERY_CANDLE
+            else 0
+        )
+        self._update(
+            run,
+            rounds_skipped=record.rounds_skipped + missed,
+            note=f"carried on after a restart: {missed} round(s) missed while the application "
+            "was not running",
+        )
+        log.info(
+            "session_run_resumed",
+            session=session.name,
+            rounds_missed=missed,
+            chains=len(run.chains),
+        )
+        return run
 
     # --- the owner's controls ---
 
@@ -319,6 +399,12 @@ class SessionScheduler:
         except Exception as exc:
             log.warning("session_prepare_failed", asset=session.asset, error=str(exc)[:200])
 
+    def _prepare_in_background(self, config: SessionConfig) -> None:
+        """Ask the broker for what a round found missing (a payout), without holding the round."""
+        if self._preparing is not None and not self._preparing.done():
+            return
+        self._preparing = self._tasks.spawn(self._prepare(config), name="session-prepare")
+
     async def _pause(self, until: datetime | None) -> None:
         """Wait until `until` (at most one tick), or until a session is saved or removed."""
         self._wake.clear()
@@ -355,8 +441,11 @@ class SessionScheduler:
             started_by=started_by,
             window_end=window_end.isoformat(),
         )
-        run.task = self._tasks.spawn(self._drive(run), name=f"session-run-{record.id}")
+        self._launch(run)
         return run
+
+    def _launch(self, run: _Run) -> None:
+        run.task = self._tasks.spawn(self._drive(run), name=f"session-run-{run.record.id}")
 
     async def _drive(self, run: _Run) -> None:
         try:
@@ -374,6 +463,19 @@ class SessionScheduler:
 
     async def _rounds(self, run: _Run) -> None:
         session = run.cfg.session
+        # The payout is read before the first round (a scheduled run did it a minute ahead; for
+        # Start now and a run carried on after a restart this is the first time).
+        await self._prepare(run.cfg)
+        if run.chains and session.mode is not SessionMode.EVERY_CANDLE:
+            # one pair at a time: a pair carried on after a restart finishes first
+            await self._wait_pair_over(run)
+            if run.stopping:
+                return
+            ready = self._clock.now() + timedelta(seconds=session.pause_s)
+            run.first_at = max(
+                run.first_at,
+                next_boundary(ready - timedelta(seconds=ALIGN_GRACE_S), session.duration_s),
+            )
         await self._wait_until(run, run.first_at)
         while not run.stopping:
             if (reason := self._reason_to_stop(run)) is not None:
@@ -453,6 +555,7 @@ class SessionScheduler:
         except BrokerError as exc:
             return f"the payout of {session.asset} cannot be read: {exc}"
         if payout is None:
+            self._prepare_in_background(config)  # so that a later round can trade
             return f"the payout of {session.asset} is not known"
         if payout < settings.min_payout_pct:
             return (
@@ -646,6 +749,16 @@ class SessionScheduler:
                 lopsided_pairs=lopsided,
                 note=f"pair {number}: only one leg is running (the other order was refused)",
             )
+
+
+def _candles_between(since: datetime, now: datetime, end: datetime, length_s: int) -> int:
+    """How many candles began after `since`, up to `now` and before `end`."""
+    count = 0
+    boundary = next_boundary(since, length_s, after=True)
+    while boundary <= now and boundary < end:
+        count += 1
+        boundary += timedelta(seconds=length_s)
+    return count
 
 
 async def _race(*waits: Awaitable[Any]) -> None:

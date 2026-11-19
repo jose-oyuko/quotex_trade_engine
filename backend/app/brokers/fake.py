@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.brokers.base import (
@@ -104,6 +105,7 @@ class FakeBrokerAdapter:
         self.hold_results = hold_results
 
         self._state = ConnectionState.DISCONNECTED
+        self._connected_since: datetime | None = None
         self._assets: dict[str, _Asset] = {}
         self._scripted: list[Decimal | TradeOutcome] = []
         self._order_failures: list[BrokerError] = []
@@ -143,6 +145,32 @@ class FakeBrokerAdapter:
         self._set_state(ConnectionState.RECONNECTING, "connection lost")
         self._prepared.clear()
 
+    def adopt_order(
+        self,
+        order_id: str,
+        *,
+        asset: str,
+        direction: Direction,
+        duration_s: int,
+        amount: Decimal,
+        outcome: TradeOutcome,
+        settled: bool = True,
+    ) -> None:
+        """Make the fake know an order placed before a restart (the real broker keeps every
+        contract). Settled at once, or held until `settle(order_id)`."""
+        profit = {
+            TradeOutcome.WON: (amount * Decimal("0.85")).quantize(CENT),
+            TradeOutcome.LOST: -amount,
+            TradeOutcome.DRAW: Decimal("0.00"),
+        }[outcome]
+        placed = PlacedOrder(
+            order_id, asset, direction, duration_s, amount, self._account_type, profit, outcome
+        )
+        pending = _Pending(placed)
+        self._pending[order_id] = pending
+        if settled:
+            pending.result.set_result(TradeResult(order_id, outcome, profit))
+
     def simulate_connection_restored(self) -> None:
         self._set_state(ConnectionState.CONNECTED)
 
@@ -170,10 +198,15 @@ class FakeBrokerAdapter:
     def account_type(self) -> AccountType:
         return self._account_type
 
+    @property
+    def connected_since(self) -> datetime | None:
+        return self._connected_since
+
     def _set_state(self, state: ConnectionState, detail: str | None = None) -> None:
         if state is self._state:
             return
         self._state = state
+        self._connected_since = self._clock.now() if state is ConnectionState.CONNECTED else None
         if self._bus is not None:
             self._bus.publish(
                 ConnectionChanged(

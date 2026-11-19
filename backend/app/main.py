@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
@@ -37,6 +38,7 @@ from app.core.clock import SystemClock
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.tasks import TaskSupervisor
+from app.core.watchdog import LoopWatchdog, chain_stop_signal
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import schema_is_current
 from app.db.recovery import load_recovery_state
@@ -100,6 +102,10 @@ def create_app(
             secrets=settings.secret_values(),
         )
         log.info("startup", environment=settings.environment, host=settings.host)
+        # Decision D-80: a frozen loop is reported, and Ctrl+C always ends the program.
+        watchdog = LoopWatchdog(asyncio.get_running_loop())
+        watchdog.start()
+        undo_signals = chain_stop_signal(watchdog)
 
         settings.data_dir.mkdir(parents=True, exist_ok=True)
         engine = create_engine(settings.database_url)
@@ -245,6 +251,8 @@ def create_app(
                         "engine_started",
                         chains_marked_unknown=summary.chains_marked_unknown,
                         trades_marked_unknown=summary.trades_marked_unknown,
+                        chains_resumed=summary.chains_resumed,
+                        trades_looked_up=summary.trades_looked_up,
                     )
         else:
             log.info("engine_stopped", hint="start it on the dashboard's Settings page")
@@ -258,6 +266,8 @@ def create_app(
         await writer.stop()
         await app.state.tasks.shutdown()
         await engine.dispose()
+        undo_signals()
+        watchdog.stop()
         log.info("shutdown")
 
     app = FastAPI(

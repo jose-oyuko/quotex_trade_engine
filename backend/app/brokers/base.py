@@ -115,6 +115,13 @@ class BrokerAdapter(Protocol):
     @property
     def account_type(self) -> AccountType: ...
 
+    @property
+    def connected_since(self) -> datetime | None:
+        """When the connection in use now was made (the engine's clock), or None while there is
+        none. A chain whose open trade expired before this moment had a step due while the
+        connection was down: that step was missed (decision D-79)."""
+        ...
+
     async def connect(self, *, retry_forever: bool = False) -> None:
         """Log in and open the connection. Raises `BrokerConnectionError` if it fails, unless
         `retry_forever` is set, in which case it keeps trying with backoff until it works or

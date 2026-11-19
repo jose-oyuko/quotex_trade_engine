@@ -114,7 +114,13 @@ decides how many pairs run). Telegram signals and groups are not affected.
   when a trade settles. The loss limit therefore stops new pairs but **does not cap the loss**.
 - **Run states:** `running`, `stopping`, `ended`; end reasons `window_ended`, `profit_target`, `loss_limit`,
   `max_pairs`, `stopped`, `kill_switch`, `engine_stopped` (the engine was stopped normally),
-  `interrupted` (the run was still going when the application died: found at the next start), `error`.
+  `interrupted` (the run was still going when the application stopped and could not carry on: its window
+  ended meanwhile, the kill switch is on, its session was switched off), `error`. A run whose window is still
+  open carries on at the next start (decision D-79, amending D-73); the rounds missed meanwhile count as
+  skipped.
+- **A step is never sent late (D-79):** a chain's next step is due when its open trade expires. A connection
+  (or, on Deriv, the program) back before that: the chain continues. Back after it: the step was missed and
+  the chain ends (`failed`, "missed: ..."), with the trade's real result.
 - **A lopsided pair:** the second order of a pair refused after the first went out (for example by a limit):
   the run counts it, because only one leg is then exposed.
 - The account cannot be switched while a run is going, and a session cannot be edited or deleted while it runs.

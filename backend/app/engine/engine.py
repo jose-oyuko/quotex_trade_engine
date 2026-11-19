@@ -256,8 +256,9 @@ class Engine:
     # --- life cycle ---
 
     def load(self, recovery: RecoveryState) -> RecoverySummary:
-        """Rebuild the in-memory state from the database: groups first, then flag what was in
-        flight when we last stopped."""
+        """Rebuild the in-memory state from the database: groups first, then what was in flight
+        when we last stopped (chains before session runs: a run carried on keeps its chains).
+        Runs inside the event loop: Deriv chains carried on get their tasks here."""
         self.guard.load(recovery.app_settings, recovery.recent_settled_trades)
         settings = {s.group_id: s for s in recovery.group_settings}
         for group in recovery.groups:
@@ -266,8 +267,9 @@ class Engine:
         for session in recovery.sessions:
             if session.group_id in settings:
                 self.set_session(session, settings[session.group_id])
+        summary = self.manager.recover(recovery)
         self.scheduler.recover(recovery.unfinished_runs)
-        return self.manager.recover(recovery)
+        return summary
 
     async def start(self, recovery: RecoveryState) -> RecoverySummary:
         summary = self.load(recovery)
@@ -282,9 +284,11 @@ class Engine:
         self.scheduler.start()
         return summary
 
-    async def stop(self) -> None:
-        """Stop opening pairs, stop taking signals, stop the chains, then close the connections."""
-        await self.scheduler.stop()
+    async def stop(self, *, closing: bool = False) -> None:
+        """Stop opening pairs, stop taking signals, stop the chains, then close the connections.
+        `closing`: the application is closing (Ctrl+C), not the owner stopping trading: a session
+        run is left going, so the next start carries it on if its window is still open (D-79)."""
+        await self.scheduler.stop(end_run=not closing)
         if self.listener is not None:
             await self.listener.stop()
         await self.manager.stop()
@@ -292,13 +296,20 @@ class Engine:
         # outlive the engine), then each one closes, with a time limit: Ctrl+C must never hang.
         for task in self._connecting:
             task.cancel()
-        for broker, adapter in self.adapters.items():
-            try:
-                await asyncio.wait_for(adapter.disconnect(), DISCONNECT_TIMEOUT_S)
-            except TimeoutError:
-                log.warning("broker_disconnect_timeout", broker=broker.value)
-            except Exception:
-                log.warning("broker_disconnect_failed", broker=broker.value, exc_info=True)
+        # All brokers close at the same time, so stopping takes at most one time limit (the stall
+        # watchdog ends the process if a stop takes much longer, decision D-80).
+        await asyncio.gather(
+            *(self._disconnect(broker, adapter) for broker, adapter in self.adapters.items())
+        )
         if self._connecting:
             await asyncio.gather(*self._connecting, return_exceptions=True)
             self._connecting.clear()
+
+    @staticmethod
+    async def _disconnect(broker: Broker, adapter: BrokerAdapter) -> None:
+        try:
+            await asyncio.wait_for(adapter.disconnect(), DISCONNECT_TIMEOUT_S)
+        except TimeoutError:
+            log.warning("broker_disconnect_timeout", broker=broker.value)
+        except Exception:
+            log.warning("broker_disconnect_failed", broker=broker.value, exc_info=True)

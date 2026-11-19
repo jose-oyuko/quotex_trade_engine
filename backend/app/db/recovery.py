@@ -14,6 +14,7 @@ from app.db.repositories import (
     SessionRepository,
     TradeRepository,
 )
+from app.domain.enums import Broker
 from app.domain.records import (
     AppSettingRecord,
     ChainRecord,
@@ -26,6 +27,8 @@ from app.domain.records import (
 
 # How far back settled trades are read: enough to cover any "day" the risk limits can define.
 RECENT_TRADES_WINDOW = timedelta(hours=48)
+# How far back trades left `unknown` are looked up on a broker that keeps every contract (D-78).
+UNKNOWN_LOOKUP_WINDOW = timedelta(days=7)
 
 
 @dataclass(slots=True, frozen=True)
@@ -40,6 +43,7 @@ class RecoveryState:
     recent_settled_trades: list[TradeRecord] = field(default_factory=list)
     sessions: list[SessionRecord] = field(default_factory=list)
     unfinished_runs: list[SessionRunRecord] = field(default_factory=list)
+    unknown_trades: list[TradeRecord] = field(default_factory=list)  # Deriv only, recent
 
 
 async def load_recovery_state(
@@ -47,7 +51,8 @@ async def load_recovery_state(
 ) -> RecoveryState:
     """One short read transaction. The engine (Phase 4) decides what to do with the result:
     settle trades past their expiry from Quotex history, or mark them `unknown`."""
-    since = (now or datetime.now(UTC)) - RECENT_TRADES_WINDOW
+    moment = now or datetime.now(UTC)
+    since = moment - RECENT_TRADES_WINDOW
     async with session_factory() as session:
         groups = GroupRepository(session)
         trades = TradeRepository(session)
@@ -60,4 +65,7 @@ async def load_recovery_state(
             recent_settled_trades=await trades.list_settled_since(since),
             sessions=await SessionRepository(session).list_all(),
             unfinished_runs=await SessionRepository(session).list_unfinished_runs(),
+            unknown_trades=await trades.list_unknown_since(
+                moment - UNKNOWN_LOOKUP_WINDOW, Broker.DERIV
+            ),
         )

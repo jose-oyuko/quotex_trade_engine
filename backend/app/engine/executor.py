@@ -101,6 +101,11 @@ class Executor:
         self._margin = result_margin_s
 
     @property
+    def result_margin_s(self) -> float:
+        """How long past a trade's expiry its result is waited for."""
+        return self._margin
+
+    @property
     def adapters(self) -> Mapping[Broker, BrokerAdapter]:
         return self._adapters
 
@@ -154,6 +159,16 @@ class Executor:
                 StepKind.FAILED,
                 f"{spec.broker.label} is not set up: its login is missing; order not sent",
             )
+        if adapter.state is not ConnectionState.CONNECTED:
+            # A step is sent when it is due or not at all (decision D-79): nothing waits for the
+            # connection to come back.
+            detail = (
+                f"missed: step {plan.step} was due while {spec.broker.label} was not connected; "
+                "it is never sent late"
+                if plan.step > 0
+                else f"{spec.broker.label} is not connected; order not sent"
+            )
+            return self._end(pending, StepKind.FAILED, detail)
         if adapter.account_type is not spec.account_type:
             return self._end(
                 pending,

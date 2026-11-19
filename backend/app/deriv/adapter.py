@@ -10,7 +10,9 @@ official API.
 - **Orders** are not serialised (unlike D-27 on Quotex): each `buy` waits for its own reply. No
   reply in time means the order *may* exist (`OrderAckTimeoutError`), never a retry.
 - **Results** come from a `proposal_open_contract` subscription; after a reconnect it is made
-  again, so a contract that ended while the socket was down is still reported.
+  again, so a contract that ended while the socket was down is still reported. A wait for a result
+  never retries on a socket it already saw closed: it waits for the next connection (decision D-78;
+  the engine froze on 2026-11-18 when a closed socket was retried in a loop that never yielded).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import asyncio
 import contextlib
 import random
 from collections.abc import Awaitable, Callable, Mapping
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -80,6 +83,9 @@ type Sleep = Callable[[float], Awaitable[None]]
 
 # A reference stake for the price quotes the payout percent is read from.
 REFERENCE_STAKE = Decimal("10.00")
+# How long a wait for a result pauses before it looks at the connection again, when the one it had
+# answered nothing in time (the same socket is then tried again).
+RESULT_RETRY_PAUSE_S = 0.5
 _CONTRACT = {Direction.CALL: "CALL", Direction.PUT: "PUT"}
 
 
@@ -131,6 +137,7 @@ class DerivAdapter:
         self._up = asyncio.Event()
         self._conn: DerivConnection | None = None
         self._connected_as: AccountType | None = None
+        self._connected_since: datetime | None = None
         self._wanted = False
         self._monitor: asyncio.Task[None] | None = None
         self._currency = ""
@@ -152,6 +159,10 @@ class DerivAdapter:
     @property
     def account_type(self) -> AccountType:
         return self._account_type
+
+    @property
+    def connected_since(self) -> datetime | None:
+        return self._connected_since
 
     @property
     def currency(self) -> str:
@@ -222,6 +233,7 @@ class DerivAdapter:
                     url,
                     spawn=lambda coro, name: self._tasks.spawn(coro, name=name),
                     timeout_s=self._connect_timeout_s,
+                    on_lost=self._on_connection_lost,
                 )
                 balance = await conn.request(
                     {"balance": 1, "subscribe": 1},
@@ -254,6 +266,7 @@ class DerivAdapter:
         self._lengths.clear()
         self._lengths_tried.clear()
         self._last_ping = self._last_quotes = self._last_assets = self._seconds()
+        self._connected_since = self._clock.now()
         self._set_state(ConnectionState.CONNECTED)
         for symbol, duration_s in sorted(self._wanted_quotes):
             with contextlib.suppress(BrokerError, TimeoutError):
@@ -286,8 +299,17 @@ class DerivAdapter:
     async def _drop_connection(self) -> None:
         conn, self._conn = self._conn, None
         self._connected_as = None
+        self._connected_since = None
         if conn is not None:
             await conn.close()
+
+    def _on_connection_lost(self, conn: DerivConnection) -> None:
+        """The socket in use closed: say so at once, so nothing waits on (or retries) a dead
+        socket until the monitor notices it. The monitor then reconnects."""
+        if conn is not self._conn or not self._wanted:
+            return  # a socket being closed on purpose, or one that never went into use
+        self._connected_since = None
+        self._set_state(ConnectionState.RECONNECTING, "connection lost")
 
     async def _watch(self) -> None:
         """Notice a lost socket and reconnect; keep the socket alive; refresh what is read from
@@ -611,21 +633,32 @@ class DerivAdapter:
             raise ResultTimeoutError(f"{order_id!r} is not a Deriv contract id")
         try:
             async with asyncio.timeout(timeout_s):
+                dead: DerivConnection | None = None
                 while True:
-                    await self._up.wait()
-                    conn = self._conn
-                    if conn is None:
-                        await asyncio.sleep(0)
-                        continue
+                    conn = await self._connection_other_than(dead)
                     try:
                         profit = await self._follow_contract(conn, int(order_id))
-                    except (ConnectionLostError, NotConnectedError, TimeoutError):
-                        continue  # follow it again on the next connection
+                    except (ConnectionLostError, NotConnectedError):
+                        dead = conn  # follow it again on the next connection, never on this one
+                        continue
+                    except TimeoutError:
+                        await asyncio.sleep(RESULT_RETRY_PAUSE_S)  # no answer: ask again
+                        continue
                     return TradeResult(order_id, classify_profit(profit), profit)
         except TimeoutError as exc:
             raise ResultTimeoutError(
                 f"order {order_id} did not settle within {timeout_s:g}s"
             ) from exc
+
+    async def _connection_other_than(self, dead: DerivConnection | None) -> DerivConnection:
+        """The open connection to use, never `dead`. Every way round this loop waits (for the
+        adapter to be up, or a pause), so it can never keep the event loop to itself."""
+        while True:
+            await self._up.wait()
+            conn = self._conn
+            if conn is not None and conn is not dead and conn.is_open:
+                return conn
+            await asyncio.sleep(RESULT_RETRY_PAUSE_S)
 
     async def _follow_contract(self, conn: DerivConnection, contract_id: int) -> Decimal:
         settled: asyncio.Future[Decimal] = asyncio.get_running_loop().create_future()

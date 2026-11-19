@@ -284,12 +284,29 @@ class RiskGuard:
             self._open_stake_by[reserved.broker] -= reserved.stake
             self._open_count_by[reserved.broker] -= 1
 
-    def settled(self, trade: TradeRecord) -> None:
-        """A trade with a known result: free its reservation and book its profit for the day."""
+    def adopt(self, trade: TradeRecord) -> None:
+        """Count a trade found open after a restart as open again (its chain goes on, D-79), so
+        its stake is in the exposure until it settles. Nothing is checked: it was already sent."""
+        if trade.id in self._open:
+            return
+        self._open[trade.id] = _Open(trade.group_id, trade.stake, trade.broker)
+        self._open_stake += trade.stake
+        broker = trade.broker
+        self._open_stake_by[broker] = self._open_stake_by.get(broker, Decimal(0)) + trade.stake
+        self._open_count_by[broker] = self._open_count_by.get(broker, 0) + 1
+
+    def settled(self, trade: TradeRecord, *, at: datetime | None = None) -> None:
+        """A trade with a known result: free its reservation and book its profit for the day,
+        now, or at `at` (a result read late from the broker belongs to the day it was first
+        recorded, decision D-78)."""
         self.release(trade.id)
         if trade.status in RESULT_TRADE_STATUSES and trade.profit is not None:
             self._book(
-                trade.broker, trade.account_type, trade.group_id, trade.profit, self._clock.now()
+                trade.broker,
+                trade.account_type,
+                trade.group_id,
+                trade.profit,
+                at or self._clock.now(),
             )
 
     @property

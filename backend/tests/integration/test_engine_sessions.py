@@ -12,11 +12,13 @@ import pytest
 
 from app.domain.enums import (
     AccountType,
+    Broker,
     ChainStatus,
     Direction,
     RepeatKind,
     RunEndReason,
     RunState,
+    SessionMode,
     SignalStatus,
     Strategy,
 )
@@ -472,18 +474,120 @@ async def test_the_account_cannot_be_switched_during_a_run() -> None:
 # --- restart, engine stop, Telegram off ---
 
 
-async def test_a_run_left_over_from_a_dead_process_ends_as_interrupted() -> None:
-    s = make_session_rig(now=at(11, 30))  # restarted in the middle of the window
-    leftover = make_session_run(started_at=at(11), state=RunState.RUNNING)
+async def test_a_run_found_going_after_a_restart_carries_on_in_its_window() -> None:
+    s = make_session_rig(now=at(11, 31), mode=SessionMode.EVERY_CANDLE)  # M5, 11:00-12:00
+    leftover = make_session_run(
+        started_at=at(11),
+        updated_at=at(11, 12),  # the application stopped soon after 11:12
+        window_end=at(12),
+        state=RunState.RUNNING,
+        pairs_opened=3,
+        profit=D("1.50"),
+    )
+    assert s.scheduler.recover([leftover]) == 0  # nothing ended
+    await s.start()
+
+    run = s.run()
+    assert run.id == leftover.id and run.state is RunState.RUNNING
+    assert run.rounds_skipped == 4  # 11:15, 11:20, 11:25 and 11:30 were missed
+    assert "4 round(s) missed while the application was not running" in (run.note or "")
+    assert (run.pairs_opened, run.profit) == (3, D("1.50"))  # its counters carry on
+
+    await s.timers.advance_to(at(11, 34, 59))
+    assert s.adapter.orders == []  # nothing is sent late: the next candle is 11:35
+    await s.timers.advance_to(at(11, 35))
+    await s.rig.until(lambda: len(s.adapter.orders) == 2)
+    assert s.run().pairs_opened == 4
+    await s.stop()
+
+
+async def test_a_run_whose_window_ended_meanwhile_ends_as_interrupted() -> None:
+    s = make_session_rig(now=at(11, 30))
+    leftover = make_session_run(started_at=at(11), window_end=at(11, 20), state=RunState.RUNNING)
 
     assert s.scheduler.recover([leftover]) == 1
     [run] = s.runs()
     assert (run.state, run.end_reason) == (RunState.ENDED, RunEndReason.INTERRUPTED)
-    assert run.ended_at is not None
+    assert "its window ended in the meantime" in (run.note or "")
 
     await s.start()
     await s.timers.advance_to(at(11, 50))
     assert s.adapter.orders == []  # an open window is not started by the restart itself
+    await s.stop()
+
+
+async def test_a_run_does_not_carry_on_when_the_kill_switch_is_on() -> None:
+    s = make_session_rig(now=at(11, 30))
+    s.engine.manager.engage_kill_switch()
+    leftover = make_session_run(started_at=at(11), window_end=at(12), state=RunState.RUNNING)
+    assert s.scheduler.recover([leftover]) == 1
+    [run] = s.runs()
+    assert run.end_reason is RunEndReason.INTERRUPTED and "kill switch" in (run.note or "")
+    await s.stop()
+
+
+async def test_a_run_that_was_stopping_or_whose_session_is_off_does_not_carry_on() -> None:
+    s = make_session_rig(now=at(11, 30))
+    stopping = make_session_run(started_at=at(11), window_end=at(12), state=RunState.STOPPING)
+    assert s.scheduler.recover([stopping]) == 1
+    s.scheduler.set_session(
+        replace(s.scheduler.sessions()[0], session=replace(s.session, enabled=False))
+    )
+    going = make_session_run(started_at=at(11), window_end=at(12), state=RunState.RUNNING)
+    assert s.scheduler.recover([going]) == 1
+    notes = [r.note or "" for r in s.runs()]
+    assert any("already stopping" in n for n in notes)
+    assert any("switched off" in n for n in notes)
+    await s.stop()
+
+
+async def test_start_now_reads_the_payout_before_its_first_pair() -> None:
+    s = make_session_rig(now=at(13))  # outside the window: nothing was prepared ahead
+    await s.start()
+    assert s.adapter.prepare_calls == []
+    s.scheduler.start_now(1)
+    await s.rig.until(lambda: len(s.adapter.orders) == 2)
+    assert s.adapter.prepare_calls == [("EURUSD", 300)]
+    await s.stop()
+
+
+async def test_start_now_on_deriv_trades_from_its_first_round() -> None:
+    s = make_session_rig(
+        now=at(13), with_deriv=True, broker=Broker.DERIV, asset="R_75", duration_s=60
+    )
+    await s.start()
+    fake = s.rig.deriv
+    assert fake is not None
+    s.scheduler.start_now(1)
+    await s.rig.until(lambda: len(fake.orders) == 2)
+    assert fake.prepare_calls == [("R_75", 60)]
+    assert s.run().rounds_skipped == 0
+    await s.stop()
+
+
+async def test_a_round_without_a_payout_asks_deriv_so_the_next_round_trades() -> None:
+    s = make_session_rig(
+        now=at(13),
+        with_deriv=True,
+        broker=Broker.DERIV,
+        asset="R_75",
+        duration_s=60,
+        mode=SessionMode.EVERY_CANDLE,
+        max_open_pairs=3,
+    )
+    await s.start()
+    fake = s.rig.deriv
+    assert fake is not None
+    s.scheduler.start_now(1)
+    await s.rig.until(lambda: len(fake.orders) == 2)
+    fake.simulate_connection_loss()  # a new connection forgets the payouts
+    fake.simulate_connection_restored()
+
+    await s.timers.advance_to(at(13, 1))
+    run = s.run()
+    assert run.rounds_skipped == 1 and "payout of R_75 is not known" in (run.note or "")
+    await s.timers.advance_to(at(13, 2))
+    await s.rig.until(lambda: len(fake.orders) == 4)  # asked for it: the next round trades
     await s.stop()
 
 
@@ -493,6 +597,16 @@ async def test_stopping_the_engine_ends_the_run() -> None:
     await s.engine.stop()
     run = s.run()
     assert (run.state, run.end_reason) == (RunState.ENDED, RunEndReason.ENGINE_STOPPED)
+    await s.rig.tasks.shutdown()
+
+
+async def test_closing_the_application_leaves_the_run_going_for_the_next_start() -> None:
+    s = make_session_rig()
+    await open_first_pair(s)
+    await s.engine.stop(closing=True)  # Ctrl+C, not the owner pressing Stop
+    run = s.run()
+    assert run.state is RunState.RUNNING and run.ended_at is None
+    assert "the application closed while this run was going" in (run.note or "")
     await s.rig.tasks.shutdown()
 
 

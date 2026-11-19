@@ -25,8 +25,10 @@ installed, installs the dashboard's packages, builds the dashboard if it is miss
 source, creates or updates the database, and checks the port is free. It then prints how the app is
 configured (never the passwords), starts the server and opens <http://127.0.0.1:8000>.
 
-Stopping is safe at any time. Open trades stay open on Quotex and run to their expiry; the next start
-marks them `unknown` in the application (it cannot see Quotex's history), so look at them on Quotex.
+Stopping is safe at any time. Open trades stay open at the broker and run to their expiry. At the next
+start, Deriv trades get their real result and Deriv chains carry on if none of their steps was missed; Quotex
+trades are marked `unknown` (the app cannot see Quotex's history), so look at those on Quotex. If Ctrl+C has
+not ended the program within 15 seconds, it is ended anyway (the stall watchdog, decision D-80).
 
 ## The owner account (first start)
 
@@ -102,10 +104,14 @@ strategy you chose; the one that wins ends. You set it up on the **Sessions** pa
    length). *Stop* has the same soft effect as a target. The **kill switch** also ends the run.
 6. **Only one session runs at a time**, so two enabled sessions may not have overlapping windows. A session
    cannot be edited or deleted while it runs.
-7. **Restarts and missed windows:** a run that was going when the application stopped is marked *interrupted*
-   and is never resumed, and a window that is already open when the engine starts is not started by itself
-   (press *Start now*). A window that passed while the engine was off is skipped. The next window starts
-   normally.
+7. **Restarts and missed windows:** a run that was going when the application stopped (a crash, a power cut,
+   Ctrl+C) **carries on by itself** at the next start if its window is still open: the rounds missed meanwhile
+   count as skipped, its profit and counters carry on, and its chains follow the "missed" rule (decision D-79:
+   a chain whose next step was due while the program was down ends; the others continue). If the window ended
+   meanwhile, the kill switch is on, or the session was switched off, it is marked *interrupted*. *Stop* on
+   the Settings page ends the run instead (you chose to stop trading). A window that is already open when the
+   engine starts is not started by itself (press *Start now*), and a window that passed while the engine was
+   off is skipped. The next window starts normally.
 
 Sessions use whichever account the engine is on (demo unless you switched on purpose); the account cannot be
 switched while a session runs.
@@ -305,6 +311,24 @@ npm run backup -- --restore backups/quotex-20261102-093000 --yes
   `quotex.db.before-restore-<time>`, so a mistake can be undone by renaming it back.
 - **Better:** copy the `backups/` folder to another disk or machine now and then. A backup on the same
   disk does not survive the disk.
+
+## A steadier connection on a home PC
+
+Every lost connection costs the trades whose next step falls inside it (decision D-79). On 2026-11-18 the
+PC's Wi-Fi lost the router in bursts while the laptop ran on battery, and the router's DNS took up to 30 s
+to answer. In order of effect:
+
+1. **Use a network cable** to the router instead of Wi-Fi. This alone removes the Wi-Fi drops.
+2. **If you stay on Wi-Fi, turn off its power saving on battery:** Control Panel → Power Options → *Change plan
+   settings* → *Change advanced power settings* → *Wireless Adapter Settings* → *Power Saving Mode* → **On
+   battery: Maximum Performance**.
+3. **Use a public DNS** instead of the router's: Settings → Network → your connection → *DNS server
+   assignment* → Manual → IPv4 `1.1.1.1` and `8.8.8.8`.
+4. **Keep the laptop plugged in**, and put the router on a small UPS if the power cuts out.
+5. Later, a **VPS** (a server in a data centre) removes all of the above.
+
+Windows records the Wi-Fi drops: Event Viewer → *Windows Logs* → *System*, source `Netwtw06` (Intel Wi-Fi),
+event 6000 "BSS missed beacons".
 
 ## When Quotex changes its domain
 
