@@ -557,6 +557,148 @@ and a check script the owner runs on the demo account.
 - Reports by broker agree with the Trades page totals (test on seeded data).
 - `eslint`, `tsc --noEmit`, `vitest`, `npm run build` and `npm run api:check` pass; no secret appears anywhere.
 
+## Phases 22-24 — Deriv on a shaky network, a switch per broker, faster results (decisions D-78 to D-82)
+
+**Why (owner's request, 2026-11-18/19):**
+- **The freeze.** On the Deriv demo the engine froze twice (06:40 and 22:17 local), each time when Deriv's
+  connection dropped while trades were open: a Cloudflare restart on Deriv's side the first time, the PC's Wi-Fi
+  losing the router the second. It then used a full CPU core, wrote nothing, answered nothing, and Ctrl+C could
+  not stop it; the trades in flight were left `unknown` (9 so far, all with their Deriv contract id stored).
+  Cause: in `DerivAdapter.await_result`, after the socket closes, the request to follow the contract fails at
+  once ("nothing was sent"), the loop retries, and `_up` is still set because the code that clears it never gets
+  to run: the loop never yields, so neither the reconnect nor the result time limit can run.
+- **Chains should carry on when nothing was missed.** The owner's rule: when the connection (or the program)
+  comes back before the chain's next trade was due, the chain continues as if nothing happened; it ends only
+  when a trade time was already missed. No lateness margin (owner's choice: strict). A session run resumes after
+  a restart while its window is open (owner's choice; amends D-73).
+- **Start now** never reads the asset's payout on Deriv, so after a restart a manual run skips every round ("the
+  payout of R_75 is not known").
+- **A broker that is not used cannot be stopped.** Quotex keeps trying to log in every ~30 s (104 attempts on
+  2026-11-18: DNS time-outs, Cloudflare 403, an email PIN), and the only way to stop it is to stop the engine.
+- **Each martingale step starts later than the last.** Over 321 demo trades every step cost about 4.1 s (0.5 s
+  for Deriv to confirm the order, 3.6 s from expiry until the result is known; the engine's own work is about
+  1 ms), so step 7 starts about 28 s into its minute.
+
+**Order:** Phase 22 (never freeze; continue chains), Phase 23 (a switch per broker), Phase 24 (faster results;
+starts with a live measurement on the owner's demo, because the faster path must match Deriv's own result rule).
+
+**Not in these phases:** moving to a VPS; changes to the PC's network (written into the guides instead); continuing
+Quotex chains after a program restart (Quotex cannot be asked for a past trade's result reliably, so D-35 stays
+for Quotex); concurrent Quotex orders.
+
+### Phase 22 — Never freeze on a dropped connection; continue chains when nothing was missed (backend, guides)
+
+**Goal:** a dropped Deriv connection or a program restart, at any moment and with any number of trades open,
+costs only the time it lasts: the engine keeps answering, follows its open contracts again, records their real
+results, and carries every chain on whose next trade was not missed.
+
+**Scope**
+- **The freeze (D-78).** `await_result` waits for the drop to be seen and for the next connection, never retrying
+  in a loop that does not yield; the adapter marks itself down the moment the socket closes. Every other retry
+  loop in `app/deriv/` and `app/quotex/` is checked for the same pattern and fixed where found.
+- **The "missed" rule (D-79), for a reconnect inside a running engine (both brokers) and, on Deriv, for a
+  restart.** A chain's next trade is due when its open trade expires (a martingale or flip step goes out as soon
+  as the result is known); a session's next pair is due at its candle.
+  - Back before the open trade expires: its contract is followed again, its result comes in as usual, and the
+    chain continues.
+  - Back after it expired: the trade still gets its real result from Deriv, but the step that was due during
+    the outage is missed, so the chain ends with the reason "a step was due while the connection was down" (a
+    loss on that last trade stays a loss: the strategy's recovery did not happen, and the report says so).
+  - A step due while the broker is down is not sent late: it is a missed step (strict, no margin).
+- **After a restart (amends D-35 for Deriv).** On start, every Deriv trade left `open` or `unknown` is looked up by
+  its contract id and settled with Deriv's result. If the program came back before that trade's expiry, its
+  chain is rebuilt from the database and continues; otherwise the chain ends as missed (above). Quotex trades
+  keep D-35 (`unknown`, chain ends). The 9 Deriv trades left `unknown` on 2026-11-18 are settled this way at the
+  first start (their chains stay ended).
+- **Session runs resume (amends D-73).** After a restart, a run whose window is still open carries on until the
+  window ends, with its counters (pairs opened, profit, limits) read back from the database; the rounds missed
+  while the program was down count as skipped ("the program was not running"). A window that ended meanwhile
+  ends the run as today.
+- **A stall watchdog (D-80).** A thread outside the event loop checks every second that the loop still turns.
+  After 10 s without a turn it logs `engine_stalled` with the loop's stack trace (then every 60 s while stalled).
+  Ctrl+C asks for a normal stop; if the loop has not stopped within 15 s, the process ends anyway (the next start
+  settles what was in flight, as above). It never restarts anything by itself.
+- **Start now on Deriv.** Start now reads the payout before the first round, like a scheduled start does one
+  minute ahead; a round that still finds no payout asks Deriv for it, so the next round can trade.
+- **Guides:** TROUBLESHOOTING and FAILURE_MODES (the freeze, the missed rule, restarts, `engine_stalled`);
+  OPERATIONS gets "a steadier connection on a home PC" (network cable instead of Wi-Fi, Wi-Fi power saving off
+  on battery, a public DNS instead of the router's, a small UPS for the router).
+
+**Acceptance criteria**
+- Fake Deriv server closes with 1001 while 1, then 5, contracts are open, and the engine reconnects before they
+  expire: the engine answers a health request within 1 s throughout, every trade is settled with the server's
+  result, and every martingale chain sends its next step and continues. The same with a socket that dies
+  without a close frame.
+- The same drop, reconnecting after the expiry: the trades get their real results and their chains end as
+  missed, with that reason.
+- Restart tests (Deriv): a program stopped and started before an open trade's expiry continues its chain; one
+  started after it ends the chain as missed with the trade's real result; a session run in its window resumes
+  and counts the missed rounds as skipped; Quotex trades still end `unknown`.
+- The watchdog: a deliberately blocked loop produces `engine_stalled` with a stack trace; Ctrl+C on a stalled
+  loop ends the process within the time limit.
+- Start now on a fresh Deriv connection trades from its first round.
+- `ruff`, `mypy`, the whole test suite pass; migrations (if any) up and down; the guides are updated.
+- Live (owner): a session on the demo, the Wi-Fi turned off and on once for a few seconds while trades are open
+  (chains continue) and once for longer than a trade (chains end as missed); every trade has its real result.
+  If not run, the report says so.
+
+### Phase 23 — Turn a broker on or off without stopping the engine (backend and dashboard)
+
+**Goal:** the owner switches Quotex or Deriv off while the engine runs (no more endless login attempts for a
+broker not in use) and back on, from the dashboard.
+
+**Scope (D-81)**
+- **A switch per broker**, stored in the settings so it survives a restart. *Off*: that broker's connection is
+  closed and its reconnect attempts stop at once; its badge says "Off". *On*: it connects (and logs in) at once.
+  The other broker, Telegram and the dashboard are untouched. A broker can be on only if its login is stored.
+- **Refused while in use:** switching a broker off is refused, with the reason in words, while it has open
+  trades, active chains or a running session; the owner waits for them to finish (or stops the session first).
+- **What uses an off broker:** a signal for a group on that broker is skipped ("Quotex is switched off"); a
+  session on it cannot start (and a scheduled one is skipped with that reason); the forms still let it be picked,
+  with a note.
+- **Stop retrying what cannot fix itself.** When a login fails in a way more attempts cannot fix (Quotex asks for
+  an email PIN; a refused password or token), the broker stops retrying and shows "needs you" with the reason,
+  until the owner acts (enters the PIN, fixes the login, or switches it off and on). Network and Cloudflare errors
+  keep retrying with the backoff, as now.
+- **API and dashboard:** `PUT /brokers/{broker}` with `enabled`; the state in `/status` and the live events; a
+  switch on each broker's card in Settings and on its badge's menu in the top bar; `openapi.json` regenerated.
+- **Guides:** OPERATIONS, TROUBLESHOOTING, API.
+
+**Acceptance criteria**
+- Engine tests with both fakes: switching Quotex off while Deriv trades leaves Deriv trading; Quotex's connect
+  loop stops (no more attempts) and starts again when switched on; switching off a broker with an open trade is
+  refused with the reason; a Quotex signal while Quotex is off is skipped with the reason; the switch survives a
+  restart; a PIN request stops the retries and shows "needs you".
+- Component tests for the switches, the refusal and the "Off" / "needs you" badges.
+- Backend and frontend checks pass (`ruff`, `mypy`, tests; `eslint`, `tsc`, `vitest`, build, `api:check`).
+- Live (owner): Quotex switched off on the dashboard; the log shows no more Quotex attempts.
+
+### Phase 24 — Settle faster, so martingale steps stop drifting (backend)
+
+**Goal:** the time from a trade's expiry to its known result falls from about 3.6 s to about 1 s on `1HZ75V`,
+so each step of a chain starts about 1.5 s after the previous one ends instead of 4.1 s.
+
+**Scope**
+- **Measure first.** `npm run deriv:check -- --order --timeline` (demo only) places a few 1.00 trades and prints
+  the time of each contract update after expiry with its fields (`is_expired`, `exit_tick`, `exit_tick_time`,
+  `status`, `is_sold`), and the asset's own price ticks around the expiry. The owner runs it; the output decides
+  which of the two ways below is used, and is in the report.
+- **The early result (D-82).** The engine acts on the result as soon as it is certain, instead of waiting for
+  Deriv to mark the contract sold: either from the first contract update that carries the exit price, or from
+  the asset's price stream (it compares the exit price with the entry price by Deriv's rule: equal is a loss).
+  The profit is the contract's payout or minus the stake. Deriv's own result, when it comes, is still the one
+  stored; if it ever differs from the early one, the trade is marked, logged (`deriv_early_result_mismatch`) and
+  shown in the phase report, and the early path can be turned off in the settings.
+- **The latency report** (`npm run latency`) gains "expiry → result" and "previous expiry → next step sent".
+
+**Acceptance criteria**
+- Tests against the fake server: the early result for won, lost and equal exit; Deriv's later result agrees and
+  is stored; a disagreement is marked and logged; with the early path off, the engine waits as today.
+- `ruff`, `mypy`, the whole test suite pass.
+- Live (owner): a 30-minute session on `1HZ75V` on the demo; `npm run latency` shows the median "expiry →
+  result" and "previous expiry → next step sent", against 3.6 s and 4.1 s before; no mismatch, or every one
+  explained.
+
 ---
 
 ## Later backlog (not scheduled)

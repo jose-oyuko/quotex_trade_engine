@@ -792,6 +792,40 @@ schemas on 2026-11-17).** Deriv has replaced the API these decisions were writte
   with the engine stopped or Deriv not connected the form says why and the asset is typed. The trade lengths
   an asset does not offer are shown but cannot be chosen, and the server still refuses them (D-75).
 
+**D-78. A dropped broker connection never stops the engine (Phase 22, proposed).** Seen twice on 2026-11-18:
+a Deriv drop with trades open froze the whole engine. No retry loop in an adapter may run again without waiting
+(for the drop to be seen, for the next connection, or a backoff). A trade waiting for its result follows its
+contract again after a reconnect, within its time limit. A Deriv trade left `open` or `unknown` by a drop, a crash
+or a stop is settled from Deriv by its contract id (Deriv keeps every contract), so `unknown` is only for what
+Deriv itself cannot report. **Amends D-35 for Deriv**; Quotex trades keep D-35.
+
+**D-79. A chain continues unless a trade time was missed; no margin (Phase 22, proposed; owner's rule).** A
+chain's next trade is due when its open trade expires (a step goes out as soon as the result is known); a
+session pair is due at its candle. If the connection, or on Deriv the program, is back before that, the chain
+continues as if nothing happened. If not, the open trade still gets its real result, but the chain ends with
+the reason "a step was due while the connection was down"; a due step is never sent late. After a restart, a
+session run whose window is still open resumes with its counters read back, and the rounds missed meanwhile
+count as skipped. **Amends D-73** ("no resume"); one run at a time and no catch-up still hold.
+
+**D-80. A stall watchdog (Phase 22, proposed).** A thread outside the event loop checks every second that the
+loop still turns. After 10 s without a turn it logs `engine_stalled` with the loop's stack trace (then every 60
+s while stalled). Ctrl+C asks for a normal stop; if the loop has not stopped 15 s later, the process ends
+anyway, and the next start settles what was in flight (D-78). It never restarts the engine by itself: the
+owner, or a service manager on the VPS, does that.
+
+**D-81. A switch per broker (Phase 23, proposed).** Each broker can be switched off and on from the dashboard
+while the engine runs; the choice is stored. Off closes its connection and stops its login attempts; on
+connects at once; nothing else is touched. Switching off is refused while that broker has open trades, active
+chains or a running session. Signals and sessions on an off broker are skipped with that reason. A login
+failure that more attempts cannot fix (an email PIN, a refused password or token) stops the retries and waits
+for the owner ("needs you"); network and Cloudflare errors keep the backoff.
+
+**D-82. Deriv results as soon as they are certain (Phase 24, proposed).** Deriv marks a contract sold about
+3.6 s after its expiry, and each martingale step waits for that. The engine may act on the result as soon as
+the exit price is known (from the contract update that carries it, or from the asset's price stream, chosen
+after the owner's live measurement), by Deriv's Rise/Fall rule (equal is a loss). Deriv's own result is the one
+stored; a disagreement is marked on the trade and logged. The early path can be switched off in the settings.
+
 ---
 
 ## Decisions to be made later (record here when decided)
