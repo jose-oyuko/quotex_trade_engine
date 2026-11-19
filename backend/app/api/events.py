@@ -25,6 +25,8 @@ from app.api.schemas.ws import (
     ConnectionChangedMessage,
     ConnectionEventOut,
     ControlsChangedMessage,
+    JobChangedMessage,
+    JobEventOut,
     RiskTrippedMessage,
     SessionRunMessage,
     SignalReceivedMessage,
@@ -41,6 +43,7 @@ from app.events.types import (
     ChainStarted,
     ConnectionChanged,
     Event,
+    JobChanged,
     RiskTripped,
     SessionRunChanged,
     SettingChanged,
@@ -58,6 +61,7 @@ type EventMessage = (
     | ChainStartedMessage
     | ConnectionChangedMessage
     | ControlsChangedMessage
+    | JobChangedMessage
     | RiskTrippedMessage
     | SessionRunMessage
     | SignalReceivedMessage
@@ -101,5 +105,11 @@ def to_message(event: Event, seq: int, snapshots: SnapshotBuilder) -> EventMessa
             return SessionRunMessage(seq=seq, at=at, data=run_out(run))
         case SettingChanged(setting=setting) if is_control_setting(setting.key):
             return ControlsChangedMessage(seq=seq, at=at, data=snapshots.controls())
+        case JobChanged(kind=kind, job_id=job_id, state=state, detail=detail):
+            return JobChangedMessage(
+                seq=seq,
+                at=at,
+                data=JobEventOut(kind=kind, job_id=job_id, state=state, detail=detail),
+            )
         case _:
             return None

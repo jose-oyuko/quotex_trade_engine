@@ -530,6 +530,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Prices
+         * @description The assets whose prices are stored, and the download running now, if any.
+         */
+        get: operations["list_prices_api_v1_prices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prices/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Downloads
+         * @description The latest downloads, newest first.
+         */
+        get: operations["list_downloads_api_v1_prices_downloads_get"];
+        put?: never;
+        /**
+         * Start Download
+         * @description Download the prices of an asset for a period (at most 31 days), in the background. The
+         *     parts already stored are skipped. 409 `download_running` while another one runs.
+         */
+        post: operations["start_download_api_v1_prices_downloads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prices/downloads/{download_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Download
+         * @description Stop a running download; the prices it stored are kept.
+         */
+        post: operations["cancel_download_api_v1_prices_downloads__download_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prices/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget Prices
+         * @description Delete the stored prices of an asset.
+         */
+        delete: operations["forget_prices_api_v1_prices__asset__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quotex/login": {
         parameters: {
             query?: never;
@@ -1805,6 +1890,72 @@ export interface components {
          * @enum {string}
          */
         Direction: "call" | "put";
+        /** DownloadIn */
+        DownloadIn: {
+            /** Asset */
+            asset: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** DownloadOut */
+        DownloadOut: {
+            /** Asset */
+            asset: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Note
+             * @description E.g. where Deriv's history starts.
+             */
+            note: string | null;
+            /**
+             * Progress
+             * @description Share of the period downloaded so far.
+             */
+            progress: number;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "failed" | "cancelled";
+            /**
+             * Ticks
+             * @description New prices stored by this download.
+             */
+            ticks: number;
+        };
+        /** DownloadsOut */
+        DownloadsOut: {
+            /** Items */
+            items: components["schemas"]["DownloadOut"][];
+        };
         /** DrawdownOut */
         DrawdownOut: {
             /** Current Amount */
@@ -2177,6 +2328,42 @@ export interface components {
              */
             type: "heartbeat";
         };
+        /**
+         * JobChangedMessage
+         * @description A price download or a backtest moved on (decision D-84): refetch it.
+         */
+        JobChangedMessage: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            data: components["schemas"]["JobEventOut"];
+            /**
+             * Seq
+             * @description Number of the latest event this message includes.
+             */
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "job.changed";
+        };
+        /** JobEventOut */
+        JobEventOut: {
+            /** Detail */
+            detail: string | null;
+            /** Job Id */
+            job_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "download" | "backtest";
+            /** State */
+            state: string;
+        };
         /** KillSwitchIn */
         KillSwitchIn: {
             /**
@@ -2411,6 +2598,47 @@ export interface components {
              */
             pin: string;
         };
+        /** PriceAssetOut */
+        PriceAssetOut: {
+            /** Asset */
+            asset: string;
+            /**
+             * First
+             * @description The oldest stored price.
+             */
+            first: string | null;
+            /** Last */
+            last: string | null;
+            /**
+             * Ranges
+             * @description The periods downloaded, oldest first.
+             */
+            ranges: components["schemas"]["PriceRangeOut"][];
+            /**
+             * Ticks
+             * @description Prices stored.
+             */
+            ticks: number;
+        };
+        /** PriceRangeOut */
+        PriceRangeOut: {
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** PricesOut */
+        PricesOut: {
+            /** Items */
+            items: components["schemas"]["PriceAssetOut"][];
+            running: components["schemas"]["DownloadOut"] | null;
+        };
         /** QuotexLoginOut */
         QuotexLoginOut: {
             /**
@@ -2631,7 +2859,7 @@ export interface components {
          * ServerMessage
          * @description Every message the server can send on /ws; see app/api/schemas/ws.py.
          */
-        ServerMessage: components["schemas"]["SnapshotMessage"] | components["schemas"]["HeartbeatMessage"] | components["schemas"]["SignalReceivedMessage"] | components["schemas"]["ChainStartedMessage"] | components["schemas"]["ChainAdvancedMessage"] | components["schemas"]["ChainEndedMessage"] | components["schemas"]["TradeOpenedMessage"] | components["schemas"]["TradeSettledMessage"] | components["schemas"]["RiskTrippedMessage"] | components["schemas"]["BalanceUpdatedMessage"] | components["schemas"]["ConnectionChangedMessage"] | components["schemas"]["AccountChangedMessage"] | components["schemas"]["ControlsChangedMessage"] | components["schemas"]["SessionRunMessage"];
+        ServerMessage: components["schemas"]["SnapshotMessage"] | components["schemas"]["HeartbeatMessage"] | components["schemas"]["SignalReceivedMessage"] | components["schemas"]["ChainStartedMessage"] | components["schemas"]["ChainAdvancedMessage"] | components["schemas"]["ChainEndedMessage"] | components["schemas"]["TradeOpenedMessage"] | components["schemas"]["TradeSettledMessage"] | components["schemas"]["RiskTrippedMessage"] | components["schemas"]["BalanceUpdatedMessage"] | components["schemas"]["ConnectionChangedMessage"] | components["schemas"]["AccountChangedMessage"] | components["schemas"]["ControlsChangedMessage"] | components["schemas"]["SessionRunMessage"] | components["schemas"]["JobChangedMessage"];
         /** SessionIn */
         SessionIn: {
             /**
@@ -5625,6 +5853,382 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ControlsOut"];
                 };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_prices_api_v1_prices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PricesOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_downloads_api_v1_prices_downloads_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    start_download_api_v1_prices_downloads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DownloadIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_download_api_v1_prices_downloads__download_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                download_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    forget_prices_api_v1_prices__asset__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not Found */
             404: {

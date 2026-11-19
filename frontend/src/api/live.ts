@@ -49,6 +49,7 @@ const MESSAGE_TYPES: Record<ServerMessage['type'], true> = {
   'account.changed': true,
   'controls.changed': true,
   'session.run': true,
+  'job.changed': true,
 }
 
 function parse(data: unknown): ServerMessage | null {

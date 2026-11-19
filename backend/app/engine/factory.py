@@ -6,10 +6,12 @@ import structlog
 
 from app.brokers.base import BrokerAdapter
 from app.brokers.errors import BrokerError
+from app.brokers.history import PriceHistory
 from app.core.clock import SystemClock
 from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.deriv.factory import build_deriv_adapter, check_deriv_account
+from app.deriv.history import DerivPriceHistory
 from app.domain.enums import Broker
 from app.engine.engine import Engine
 from app.events.bus import EventBus
@@ -19,7 +21,14 @@ from app.telegram.source import TelegramNotConfiguredError, TelegramSource
 
 log = structlog.get_logger()
 
-__all__ = ["build_engine", "check_deriv_account"]
+__all__ = ["build_engine", "build_price_history", "check_deriv_account"]
+
+
+def build_price_history(settings: Settings, tasks: TaskSupervisor) -> PriceHistory:
+    """Deriv's past prices for backtests (decision D-84): its public socket, no login."""
+    return DerivPriceHistory(
+        settings.deriv_public_ws_url, spawn=lambda coro, name: tasks.spawn(coro, name=name)
+    )
 
 
 def build_engine(settings: Settings, bus: EventBus, tasks: TaskSupervisor) -> Engine:

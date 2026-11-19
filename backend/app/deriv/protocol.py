@@ -370,3 +370,39 @@ def early_profit(terms: ContractTerms, exit_price: Decimal) -> Decimal | None:
         return None
     won = exit_price > entry if terms.contract_type == "CALL" else exit_price < entry
     return payout - stake if won else -stake
+
+
+# ---- past prices (backtests, decision D-84) --------------------------------------------------
+
+
+def ticks_history_request(symbol: str, *, start: int, end: int, count: int) -> dict[str, Any]:
+    """A `ticks_history` request for the latest `count` ticks between `start` and `end`."""
+    return {
+        "ticks_history": symbol,
+        "start": start,
+        "end": str(end),
+        "count": count,
+        "style": "ticks",
+    }
+
+
+def parse_ticks_history(reply: Mapping[str, Any]) -> tuple[list[int], list[float]]:
+    """`(times, quotes)` of a `ticks_history` answer, oldest first. Pairs that are not a whole
+    epoch and a number are skipped; a missing `history` is an empty answer."""
+    history = reply.get("history")
+    if not isinstance(history, Mapping):
+        return [], []
+    times, prices = history.get("times"), history.get("prices")
+    if not isinstance(times, list) or not isinstance(prices, list):
+        return [], []
+    pairs: list[tuple[int, float]] = []
+    for epoch, price in zip(times, prices, strict=False):
+        if isinstance(epoch, bool) or isinstance(price, bool):
+            continue
+        try:
+            when, quote = int(epoch), float(price)
+        except (TypeError, ValueError):
+            continue
+        pairs.append((when, quote))
+    pairs.sort(key=lambda p: p[0])
+    return [p[0] for p in pairs], [p[1] for p in pairs]

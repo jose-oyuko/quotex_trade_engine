@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     deriv_token_demo: SecretStr | None = None
     deriv_token_real: SecretStr | None = None
     deriv_api_url: str = "https://api.derivws.com/trading/v1/"
+    # Deriv's public socket for past prices (backtests, D-84): no token, no account.
+    deriv_public_ws_url: str = "wss://api.derivws.com/trading/v1/options/ws/public"
 
     @field_validator("telegram_api_id", "telegram_phone", "deriv_app_id", mode="before")
     @classmethod
@@ -149,6 +151,12 @@ class Settings(BaseSettings):
     @property
     def database_path(self) -> Path:
         return self.data_dir.resolve() / "quotex.db"
+
+    @property
+    def history_path(self) -> Path:
+        """Past prices and backtests (decision D-84): a file of their own, not the trading
+        database."""
+        return self.data_dir.resolve() / "history.db"
 
     @property
     def database_url(self) -> str:

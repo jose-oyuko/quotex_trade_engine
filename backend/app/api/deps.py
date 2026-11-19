@@ -19,6 +19,7 @@ from app.services.deriv import DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.price_history import PriceHistoryService
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
 from app.services.sessions import SessionService
@@ -119,6 +120,11 @@ def get_deriv(request: Request) -> DerivService:
     return service
 
 
+def get_price_history(request: Request) -> PriceHistoryService:
+    service: PriceHistoryService = request.app.state.prices
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -152,3 +158,4 @@ TelegramLoginDep = Annotated[TelegramLoginService, Depends(get_telegram_login)]
 ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]
 VaultDep = Annotated[SecretStore, Depends(get_vault)]
+PriceHistoryDep = Annotated[PriceHistoryService, Depends(get_price_history)]

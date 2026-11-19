@@ -46,6 +46,8 @@ function staleKeys(message: LiveMessage): (readonly unknown[])[] {
       return []
     case 'session.run':
       return [keys.sessions, keys.sessionRuns]
+    case 'job.changed':
+      return message.data.kind === 'download' ? [keys.prices] : [keys.backtests]
   }
 }
 

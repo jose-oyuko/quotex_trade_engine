@@ -24,6 +24,7 @@ from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
+from app.deriv.fake import FakePriceHistory
 from app.domain.enums import Broker
 from app.engine.engine import Engine
 from app.engine.flags import EngineFlags
@@ -175,6 +176,7 @@ async def running_api(
     login_source: Any = None,
     quotex_login: Any = None,
     deriv_checker: Any = None,
+    price_history: Any = None,
     allow_real: bool = False,
     **settings: Any,
 ) -> AsyncIterator[ApiRig]:
@@ -193,6 +195,7 @@ async def running_api(
             login_source=login_source,
             quotex_login=quotex_login,
             deriv_checker=deriv_checker,
+            price_history=price_history,
             allow_real=allow_real,
             settings=settings,
         ) as rig:
@@ -211,6 +214,7 @@ async def _running_api(
     login_source: Any,
     quotex_login: Any,
     deriv_checker: Any,
+    price_history: Any,
     allow_real: bool,
     settings: dict[str, Any],
 ) -> AsyncIterator[ApiRig]:
@@ -231,6 +235,8 @@ async def _running_api(
         login_source=login_source,
         quotex_login=quotex_login,
         deriv_checker=deriv_checker,
+        # never Deriv's real price service in a test (decision D-84)
+        price_history=lambda _settings, _tasks: price_history or FakePriceHistory(),
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with (

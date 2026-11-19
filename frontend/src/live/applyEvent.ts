@@ -60,6 +60,7 @@ export function applyEvent(state: Snapshot, message: Live): Snapshot {
     case 'signal.received':
     case 'risk.tripped':
     case 'session.run':
+    case 'job.changed':
       return state // shown in lists, which refetch; nothing in the status changes
   }
 }

@@ -37,6 +37,13 @@ class AccountEventOut(BaseModel):
     account_type: AccountType
 
 
+class JobEventOut(BaseModel):
+    kind: Literal["download", "backtest"]
+    job_id: int
+    state: str
+    detail: str | None
+
+
 class _Message(BaseModel):
     seq: int = Field(ge=0, description="Number of the latest event this message includes.")
     at: datetime
@@ -114,6 +121,13 @@ class ControlsChangedMessage(_Message):
     data: ControlsOut
 
 
+class JobChangedMessage(_Message):
+    """A price download or a backtest moved on (decision D-84): refetch it."""
+
+    type: Literal["job.changed"] = "job.changed"
+    data: JobEventOut
+
+
 type ServerMessage = Annotated[
     SnapshotMessage
     | HeartbeatMessage
@@ -127,7 +141,8 @@ type ServerMessage = Annotated[
     | BalanceUpdatedMessage
     | ConnectionChangedMessage
     | AccountChangedMessage
-    | ControlsChangedMessage,
+    | ControlsChangedMessage
+    | JobChangedMessage,
     Field(discriminator="type"),
 ]
 
@@ -146,6 +161,7 @@ SERVER_MESSAGE_MODELS: tuple[type[BaseModel], ...] = (
     AccountChangedMessage,
     ControlsChangedMessage,
     SessionRunMessage,
+    JobChangedMessage,
 )
 
 

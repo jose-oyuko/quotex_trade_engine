@@ -52,6 +52,12 @@ from app.services.groups import (
     InvalidGroupError,
 )
 from app.services.login_errors import EngineRunningError, WrongStepError
+from app.services.price_history import (
+    AssetBusyError,
+    DownloadNotFoundError,
+    DownloadRunningError,
+    InvalidDownloadError,
+)
 from app.services.quotex_login import NoPinWantedError, PinInvalidError, QuotexNotConfiguredError
 from app.services.sessions import (
     InvalidSessionError,
@@ -143,6 +149,10 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     DerivNotConfiguredError: (409, "deriv_not_configured"),
     DerivRefusedError: (422, "deriv_login_refused"),
     DerivUnreachableError: (502, "deriv_unreachable"),
+    InvalidDownloadError: (422, "invalid_download"),
+    DownloadRunningError: (409, "download_running"),
+    DownloadNotFoundError: (404, "download_not_found"),
+    AssetBusyError: (409, "asset_downloading"),
 }
 
 HTTP_CODES = {

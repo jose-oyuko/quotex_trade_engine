@@ -23,6 +23,7 @@ from app.api.routers import (
     deriv,
     engine,
     groups,
+    prices,
     quotex,
     reports,
     sessions,
@@ -35,6 +36,8 @@ from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
 from app.api.static import mount_frontend
 from app.auth.service import AuthService
+from app.backtest.store import PriceStore
+from app.brokers.history import PriceHistory
 from app.core.clock import SystemClock
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -47,7 +50,7 @@ from app.db.writer import DBWriter
 from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.engine.errors import EngineStartError
-from app.engine.factory import build_engine, check_deriv_account
+from app.engine.factory import build_engine, build_price_history, check_deriv_account
 from app.engine.flags import EngineFlags
 from app.engine.logins import resolve_settings
 from app.events.bus import EventBus
@@ -58,6 +61,7 @@ from app.services.deriv import AccountChecker, DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.price_history import PriceHistoryService
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
 from app.services.sessions import SessionService
@@ -75,6 +79,7 @@ log = structlog.get_logger()
 type EngineBuilder = Callable[[Settings, EventBus, TaskSupervisor], Engine]
 type LoginSourceFactory = Callable[[int, str, str | None], TelegramSource]
 type QuotexLoginFactory = Callable[[LoginRequest], QuotexLogin]
+type PriceHistoryFactory = Callable[[Settings, TaskSupervisor], PriceHistory]
 
 
 class DatabaseNotMigratedError(RuntimeError):
@@ -88,6 +93,7 @@ def create_app(
     login_source: LoginSourceFactory | None = None,
     quotex_login: QuotexLoginFactory | None = None,
     deriv_checker: AccountChecker | None = None,
+    price_history: PriceHistoryFactory | None = None,
 ) -> FastAPI:
     """Build the application. Tests pass their own settings (and a fake-backed engine builder)."""
     settings = settings or get_settings()
@@ -232,6 +238,15 @@ def create_app(
             clock=clock,
         )
         await app.state.auth.prepare()
+        # Past prices for backtests (decision D-84): a file of their own, Deriv's public socket.
+        app.state.prices = PriceHistoryService(
+            store=PriceStore(cfg.history_path),
+            history=(price_history or build_price_history)(cfg, app.state.tasks),
+            bus=app.state.bus,
+            tasks=app.state.tasks,
+            clock=clock,
+        )
+        await app.state.prices.prepare()
         app.state.risk_settings = RiskSettingsService(
             app.state.bus, clock, live, lambda: app.state.trading
         )
@@ -300,6 +315,7 @@ def create_app(
     app.state.quotex_login = None
     app.state.env_import = None
     app.state.deriv = None
+    app.state.prices = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -335,6 +351,7 @@ def create_app(
         quotex.router,
         deriv.router,
         brokers.router,
+        prices.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

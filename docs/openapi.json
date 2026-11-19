@@ -1166,6 +1166,149 @@
         "title": "Direction",
         "type": "string"
       },
+      "DownloadIn": {
+        "properties": {
+          "asset": {
+            "maxLength": 30,
+            "minLength": 1,
+            "pattern": "^\\w+$",
+            "title": "Asset",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset",
+          "start",
+          "end"
+        ],
+        "title": "DownloadIn",
+        "type": "object"
+      },
+      "DownloadOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "E.g. where Deriv's history starts.",
+            "title": "Note"
+          },
+          "progress": {
+            "description": "Share of the period downloaded so far.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "ticks": {
+            "description": "New prices stored by this download.",
+            "title": "Ticks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "asset",
+          "start",
+          "end",
+          "state",
+          "ticks",
+          "progress",
+          "note",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "DownloadOut",
+        "type": "object"
+      },
+      "DownloadsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DownloadOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DownloadsOut",
+        "type": "object"
+      },
       "DrawdownOut": {
         "properties": {
           "current_amount": {
@@ -2195,6 +2338,77 @@
         "title": "HeartbeatMessage",
         "type": "object"
       },
+      "JobChangedMessage": {
+        "description": "A price download or a backtest moved on (decision D-84): refetch it.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/JobEventOut"
+          },
+          "seq": {
+            "description": "Number of the latest event this message includes.",
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "const": "job.changed",
+            "default": "job.changed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "at",
+          "data"
+        ],
+        "title": "JobChangedMessage",
+        "type": "object"
+      },
+      "JobEventOut": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "download",
+              "backtest"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job_id",
+          "state",
+          "detail"
+        ],
+        "title": "JobEventOut",
+        "type": "object"
+      },
       "KillSwitchIn": {
         "additionalProperties": false,
         "properties": {
@@ -2764,6 +2978,108 @@
           "pin"
         ],
         "title": "PinIn",
+        "type": "object"
+      },
+      "PriceAssetOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "first": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The oldest stored price.",
+            "title": "First"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "ranges": {
+            "description": "The periods downloaded, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/PriceRangeOut"
+            },
+            "title": "Ranges",
+            "type": "array"
+          },
+          "ticks": {
+            "description": "Prices stored.",
+            "title": "Ticks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "asset",
+          "ticks",
+          "first",
+          "last",
+          "ranges"
+        ],
+        "title": "PriceAssetOut",
+        "type": "object"
+      },
+      "PriceRangeOut": {
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "PriceRangeOut",
+        "type": "object"
+      },
+      "PricesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceAssetOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "running": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DownloadOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "running"
+        ],
+        "title": "PricesOut",
         "type": "object"
       },
       "QuotexLoginOut": {
@@ -3353,6 +3669,7 @@
             "connection.changed": "#/components/schemas/ConnectionChangedMessage",
             "controls.changed": "#/components/schemas/ControlsChangedMessage",
             "heartbeat": "#/components/schemas/HeartbeatMessage",
+            "job.changed": "#/components/schemas/JobChangedMessage",
             "risk.tripped": "#/components/schemas/RiskTrippedMessage",
             "session.run": "#/components/schemas/SessionRunMessage",
             "signal.received": "#/components/schemas/SignalReceivedMessage",
@@ -3404,6 +3721,9 @@
           },
           {
             "$ref": "#/components/schemas/SessionRunMessage"
+          },
+          {
+            "$ref": "#/components/schemas/JobChangedMessage"
           }
         ],
         "title": "ServerMessage"
@@ -7837,6 +8157,439 @@
         "summary": "Engage Kill Switch",
         "tags": [
           "control"
+        ]
+      }
+    },
+    "/api/v1/prices": {
+      "get": {
+        "description": "The assets whose prices are stored, and the download running now, if any.",
+        "operationId": "list_prices_api_v1_prices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Prices",
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/api/v1/prices/downloads": {
+      "get": {
+        "description": "The latest downloads, newest first.",
+        "operationId": "list_downloads_api_v1_prices_downloads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Downloads",
+        "tags": [
+          "prices"
+        ]
+      },
+      "post": {
+        "description": "Download the prices of an asset for a period (at most 31 days), in the background. The\nparts already stored are skipped. 409 `download_running` while another one runs.",
+        "operationId": "start_download_api_v1_prices_downloads_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Download",
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/api/v1/prices/downloads/{download_id}/cancel": {
+      "post": {
+        "description": "Stop a running download; the prices it stored are kept.",
+        "operationId": "cancel_download_api_v1_prices_downloads__download_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "download_id",
+            "required": true,
+            "schema": {
+              "title": "Download Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Cancel Download",
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/api/v1/prices/{asset}": {
+      "delete": {
+        "description": "Delete the stored prices of an asset.",
+        "operationId": "forget_prices_api_v1_prices__asset__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset",
+            "required": true,
+            "schema": {
+              "title": "Asset",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Forget Prices",
+        "tags": [
+          "prices"
         ]
       }
     },

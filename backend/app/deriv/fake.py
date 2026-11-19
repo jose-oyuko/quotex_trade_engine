@@ -3,11 +3,17 @@ offered per asset, `_otc` pairs do not exist, and there is no draw (an equal exi
 
 from __future__ import annotations
 
+import contextlib
+import math
+import zlib
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from decimal import Decimal
 
 from app.brokers.base import AssetOffer, ConnectionState, TradeOutcome
 from app.brokers.errors import DurationNotOfferedError
 from app.brokers.fake import FakeBrokerAdapter
+from app.brokers.history import PriceFeed, PriceHistoryError, TickPage
 from app.deriv.protocol import (
     LengthRange,
     allows,
@@ -90,3 +96,52 @@ class FakeDerivAdapter(FakeBrokerAdapter):
         if outcome is TradeOutcome.DRAW:  # Deriv has no draw on Rise/Fall
             return TradeOutcome.LOST, -amount
         return outcome, profit
+
+
+class FakePriceFeed:
+    """Made-up prices for the demo and for tests: a tick every second (every 2 s on `R_` indices),
+    each a fixed function of the asset and the second, so the same range always gives the same
+    ticks. `starts_at` is where the made-up history begins (like Deriv's oldest tick)."""
+
+    def __init__(self, *, starts_at: int | None = None) -> None:
+        self.starts_at = starts_at
+        self.requests = 0
+
+    async def page(self, asset: str, *, start: int, end: int, count: int) -> TickPage:
+        self.requests += 1
+        if deriv_symbol(asset) is None:
+            raise PriceHistoryError(f"{asset} is not traded on Deriv, so it has no price history.")
+        step = 2 if asset.startswith("R_") else 1
+        first = max(start, self.starts_at or start)
+        first += (-first) % step
+        last = end - end % step
+        if last < first:
+            return TickPage()
+        begin = max(first, last - (count - 1) * step)
+        times = list(range(begin, last + 1, step))
+        return TickPage(times, [fake_quote(asset, t) for t in times])
+
+
+def fake_quote(asset: str, epoch: int) -> float:
+    """A wavy price with noise, the same for the same asset and second."""
+    seed = zlib.crc32(f"{asset}:{epoch}".encode())
+    noise = (seed % 2001 - 1000) / 250.0
+    return round(1000 + 30 * math.sin(epoch / 5000) + 8 * math.sin(epoch / 377) + noise, 2)
+
+
+class FakePriceHistory:
+    """`PriceHistory` over one `FakePriceFeed`; `fail_open` makes opening fail like a dead
+    network."""
+
+    def __init__(self, feed: FakePriceFeed | None = None) -> None:
+        self.feed = feed or FakePriceFeed()
+        self.fail_open: str | None = None
+
+    def open(self) -> AbstractAsyncContextManager[PriceFeed]:
+        return self._opened()
+
+    @contextlib.asynccontextmanager
+    async def _opened(self) -> AsyncIterator[PriceFeed]:
+        if self.fail_open is not None:
+            raise PriceHistoryError(self.fail_open)
+        yield self.feed

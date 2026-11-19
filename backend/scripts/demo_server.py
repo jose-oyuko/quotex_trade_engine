@@ -33,7 +33,7 @@ from app.core.config import Settings
 from app.core.tasks import TaskSupervisor
 from app.db.engine import create_engine, create_session_factory
 from app.db.migrations import alembic_config
-from app.deriv.fake import FakeDerivAdapter
+from app.deriv.fake import FakeDerivAdapter, FakePriceHistory
 from app.deriv.protocol import LengthRange
 from app.domain.enums import AccountType, Broker
 from app.engine.engine import Engine
@@ -227,7 +227,10 @@ async def run(port: int, interval: float, win_rate: float, reset: bool) -> int:
     await leave_engine_running(settings)
     holder: list[Fakes] = []
     app = create_app(
-        settings, engine_builder=fake_builder(holder), deriv_checker=demo_account_check
+        settings,
+        engine_builder=fake_builder(holder),
+        deriv_checker=demo_account_check,
+        price_history=lambda _settings, _tasks: FakePriceHistory(),  # made-up prices (D-84)
     )
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_config=None))
     serving = asyncio.create_task(server.serve())

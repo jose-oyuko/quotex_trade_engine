@@ -151,6 +151,12 @@ class FakeDerivServer:
         default_factory=list
     )
     _tick_streams: dict[str, list[tuple[ServerConnection, int, str]]] = field(default_factory=dict)
+    # Past prices for `ticks_history` (backtests, D-84), by Deriv symbol: (epoch, quote), any order.
+    history: dict[str, list[tuple[int, float]]] = field(default_factory=dict)
+    history_errors: list[dict[str, str]] = field(default_factory=list)
+    history_page_cap: int | None = None  # answer at most this many, whatever `count` says
+    history_answers_before_cut: int | None = None  # then drop the socket once, instead of answering
+    history_dead: bool = False  # every `ticks_history` drops the socket
 
     async def start(self) -> None:
         self._server = await serve(self._handle, "127.0.0.1", 0)
@@ -164,6 +170,10 @@ class FakeDerivServer:
     async def link(self, kind: AccountType) -> str:
         """What `DerivLogin.socket_url` returns: a fresh one-time link to the socket."""
         return f"ws://127.0.0.1:{self._port}/ws/{kind.value}?otp={uuid.uuid4().hex}"
+
+    def public_url(self) -> str:
+        """Deriv's public socket for market data: no token, no one-time code."""
+        return f"ws://127.0.0.1:{self._port}/options/ws/public"
 
     async def drop_clients(self) -> None:
         for client in list(self._clients):
@@ -220,6 +230,9 @@ class FakeDerivServer:
 
     async def _handle(self, ws: ServerConnection) -> None:
         path = ws.request.path if ws.request is not None else ""
+        if path.startswith("/options/ws/public"):
+            await self._public(ws)
+            return
         if path in self.links_used:
             await ws.close(code=4001, reason="one-time code already used")
             return
@@ -236,6 +249,45 @@ class FakeDerivServer:
             pass
         finally:
             self._clients.discard(ws)
+
+    async def _public(self, ws: ServerConnection) -> None:
+        """The public socket answers market data only (`ticks_history`)."""
+        self._clients.add(ws)
+        try:
+            async for frame in ws:
+                message = json.loads(frame)
+                self.received.append(message)
+                if "ticks_history" in message:
+                    if self.history_dead or self.history_answers_before_cut == 0:
+                        self.history_answers_before_cut = None
+                        ws.transport.abort()
+                        return
+                    if self.history_answers_before_cut is not None:
+                        self.history_answers_before_cut -= 1
+                    await self._send(ws, self._ticks_history(message))
+        except ConnectionClosed:
+            pass
+        finally:
+            self._clients.discard(ws)
+
+    def _ticks_history(self, msg: dict[str, Any]) -> dict[str, Any]:
+        base = {"echo_req": msg, "req_id": msg.get("req_id"), "msg_type": "history"}
+        if self.history_errors:
+            return {**base, "error": self.history_errors.pop(0)}
+        symbol = msg["ticks_history"]
+        if symbol not in self.history:
+            return {**base, "error": {"code": "InvalidSymbol", "message": "Symbol is invalid."}}
+        end = int(msg["end"]) if msg["end"] != "latest" else 2**40
+        start = int(msg.get("start", 0))
+        count = int(msg.get("count", 1000))
+        if self.history_page_cap is not None:
+            count = min(count, self.history_page_cap)
+        inside = sorted(p for p in self.history[symbol] if start <= p[0] <= end)[-count:]
+        return {
+            **base,
+            "pip_size": 2,
+            "history": {"times": [p[0] for p in inside], "prices": [p[1] for p in inside]},
+        }
 
     async def _send(self, ws: ServerConnection, message: dict[str, Any]) -> None:
         with contextlib.suppress(ConnectionClosed):

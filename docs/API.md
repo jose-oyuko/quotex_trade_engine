@@ -61,6 +61,11 @@ trust:
 | `GET /deriv/assets` | Deriv's assets as the running engine knows them: name, Deriv's display name, market (`forex`, `synthetic_index`, …), open or not, and the Rise/Fall trade lengths it allows (`null` while not learnt yet). Without a connected Deriv: `available: false` with the reason, never an error. |
 | `GET /brokers` | Each broker: switched on or off (`enabled`, remembered) and its `state`: `off`, `needs_you` (it stopped trying: a login only the owner can fix, such as an e-mailed PIN; `detail` says why), `connected`, `connecting`, `reconnecting`, `disconnected`, `no_login` (the engine runs without it) or `engine_stopped`. |
 | `PUT /brokers/{broker}` | `{"enabled": true\|false}`: switch a broker off (its connection closes and its login attempts stop; signals and sessions on it are skipped, saying so) or on (it connects at once). Works with the engine stopped too; remembered. 409 `broker_switch_refused` while it has open trades, running chains or a running session, or when switching on a broker whose login is not stored. *Start now* on a session whose broker is off: 409 `broker_off`. |
+| `GET /prices` | Past prices stored for backtests (decision D-84): each asset with the number of prices, the oldest and newest, and the periods downloaded (`ranges`); plus the download running now (`running`, or `null`). |
+| `GET /prices/downloads` | The latest downloads, newest first: asset, period, `state` (`running`, `done`, `failed`, `cancelled`), new prices stored, `progress` (0 to 1), a `note` (e.g. "Deriv has no R_75 prices from … (its history starts later)") and the `error` in words. |
+| `POST /prices/downloads` | `{"asset", "start", "end"}`: download that asset's prices from Deriv's public price service (no login; nothing is traded), in the background, one at a time; parts already stored are skipped. 202 with the download. 422 `invalid_download` (no asset, start not before end, more than 31 days), 409 `download_running`. Progress arrives as `job.changed` events. A dropped connection is opened again up to 5 times; what was stored is always kept. |
+| `POST /prices/downloads/{id}/cancel` | Stop a running download; the prices it stored are kept. 404 `download_not_found`. |
+| `DELETE /prices/{asset}` | Delete an asset's stored prices. 404 `download_not_found` if none; 409 `asset_downloading` while it is being downloaded. |
 | `GET /telegram/login` | Where the Telegram login is: `logged_out`, `code_sent`, `password_needed` or `logged_in`, with the hidden phone number, where the code went, how many resends are left, whether the API id and hash are stored, and whether the engine is running. Safe after a page reload. |
 | `POST /telegram/login/start` | `{"phone"}`: Telegram sends a code. 409 `telegram_not_configured` (store the API id and hash first), 409 `engine_running`, 422 `telegram_login_refused` (bad number, bad API id/hash), 429 `telegram_wait` (flood wait, says how long). |
 | `POST /telegram/login/code`, `POST /telegram/login/password`, `POST /telegram/login/resend`, `POST /telegram/login/cancel` | The next steps. Wrong code: 422 `telegram_code_invalid` (the same step continues); old code: 409 `telegram_code_expired` (starts over); wrong two-step password: 422 `telegram_password_invalid`; a step out of order or a timed-out login: 409 `telegram_login_step`. The session is stored encrypted when the last step succeeds. |
@@ -177,8 +182,9 @@ it). Every message is a JSON text frame with `type`, `seq` and `at`.
    replaces whatever the client believed.
 2. After it come **events**, named by `type`: `signal.received`, `chain.started`, `chain.advanced`,
    `chain.ended`, `trade.opened`, `trade.settled`, `risk.tripped`, `balance.updated`,
-   `connection.changed`, `account.changed`, `controls.changed`. Each carries the full record in
-   `data`. Their `seq` goes up by **exactly 1** each time.
+   `connection.changed`, `account.changed`, `controls.changed`, `session.run`, `job.changed` (a
+   price download or a backtest moved on: `kind`, `job_id`, `state`, `detail`; refetch it). Each
+   carries the full record in `data`. Their `seq` goes up by **exactly 1** each time.
 3. **`heartbeat`** is sent when nothing else was sent for 15 seconds. Its `seq` is the latest event
    number.
 

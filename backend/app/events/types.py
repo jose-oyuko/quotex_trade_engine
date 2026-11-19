@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from app.domain.enums import AccountType
 from app.domain.records import (
@@ -105,6 +105,18 @@ class ConnectionChanged(Event):
     name: ClassVar[str] = "connection.changed"
     component: str
     connected: bool
+    detail: str | None = None
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class JobChanged(Event):
+    """A price download or a backtest started, moved on or ended (decision D-84). Shown live so
+    the Backtest page can refresh; not stored here (the price store keeps its own rows)."""
+
+    name: ClassVar[str] = "job.changed"
+    kind: Literal["download", "backtest"]
+    job_id: int
+    state: str
     detail: str | None = None
 
 

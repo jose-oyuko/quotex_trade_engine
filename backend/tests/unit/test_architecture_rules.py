@@ -64,6 +64,20 @@ def test_only_the_deriv_package_talks_to_deriv() -> None:
     assert "websockets.asyncio.client" in imported_modules(APP / "deriv" / "connection.py")
 
 
+def test_only_the_deriv_package_asks_deriv_for_past_prices() -> None:
+    """Decision D-84: downloads go through `app/deriv/history.py` on a connection of their own;
+    nothing else spells Deriv's `ticks_history` request, and the price store and the replay know
+    only the broker-neutral `app.brokers.history` types."""
+    offenders = [
+        str(path.relative_to(APP))
+        for path in APP.rglob("*.py")
+        if path.relative_to(APP).parts[0] != "deriv"
+        and "ticks_history" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
+    assert "app.deriv.connection" in imported_modules(APP / "deriv" / "history.py")
+
+
 def test_the_two_brokers_know_nothing_of_each_other() -> None:
     """Quotex and Deriv share only `app/brokers/` (the interface, the errors, the fake)."""
     offenders = [
@@ -235,6 +249,7 @@ def test_lower_layers_never_import_the_layers_above_them() -> None:
         "deriv": ("app.api", "app.services", "app.engine", "app.db", "app.sessions"),
         "engine": ("app.api", "app.services"),
         "sessions": ("app.api", "app.services"),
+        "backtest": ("app.api", "app.services", "app.db", "app.deriv", "app.quotex"),
         "services": ("app.api",),
     }
     offenders = [

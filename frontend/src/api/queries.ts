@@ -41,6 +41,8 @@ export const keys = {
   secrets: ['secrets'] as const,
   derivAssets: ['deriv', 'assets'] as const,
   brokers: ['brokers'] as const,
+  prices: ['prices'] as const,
+  backtests: ['backtests'] as const,
 }
 
 export function useStatus() {
