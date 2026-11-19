@@ -14,9 +14,15 @@ from contextlib import AbstractAsyncContextManager
 import structlog
 
 from app.brokers.errors import BrokerError
-from app.brokers.history import PriceFeed, PriceHistoryError, TickPage
+from app.brokers.history import NamedAsset, PriceFeed, PriceHistoryError, TickPage
 from app.deriv.connection import DerivConnection, Spawn
-from app.deriv.protocol import deriv_symbol, error_of, parse_ticks_history, ticks_history_request
+from app.deriv.protocol import (
+    deriv_symbol,
+    error_of,
+    named_assets,
+    parse_ticks_history,
+    ticks_history_request,
+)
 
 log = structlog.get_logger()
 
@@ -43,6 +49,19 @@ class DerivPriceFeed:
             raise PriceHistoryError(f"Deriv refused the request for {asset}: {problem[1]}")
         times, quotes = parse_ticks_history(reply)
         return TickPage(times, quotes)
+
+    async def assets(self) -> list[NamedAsset]:
+        try:
+            reply = await self._connection.request(
+                {"active_symbols": "brief"}, timeout_s=self._timeout_s
+            )
+        except TimeoutError as exc:
+            raise PriceHistoryError("Deriv did not answer in time.", retryable=True) from exc
+        except BrokerError as exc:
+            raise PriceHistoryError("The connection to Deriv was lost.", retryable=True) from exc
+        if (problem := error_of(reply)) is not None:
+            raise PriceHistoryError(f"Deriv did not list its assets: {problem[1]}")
+        return [NamedAsset(a, n, g) for a, n, g in named_assets(reply.get("active_symbols"))]
 
 
 class DerivPriceHistory:

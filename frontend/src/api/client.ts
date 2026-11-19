@@ -2,6 +2,7 @@
 // handling; the `api` object below names every endpoint with its input and output types.
 import type {
   Account,
+  AssetNames,
   Backtest,
   BacktestChains,
   BacktestInput,
@@ -262,6 +263,8 @@ export const api = {
     list: (signal?: AbortSignal) => request<PricesOut>('GET', '/prices', { signal }),
     downloads: (signal?: AbortSignal) =>
       request<DownloadsOut>('GET', '/prices/downloads', { signal }),
+    /** Deriv's assets with the names people know ("Volatility 75 (1s) Index"). */
+    assets: (signal?: AbortSignal) => request<AssetNames>('GET', '/prices/assets', { signal }),
     download: (body: DownloadInput) => request<Download>('POST', '/prices/downloads', { body }),
     cancel: (id: number) => request<Download>('POST', `/prices/downloads/${String(id)}/cancel`),
     forget: (asset: string) => request<undefined>('DELETE', `/prices/${encodeURIComponent(asset)}`),

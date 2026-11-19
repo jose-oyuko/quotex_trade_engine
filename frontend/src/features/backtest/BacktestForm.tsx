@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../../api/client'
-import { keys, usePrices, useSessions } from '../../api/queries'
+import { keys, useAssetNames, usePrices, useSessions } from '../../api/queries'
 import type { Backtest, Strategy } from '../../api/types'
 import { Button } from '../../components/Button'
 import { errorMessage } from '../../lib/errors'
 import { MODES, WEEKDAYS } from '../sessions/sessionSchema'
+import { assetLabel } from './assetNames'
 import {
   LENGTHS,
   MAX_STRATEGIES,
@@ -55,10 +56,20 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
   const client = useQueryClient()
   const prices = usePrices()
   const sessions = useSessions()
+  const names = useAssetNames().data?.items ?? []
   const [values, setValues] = useState<BacktestFormValues>(() => emptyBacktest())
   const [errors, setErrors] = useState<FormErrors>({})
   const start = useMutation({
-    mutationFn: () => api.backtests.start(toInput(values)),
+    mutationFn: () => {
+      const input = toInput(values)
+      // an unnamed run is named after the asset as people know it
+      const days =
+        values.first_day === values.last_day
+          ? values.first_day
+          : `${values.first_day} to ${values.last_day}`
+      const name = input.name ?? `${assetLabel(input.asset, names)}, ${days}`
+      return api.backtests.start({ ...input, name: name.slice(0, 80) })
+    },
     onSuccess: (backtest) => {
       void client.invalidateQueries({ queryKey: keys.backtests })
       onStarted(backtest)
@@ -130,11 +141,13 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
             }}
           >
             {!held.some((h) => h.asset === values.asset) && (
-              <option value={values.asset}>{values.asset} (no prices stored)</option>
+              <option value={values.asset}>
+                {assetLabel(values.asset, names)}: no prices stored
+              </option>
             )}
             {held.map((h) => (
               <option key={h.asset} value={h.asset}>
-                {h.asset}
+                {assetLabel(h.asset, names)}
               </option>
             ))}
           </select>
@@ -144,8 +157,8 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
         {covered !== 'all' && (
           <p className="form-warning" role="status">
             {covered === 'none'
-              ? `No prices of ${values.asset} are stored for these days: download them above first.`
-              : `The prices of ${values.asset} cover only part of these days; candles without prices are skipped and counted.`}
+              ? `No prices of ${assetLabel(values.asset, names)} are stored for these days: download them above first.`
+              : `The prices of ${assetLabel(values.asset, names)} cover only part of these days; candles without prices are skipped and counted.`}
           </p>
         )}
       </fieldset>

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useBacktest, useBacktestChains } from '../../api/queries'
+import { useAssetNames, useBacktest, useBacktestChains } from '../../api/queries'
 import type { Backtest, BacktestChain, StrategyResult } from '../../api/types'
 import { Badge } from '../../components/Badge'
 import { BarChart } from '../../components/charts/BarChart'
@@ -7,6 +7,7 @@ import { LineChart } from '../../components/charts/LineChart'
 import { DataState } from '../../components/DataState'
 import { Money } from '../../components/Money'
 import { Pagination } from '../../components/Pagination'
+import { assetLabel } from './assetNames'
 import { STRATEGIES } from './backtestSchema'
 
 const strategyLabel = (s: StrategyResult) => {
@@ -243,6 +244,7 @@ function Chains({ backtest }: { backtest: Backtest }) {
 
 export function BacktestResult({ id }: { id: number }) {
   const query = useBacktest(id)
+  const names = useAssetNames().data?.items ?? []
   return (
     <DataState query={query}>
       {(backtest) => {
@@ -280,10 +282,11 @@ export function BacktestResult({ id }: { id: number }) {
               are not simulated.
             </p>
             <p className="help">
-              {setup.asset}, {setup.first_day} to {setup.last_day}, {setup.start_time.slice(0, 5)}–
-              {setup.end_time.slice(0, 5)} {setup.timezone}, {String(setup.duration_s / 60)}-minute
-              trades, base stake <Money value={setup.base_stake} />: {summary.windows} window(s),
-              replayed in {summary.seconds} s.
+              {assetLabel(setup.asset, names)}, {setup.first_day} to {setup.last_day},{' '}
+              {setup.start_time.slice(0, 5)}–{setup.end_time.slice(0, 5)} {setup.timezone},{' '}
+              {String(setup.duration_s / 60)}-minute trades, base stake{' '}
+              <Money value={setup.base_stake} />: {summary.windows} window(s), replayed in{' '}
+              {summary.seconds} s.
             </p>
             <Comparison strategies={summary.strategies} />
             {summary.strategies.map((s, i) => (

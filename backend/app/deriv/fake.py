@@ -13,7 +13,7 @@ from decimal import Decimal
 from app.brokers.base import AssetOffer, ConnectionState, TradeOutcome
 from app.brokers.errors import DurationNotOfferedError
 from app.brokers.fake import FakeBrokerAdapter
-from app.brokers.history import PriceFeed, PriceHistoryError, TickPage
+from app.brokers.history import NamedAsset, PriceFeed, PriceHistoryError, TickPage
 from app.deriv.protocol import (
     LengthRange,
     allows,
@@ -120,6 +120,20 @@ class FakePriceFeed:
         begin = max(first, last - (count - 1) * step)
         times = list(range(begin, last + 1, step))
         return TickPage(times, [fake_quote(asset, t) for t in times])
+
+    async def assets(self) -> list[NamedAsset]:
+        """A few of Deriv's assets under Deriv's own names (as listed on 2026-11-19)."""
+        return list(FAKE_ASSETS)
+
+
+FAKE_ASSETS = (
+    NamedAsset("1HZ10V", "Volatility 10 (1s) Index", "Volatility indices"),
+    NamedAsset("1HZ75V", "Volatility 75 (1s) Index", "Volatility indices"),
+    NamedAsset("R_10", "Volatility 10 Index", "Volatility indices"),
+    NamedAsset("R_75", "Volatility 75 Index", "Volatility indices"),
+    NamedAsset("BOOM500", "Boom 500 Index", "Crash and Boom"),
+    NamedAsset("EURUSD", "EUR/USD", "Forex"),
+)
 
 
 def fake_quote(asset: str, epoch: int) -> float:

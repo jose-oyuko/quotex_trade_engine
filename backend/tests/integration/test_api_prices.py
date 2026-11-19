@@ -90,3 +90,23 @@ async def test_one_download_at_a_time_cancel_and_refusals(tmp_path: Path) -> Non
         assert bad_name.status_code == 422
         missing = await rig.client.post(f"{API}/prices/downloads/999/cancel")
         assert missing.status_code == 404
+
+
+async def test_the_assets_are_listed_with_their_everyday_names(tmp_path: Path) -> None:
+    async with running_api(tmp_path) as rig:
+        body = (await rig.client.get(f"{API}/prices/assets")).json()
+        assert body["available"] is True
+        assert {
+            "asset": "1HZ75V",
+            "name": "Volatility 75 (1s) Index",
+            "group": "Volatility indices",
+        } in body["items"]
+    offline = FakePriceHistory()
+    offline.fail_open = "Could not reach Deriv's price service (OSError)."
+    async with running_api(tmp_path / "2", price_history=offline) as rig:
+        body = (await rig.client.get(f"{API}/prices/assets")).json()
+        assert body == {
+            "available": False,
+            "reason": "Could not reach Deriv's price service (OSError).",
+            "items": [],
+        }

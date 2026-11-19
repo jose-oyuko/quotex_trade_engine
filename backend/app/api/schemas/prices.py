@@ -37,6 +37,18 @@ class DownloadOut(BaseModel):
     finished_at: datetime | None
 
 
+class AssetNameOut(BaseModel):
+    asset: str = Field(description="The code: `1HZ75V`, `R_75`, `EURUSD`.")
+    name: str = Field(description="Deriv's own name: `Volatility 75 (1s) Index`.")
+    group: str = Field(description="A family to sort by: `Volatility indices`, `Forex` ...")
+
+
+class AssetNamesOut(BaseModel):
+    available: bool
+    reason: str | None = Field(description="Why there is no list, in words.")
+    items: list[AssetNameOut]
+
+
 class PricesOut(BaseModel):
     items: list[PriceAssetOut]
     running: DownloadOut | None

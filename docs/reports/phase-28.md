@@ -111,6 +111,23 @@ No new dependencies. Files in section 2.
 - **Optimising the multipliers automatically** was left out as planned. Comparing a few choices side
   by side (up to six per run) covers most of it.
 
+## 10b. Follow-up (owner's request, 2026-11-19): assets by the names people know
+
+The owner could not relate to codes like `1HZ75V`. The page now shows every asset by Deriv's own name, with
+the code in brackets after it: *Volatility 75 (1s) Index (1HZ75V)*, *Volatility 10 Index (R_10)*, *Boom
+500 Index (BOOM500)*. This applies to the download picker (grouped by family, volatility indices first),
+the stored-prices table, the downloads, the backtest form, and the result. An unnamed backtest is named
+after the asset that way too.
+- **The names come from Deriv itself:** its public service lists all 95 assets with names and families,
+  no login (`GET /api/v1/prices/assets`, asked again every 6 hours, the last list kept if Deriv cannot be
+  reached).
+- **Without Deriv,** the volatility indices and EUR/USD are still named from a short built-in list.
+- **Checked live:** 95 assets in 11 families.
+- **Tests:**
+  - backend: the parser (natural number order, our code for forex pairs), the cache and the offline
+    fallback, the API, and the real Deriv source against the fake server;
+  - frontend: `assetNames.test.ts`, and the page tests now pick assets by name.
+
 ## 11. Git state
 
 Committed with your permission ("commit and start the phases, till the end"): see STATUS for the hash.

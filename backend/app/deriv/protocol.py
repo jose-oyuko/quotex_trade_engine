@@ -375,6 +375,48 @@ def early_profit(terms: ContractTerms, exit_price: Decimal) -> Decimal | None:
 # ---- past prices (backtests, decision D-84) --------------------------------------------------
 
 
+# Deriv's `submarket` codes as families people know (the rest show Deriv's `market` name).
+SUBMARKET_GROUPS = {
+    "random_index": "Volatility indices",
+    "crash_index": "Crash and Boom",
+    "jump_index": "Jump indices",
+    "step_index": "Step indices",
+    "range_index": "Range Break indices",
+    "random_daily": "Bull and Bear",
+    "forex_basket": "Baskets",
+    "commodity_basket": "Baskets",
+    "major_pairs": "Forex",
+    "minor_pairs": "Forex",
+    "exotic_pairs": "Forex",
+    "metals": "Commodities",
+}
+
+
+def named_assets(rows: object) -> list[tuple[str, str, str]]:
+    """`(our code, Deriv's name, family)` for every row of an `active_symbols` answer, sorted by
+    family then name. Rows without a symbol are skipped."""
+    found: list[tuple[str, str, str]] = []
+    if not isinstance(rows, list):
+        return found
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        symbol = row.get("underlying_symbol")
+        if not isinstance(symbol, str) or not symbol:
+            continue
+        group = (
+            SUBMARKET_GROUPS.get(str(row.get("submarket") or ""))
+            or str(row.get("market") or "Other").replace("_", " ").capitalize()
+        )
+        found.append((asset_name(symbol), str(row.get("underlying_symbol_name") or symbol), group))
+    return sorted(found, key=lambda a: (a[2], _natural(a[1])))
+
+
+def _natural(text: str) -> tuple[object, ...]:
+    """Numbers in a name sort as numbers: "Volatility 10", "Volatility 25", "Volatility 100"."""
+    return tuple(int(part) if part.isdigit() else part for part in re.split(r"(\d+)", text))
+
+
 def ticks_history_request(symbol: str, *, start: int, end: int, count: int) -> dict[str, Any]:
     """A `ticks_history` request for the latest `count` ticks between `start` and `end`."""
     return {

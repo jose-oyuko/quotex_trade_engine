@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.backtest.store import PriceStore, merge, subtract
-from app.deriv.protocol import parse_ticks_history, ticks_history_request
+from app.deriv.protocol import named_assets, parse_ticks_history, ticks_history_request
 
 NOW = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
 
@@ -87,3 +87,48 @@ def test_deriv_s_history_answer_is_read_oldest_first() -> None:
     reply = {"history": {"times": [3, 1, "2", True, 4], "prices": [3.5, 1.5, 2.5, 9, "x"]}}
     assert parse_ticks_history(reply) == ([1, 2, 3], [1.5, 2.5, 3.5])
     assert parse_ticks_history({"msg_type": "history"}) == ([], [])
+
+
+def test_deriv_s_asset_list_gives_each_code_its_everyday_name() -> None:
+    rows = [
+        {
+            "underlying_symbol": "1HZ100V",
+            "underlying_symbol_name": "Volatility 100 (1s) Index",
+            "market": "synthetic_index",
+            "submarket": "random_index",
+        },
+        {
+            "underlying_symbol": "R_10",
+            "underlying_symbol_name": "Volatility 10 Index",
+            "market": "synthetic_index",
+            "submarket": "random_index",
+        },
+        {
+            "underlying_symbol": "1HZ25V",
+            "underlying_symbol_name": "Volatility 25 (1s) Index",
+            "market": "synthetic_index",
+            "submarket": "random_index",
+        },
+        {
+            "underlying_symbol": "frxEURUSD",
+            "underlying_symbol_name": "EUR/USD",
+            "market": "forex",
+            "submarket": "major_pairs",
+        },
+        {
+            "underlying_symbol": "cryBTCUSD",
+            "underlying_symbol_name": "BTC/USD",
+            "market": "cryptocurrency",
+            "submarket": "non_stable_coin",
+        },
+        {"underlying_symbol_name": "no symbol"},
+        "not a row",
+    ]
+    assert named_assets(rows) == [
+        ("cryBTCUSD", "BTC/USD", "Cryptocurrency"),
+        ("EURUSD", "EUR/USD", "Forex"),  # our code for a forex pair
+        ("R_10", "Volatility 10 Index", "Volatility indices"),
+        ("1HZ25V", "Volatility 25 (1s) Index", "Volatility indices"),
+        ("1HZ100V", "Volatility 100 (1s) Index", "Volatility indices"),
+    ]
+    assert named_assets(None) == []

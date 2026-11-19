@@ -35,11 +35,25 @@ class TickPage:
         return len(self.times)
 
 
+@dataclass(slots=True, frozen=True)
+class NamedAsset:
+    """An asset as people know it: `asset` is our code (`1HZ75V`, `EURUSD`), `name` the broker's
+    own name for it ("Volatility 75 (1s) Index", "EUR/USD"), `group` a family to sort by."""
+
+    asset: str
+    name: str
+    group: str
+
+
 class PriceFeed(Protocol):
     async def page(self, asset: str, *, start: int, end: int, count: int) -> TickPage:
         """The latest `count` ticks (at most) of `asset` between `start` and `end` (epoch
         seconds, both included), oldest first. Empty when there is none in that range. Raises
         `PriceHistoryError`."""
+        ...
+
+    async def assets(self) -> list[NamedAsset]:
+        """Every asset the broker lists, with its name. Raises `PriceHistoryError`."""
         ...
 
 

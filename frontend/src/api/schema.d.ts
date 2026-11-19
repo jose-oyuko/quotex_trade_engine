@@ -638,6 +638,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prices/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Asset Names
+         * @description Every asset Deriv lists, with Deriv's own name ("Volatility 75 (1s) Index" for `1HZ75V`)
+         *     and its family, from Deriv's public service (no login). Without Deriv: `available: false`
+         *     with the reason, never an error.
+         */
+        get: operations["asset_names_api_v1_prices_assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prices/downloads": {
         parameters: {
             query?: never;
@@ -1510,6 +1532,36 @@ export interface components {
          * @enum {string}
          */
         AccountType: "demo" | "real";
+        /** AssetNameOut */
+        AssetNameOut: {
+            /**
+             * Asset
+             * @description The code: `1HZ75V`, `R_75`, `EURUSD`.
+             */
+            asset: string;
+            /**
+             * Group
+             * @description A family to sort by: `Volatility indices`, `Forex` ...
+             */
+            group: string;
+            /**
+             * Name
+             * @description Deriv's own name: `Volatility 75 (1s) Index`.
+             */
+            name: string;
+        };
+        /** AssetNamesOut */
+        AssetNamesOut: {
+            /** Available */
+            available: boolean;
+            /** Items */
+            items: components["schemas"]["AssetNameOut"][];
+            /**
+             * Reason
+             * @description Why there is no list, in words.
+             */
+            reason: string | null;
+        };
         /**
          * AssetSuffixMode
          * @enum {string}
@@ -6979,6 +7031,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PricesOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    asset_names_api_v1_prices_assets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetNamesOut"];
                 };
             };
             /** @description Not Found */

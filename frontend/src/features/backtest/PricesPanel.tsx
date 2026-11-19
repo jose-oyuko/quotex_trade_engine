@@ -1,17 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
-import { keys, usePriceDownloads, usePrices } from '../../api/queries'
-import type { Download, PriceAsset } from '../../api/types'
+import { keys, useAssetNames, usePriceDownloads, usePrices } from '../../api/queries'
+import type { AssetName, Download, PriceAsset } from '../../api/types'
 import { Badge, type Tone } from '../../components/Badge'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { DataState } from '../../components/DataState'
 import { errorMessage } from '../../lib/errors'
+import { assetLabel, groupedAssets } from './assetNames'
 import { isoDay } from './backtestSchema'
-
-/** Assets worth downloading; any other Deriv symbol can be typed. */
-const SUGGESTED_ASSETS = ['1HZ75V', 'R_75', '1HZ100V', 'R_100', '1HZ50V', 'R_50', 'EURUSD']
 
 const STATE: Record<Download['state'], { text: string; tone: Tone }> = {
   running: { text: 'downloading', tone: 'info' },
@@ -23,7 +21,7 @@ const STATE: Record<Download['state'], { text: string; tone: Tone }> = {
 const when = (iso: string | null) =>
   iso === null ? '—' : new Date(iso).toISOString().slice(0, 16).replace('T', ' ')
 
-function Running({ download }: { download: Download }) {
+function Running({ download, names }: { download: Download; names: AssetName[] }) {
   const client = useQueryClient()
   const cancel = useMutation({
     mutationFn: () => api.prices.cancel(download.id),
@@ -35,8 +33,8 @@ function Running({ download }: { download: Download }) {
   return (
     <div className="run-panel" aria-live="polite">
       <p>
-        Downloading <strong>{download.asset}</strong> from {when(download.start)} to{' '}
-        {when(download.end)} UTC: {download.ticks.toLocaleString()} new prices so far.
+        Downloading <strong>{assetLabel(download.asset, names)}</strong> from {when(download.start)}{' '}
+        to {when(download.end)} UTC: {download.ticks.toLocaleString()} new prices so far.
       </p>
       <progress max={100} value={percent} aria-label={`Download ${String(percent)}% done`}>
         {percent}%
@@ -59,7 +57,7 @@ function Running({ download }: { download: Download }) {
   )
 }
 
-function DownloadForm({ busy }: { busy: boolean }) {
+function DownloadForm({ busy, names }: { busy: boolean; names: AssetName[] }) {
   const client = useQueryClient()
   const today = new Date()
   const [asset, setAsset] = useState('1HZ75V')
@@ -84,20 +82,23 @@ function DownloadForm({ busy }: { busy: boolean }) {
     <form className="filters" onSubmit={submit} aria-label="Download prices">
       <label>
         Asset
-        <input
-          list="price-assets"
+        <select
           value={asset}
           onChange={(e) => {
             setAsset(e.target.value)
           }}
-          required
-        />
+        >
+          {groupedAssets(names).map(([group, items]) => (
+            <optgroup key={group} label={group}>
+              {items.map((a) => (
+                <option key={a.asset} value={a.asset}>
+                  {a.name} ({a.asset})
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </label>
-      <datalist id="price-assets">
-        {SUGGESTED_ASSETS.map((a) => (
-          <option key={a} value={a} />
-        ))}
-      </datalist>
       <label>
         From (UTC)
         <input
@@ -132,7 +133,7 @@ function DownloadForm({ busy }: { busy: boolean }) {
   )
 }
 
-function HeldAsset({ held }: { held: PriceAsset }) {
+function HeldAsset({ held, names }: { held: PriceAsset; names: AssetName[] }) {
   const client = useQueryClient()
   const [asking, setAsking] = useState(false)
   const forget = useMutation({
@@ -144,7 +145,7 @@ function HeldAsset({ held }: { held: PriceAsset }) {
   })
   return (
     <tr>
-      <th scope="row">{held.asset}</th>
+      <th scope="row">{assetLabel(held.asset, names)}</th>
       <td>{held.ticks.toLocaleString()}</td>
       <td>{when(held.first)}</td>
       <td>{when(held.last)}</td>
@@ -166,7 +167,7 @@ function HeldAsset({ held }: { held: PriceAsset }) {
         </Button>
         {asking && (
           <ConfirmDialog
-            title={`Delete the prices of ${held.asset}?`}
+            title={`Delete the prices of ${assetLabel(held.asset, names)}?`}
             confirmLabel="Delete"
             danger
             busy={forget.isPending}
@@ -192,6 +193,7 @@ function HeldAsset({ held }: { held: PriceAsset }) {
 export function PricesPanel() {
   const prices = usePrices()
   const downloads = usePriceDownloads()
+  const names = useAssetNames().data?.items ?? []
   const running = prices.data?.running ?? null
   return (
     <section aria-labelledby="prices-heading">
@@ -201,8 +203,8 @@ export function PricesPanel() {
         about a year. A day of a 1-second index takes about a minute to download; parts already
         stored are skipped.
       </p>
-      {running !== null && <Running download={running} />}
-      <DownloadForm busy={running !== null} />
+      {running !== null && <Running download={running} names={names} />}
+      <DownloadForm busy={running !== null} names={names} />
       <DataState
         query={prices}
         isEmpty={(data) => data.items.length === 0}
@@ -226,7 +228,7 @@ export function PricesPanel() {
               </thead>
               <tbody>
                 {data.items.map((held) => (
-                  <HeldAsset key={held.asset} held={held} />
+                  <HeldAsset key={held.asset} held={held} names={names} />
                 ))}
               </tbody>
             </table>
@@ -239,8 +241,9 @@ export function PricesPanel() {
           <ul className="plain-list">
             {downloads.data?.items.slice(0, 10).map((d) => (
               <li key={d.id}>
-                <Badge tone={STATE[d.state].tone}>{STATE[d.state].text}</Badge> {d.asset},{' '}
-                {when(d.start)} → {when(d.end)}: {d.ticks.toLocaleString()} new prices
+                <Badge tone={STATE[d.state].tone}>{STATE[d.state].text}</Badge>{' '}
+                {assetLabel(d.asset, names)}, {when(d.start)} → {when(d.end)}:{' '}
+                {d.ticks.toLocaleString()} new prices
                 {d.note !== null && <span className="help"> {d.note}</span>}
                 {d.error !== null && <span className="form-error"> {d.error}</span>}
               </li>

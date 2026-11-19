@@ -17,7 +17,7 @@ from functools import partial
 import structlog
 
 from app.backtest.store import AssetHeld, DownloadRow, PriceStore
-from app.brokers.history import PriceFeed, PriceHistory, PriceHistoryError
+from app.brokers.history import NamedAsset, PriceFeed, PriceHistory, PriceHistoryError
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.core.tasks import TaskSupervisor
@@ -30,6 +30,7 @@ PAGE = 5000  # ticks asked for per request
 MAX_DAYS = 31  # per download
 RETRIES = 5  # a dropped connection is opened again this many times in a row
 NO_PRICES_NOTE_S = 3600  # a stretch this long without a single price is worth saying
+NAMES_FOR_S = 6 * 3600  # Deriv's list of assets is asked for again after this long
 
 
 class InvalidDownloadError(DomainError):
@@ -75,6 +76,8 @@ class PriceHistoryService:
         self._pace_s = pace_s  # Deriv allows about 220 requests a minute
         self._retry_s = retry_s  # the first wait before opening a dropped connection again
         self._active: _Active | None = None
+        self._names: list[NamedAsset] = []
+        self._names_at: float | None = None  # monotonic seconds of the last good list
 
     @property
     def store(self) -> PriceStore:
@@ -86,6 +89,24 @@ class PriceHistoryService:
         )
         if cut:
             log.warning("price_downloads_cut_by_a_stop", downloads=cut)
+
+    async def names(self) -> list[NamedAsset]:
+        """Deriv's assets with their names, asked for at most every `NAMES_FOR_S` (the last good
+        list is kept if Deriv cannot be reached). Raises `PriceHistoryError` when there has never
+        been one."""
+        now = asyncio.get_running_loop().time()
+        if self._names_at is not None and now - self._names_at < NAMES_FOR_S:
+            return self._names
+        try:
+            async with self._history.open() as feed:
+                found = await feed.assets()
+        except PriceHistoryError:
+            if self._names:
+                return self._names
+            raise
+        if found:
+            self._names, self._names_at = found, now
+        return found
 
     async def held(self) -> list[AssetHeld]:
         return await asyncio.to_thread(self._store.held)

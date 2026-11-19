@@ -148,7 +148,18 @@ const chains: BacktestChains = {
   ],
 }
 
+const names = {
+  available: true,
+  reason: null,
+  items: [
+    { asset: '1HZ75V', name: 'Volatility 75 (1s) Index', group: 'Volatility indices' },
+    { asset: 'R_75', name: 'Volatility 75 Index', group: 'Volatility indices' },
+    { asset: 'BOOM500', name: 'Boom 500 Index', group: 'Crash and Boom' },
+  ],
+}
+
 const base = [
+  ['GET', '/prices/assets', json(names)],
   ['GET', '/prices', json(held)],
   ['GET', '/prices/downloads', json({ items: [download({ state: 'done', progress: 1 })] })],
   ['GET', '/backtests', json({ items: [] })],
@@ -161,11 +172,12 @@ describe('the Backtest page', () => {
     const user = userEvent.setup()
     renderWith(<BacktestPage />, { route: '/backtest' })
     const table = await screen.findByRole('table', { name: 'Stored prices' })
-    expect(within(table).getByText('1HZ75V')).toBeVisible()
+    expect(await within(table).findByText('Volatility 75 (1s) Index (1HZ75V)')).toBeVisible()
     expect(within(table).getByText('86,400')).toBeVisible()
     const form = screen.getByRole('form', { name: 'Download prices' })
-    await user.clear(within(form).getByLabelText('Asset'))
-    await user.type(within(form).getByLabelText('Asset'), 'R_75')
+    const picker = within(form).getByLabelText('Asset')
+    expect(within(picker).getByRole('option', { name: 'Boom 500 Index (BOOM500)' })).toBeVisible()
+    await user.selectOptions(picker, 'Volatility 75 Index (R_75)')
     await user.click(within(form).getByRole('button', { name: 'Download' }))
     await waitFor(() => {
       expect(api.to('POST', '/prices/downloads')).toHaveLength(1)
@@ -177,8 +189,9 @@ describe('the Backtest page', () => {
 
   it('shows a running download with its progress and cancels it', async () => {
     const api = mockApi([
+      ['GET', '/prices/assets', json(names)],
       ['GET', '/prices', json({ ...held, running: download() })],
-      ...base.slice(1),
+      ...base.slice(2),
       ['POST', '/prices/downloads/7/cancel', json(download({ state: 'cancelled' }))],
     ])
     const user = userEvent.setup()
@@ -204,8 +217,13 @@ describe('the Backtest page', () => {
     await waitFor(() => {
       expect(api.to('POST', '/backtests')).toHaveLength(1)
     })
-    const body = api.to('POST', '/backtests')[0]?.body as { strategies: unknown[]; asset: string }
+    const body = api.to('POST', '/backtests')[0]?.body as {
+      strategies: unknown[]
+      asset: string
+      name: string
+    }
     expect(body.asset).toBe('1HZ75V')
+    expect(body.name).toMatch(/^Volatility 75 \(1s\) Index \(1HZ75V\), \d{4}-\d{2}-\d{2}$/)
     expect(body.strategies).toHaveLength(2)
     expect(await screen.findByRole('progressbar', { name: 'Backtest 50% done' })).toBeVisible()
   })
@@ -246,7 +264,7 @@ describe('the Backtest page', () => {
 
   it('shows a finished backtest: the comparison, the assumptions and the chains', async () => {
     mockApi([
-      ...base.slice(0, 2),
+      ...base.slice(0, 3),
       ['GET', '/backtests', json({ items: [backtest()] })],
       ['GET', '/sessions', json({ items: [], total: 0, limit: 200, offset: 0 })],
       ['GET', '/backtests/3', json(backtest())],

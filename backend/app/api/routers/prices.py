@@ -9,6 +9,8 @@ from fastapi import APIRouter, Response, status
 
 from app.api.deps import PriceHistoryDep
 from app.api.schemas.prices import (
+    AssetNameOut,
+    AssetNamesOut,
     DownloadIn,
     DownloadOut,
     DownloadsOut,
@@ -17,6 +19,7 @@ from app.api.schemas.prices import (
     PricesOut,
 )
 from app.backtest.store import AssetHeld, DownloadRow
+from app.brokers.history import PriceHistoryError
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 
@@ -64,6 +67,22 @@ async def list_prices(prices: PriceHistoryDep) -> PricesOut:
     return PricesOut(
         items=[_asset_out(h) for h in held],
         running=None if running is None else download_out(running),
+    )
+
+
+@router.get("/assets", response_model=AssetNamesOut)
+async def asset_names(prices: PriceHistoryDep) -> AssetNamesOut:
+    """Every asset Deriv lists, with Deriv's own name ("Volatility 75 (1s) Index" for `1HZ75V`)
+    and its family, from Deriv's public service (no login). Without Deriv: `available: false`
+    with the reason, never an error."""
+    try:
+        found = await prices.names()
+    except PriceHistoryError as exc:
+        return AssetNamesOut(available=False, reason=str(exc), items=[])
+    return AssetNamesOut(
+        available=True,
+        reason=None,
+        items=[AssetNameOut(asset=a.asset, name=a.name, group=a.group) for a in found],
     )
 
 

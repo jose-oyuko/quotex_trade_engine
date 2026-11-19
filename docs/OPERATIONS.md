@@ -383,8 +383,9 @@ read against Deriv's end time.
 How would a strategy have done on Deriv's real past prices? The **Backtest** page (decision D-84) answers
 it without trading anything.
 
-1. **Download prices** (*Price history*): choose an asset (`1HZ75V`, `R_75`, …) and the days, then
-   *Download*. The prices come from Deriv's public price service: no login, no token, nothing is traded.
+1. **Download prices** (*Price history*): choose an asset and the days, then *Download*. Assets are
+   listed by the names Deriv gives them, with Deriv's code in brackets: *Volatility 75 (1s) Index
+   (1HZ75V)* is the one-tick-a-second index, *Volatility 75 Index (R_75)* the one ticking every 2 s. The prices come from Deriv's public price service: no login, no token, nothing is traded.
    - A day of a 1-second index takes about a minute (Deriv answers 1,000 prices per request).
    - Days already stored are skipped, so downloading again is quick.
    - *Cancel* keeps what was stored. A dropped connection is retried up to 5 times.

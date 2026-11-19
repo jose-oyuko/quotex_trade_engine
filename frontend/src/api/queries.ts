@@ -240,6 +240,14 @@ export function usePrices() {
   })
 }
 
+export function useAssetNames() {
+  return useQuery({
+    queryKey: [...keys.prices, 'assets'],
+    queryFn: ({ signal }) => api.prices.assets(signal),
+    staleTime: 3_600_000, // Deriv's list hardly changes
+  })
+}
+
 export function usePriceDownloads() {
   return useQuery({
     queryKey: [...keys.prices, 'downloads'],

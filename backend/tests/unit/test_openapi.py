@@ -51,6 +51,7 @@ EXPECTED_OPERATIONS = {
     ("GET", "/api/v1/prices"),
     ("DELETE", "/api/v1/prices/{asset}"),
     ("GET", "/api/v1/prices/downloads"),
+    ("GET", "/api/v1/prices/assets"),
     ("POST", "/api/v1/prices/downloads"),
     ("POST", "/api/v1/prices/downloads/{download_id}/cancel"),
     ("GET", "/api/v1/backtests"),

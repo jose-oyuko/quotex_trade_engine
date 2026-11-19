@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.backtest.store import PriceStore
+from app.brokers.history import PriceHistoryError
 from app.core.clock import SystemClock
 from app.core.tasks import TaskSupervisor
 from app.deriv.fake import FakePriceFeed, FakePriceHistory
@@ -278,3 +279,32 @@ async def test_storing_many_prices_never_holds_the_event_loop(tmp_path: Path) ->
     assert found is not None and found.state == "done" and found.ticks == 100_000
     assert worst < 0.1, f"the event loop was held for {worst * 1000:.0f} ms"
     await tasks.shutdown()
+
+
+async def test_deriv_s_assets_come_with_their_names_and_the_list_is_kept(rig: Rig) -> None:
+    names = await rig.service.names()
+    assert ("R_75", "Volatility 75 Index") in [(a.asset, a.name) for a in names]
+    assert ("EURUSD", "EUR/USD") in [(a.asset, a.name) for a in names]
+    asked = len(rig.server.sent("active_symbols"))
+    assert await rig.service.names() == names  # kept: Deriv is not asked again
+    assert len(rig.server.sent("active_symbols")) == asked
+
+
+async def test_without_deriv_the_last_list_of_names_is_kept(tmp_path: Path) -> None:
+    history = FakePriceHistory()
+    service = PriceHistoryService(
+        store=PriceStore(tmp_path / "h.db"),
+        history=history,
+        bus=EventBus(),
+        tasks=TaskSupervisor(),
+        clock=SystemClock(),
+    )
+    history.fail_open = "Could not reach Deriv's price service."
+    with pytest.raises(PriceHistoryError, match="Could not reach"):
+        await service.names()
+    history.fail_open = None
+    first = await service.names()
+    assert first[1].name == "Volatility 75 (1s) Index"
+    service._names_at = -1e9  # long ago: it asks again
+    history.fail_open = "Could not reach Deriv's price service."
+    assert await service.names() == first

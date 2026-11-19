@@ -257,6 +257,17 @@ class FakeDerivServer:
             async for frame in ws:
                 message = json.loads(frame)
                 self.received.append(message)
+                if "active_symbols" in message:
+                    await self._send(
+                        ws,
+                        {
+                            "echo_req": message,
+                            "req_id": message.get("req_id"),
+                            "msg_type": "active_symbols",
+                            "active_symbols": self.assets,
+                        },
+                    )
+                    continue
                 if "ticks_history" in message:
                     if self.history_dead or self.history_answers_before_cut == 0:
                         self.history_answers_before_cut = None
