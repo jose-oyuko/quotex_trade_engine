@@ -759,6 +759,154 @@ strategies today.
 
 ---
 
+## Phases 26-28 — Backtesting the strategies on Deriv's price history (decision D-84)
+
+**Why (owner's request, 2026-11-19):** to see how each strategy (no martingale, martingale, flip every loss,
+two-step flip, growing flip) and each choice of steps and multipliers would have done on Deriv's real past
+prices before using it on the demo or on real money. The dashboard gets a Backtest page, and fresh price
+history can be downloaded from it.
+
+**What a backtest is here.** A trading session replayed on stored price ticks instead of a live broker:
+- the same window, trade length, mode (one pair at a time, or a pair at every candle), base stake, steps and
+  multipliers as a session form;
+- each pair opens a CALL and a PUT on the same candle, and each leg runs its chain with **the engine's own
+  strategy code** (`app/engine/strategies.py`, `Chain`), so the backtest follows exactly the live rules;
+- each trade is decided by **Deriv's rule** (D-82): the entry is the first tick after the purchase, the exit
+  is the latest tick at or before the end time; Rise wins strictly above the entry, Fall strictly below,
+  equal loses;
+- a follow-up step goes out a set delay after the previous trade ended (default 1.0 s, as measured live
+  with the early result), so steps drift like they do live.
+
+**What it cannot know, said on every result:**
+- Deriv does not keep past payouts: the payout % is an assumption the owner sets (default 88%, measured on
+  `1HZ75V` on 2026-11-17/19).
+- Order confirmation time, network drops and missed trades are not simulated.
+- A strategy changes how wins and losses bunch together, not the odds; on a random index with a payout
+  under 100% the expected result is slightly negative. The useful output is the risk: how often chains run
+  out of steps, the largest stake, the worst drawdown.
+
+---
+
+## Phase 26 — Price history: download and store (backend)
+
+**Scope**
+- **`app/deriv/history.py`:** downloads ticks with Deriv's public `ticks_history` call (`style: ticks`, at
+  most 5,000 per request, paging by time). It uses only the app id (no token, no login, no account) and its
+  **own WebSocket connection**, never the engine's, so a download cannot slow the order path (hard rule 5).
+  Only `app/deriv/` talks to Deriv (D-74).
+- **Storage in a separate SQLite file,** `data/history.db` (git-ignored like the rest of `data/`):
+  - a day of `1HZ75V` is about 86,400 ticks, so a month is millions of rows; keeping them out of
+    `quotex.db` keeps the trading database small and its writer free;
+  - tables: `ticks (symbol, epoch, quote)` with the key `(symbol, epoch)`, and `downloads` (each request:
+    symbol, from, to, state, ticks stored, error, times);
+  - rows are written in batches in a worker thread, so the event loop is never blocked (the stall
+    watchdog of D-80 would report it).
+- **A download job:** one at a time, in the background.
+  - It skips the parts of the range already held, so it can be resumed or repeated.
+  - It can be cancelled.
+  - It reports progress (ticks stored, up to which time) as a bus event, so the dashboard updates live.
+  - It stops at the oldest tick Deriv offers and says so ("Deriv's history for R_75 starts at …").
+  - A dropped connection fails the job with the reason; what was stored stays.
+- **API:**
+  - `GET /history`: the assets held, with the ranges covered and the number of ticks.
+  - `POST /history/downloads` (asset, from, to; at most 31 days per request): starts a download; 409 if
+    one is running.
+  - `GET /history/downloads`, `POST /history/downloads/{id}/cancel`.
+  - `DELETE /history/{asset}`: forgets an asset's stored ticks.
+  - Admin only, like the rest of the dashboard.
+- **`npm run history:download -- --asset 1HZ75V --days 7`** does the same from the terminal.
+
+**Acceptance criteria**
+- Against the fake Deriv server (it gains `ticks_history`): paging over more than 5,000 ticks; a range
+  partly held downloads only the gap; cancel stops it and keeps what was stored; a dropped connection fails
+  the job with the reason; the start of Deriv's history is reported.
+- The download never uses the engine's adapter; an architecture test keeps `ticks_history` inside
+  `app/deriv/`.
+- API tests: start, 409 while running, list, cancel, delete; progress events published.
+- Writing 100,000 ticks does not block the event loop for more than 100 ms at a time (test).
+- `ruff`, `mypy`, the whole test suite pass.
+- **Owner's check (or mine, with permission; no token needed):** `npm run history:download -- --asset 1HZ75V
+  --days 1` and the same for `R_75`; the report says how far back Deriv's history goes for each.
+
+---
+
+## Phase 27 — The backtest engine and its API (backend)
+
+**Scope**
+- **`app/backtest/`:**
+  - `replay.py`: given the stored ticks and a session-shaped setup, walks the candles of each day's
+    window, opens the pairs (both modes, D-72's soft stop at the window's end: running chains finish),
+    and runs each leg's chain through `plan_step` / `Chain.apply_result`. Pure and synchronous, run in a
+    worker thread.
+  - Trades are decided by Deriv's rule (above). A trade whose ticks are missing from the stored history
+    is not guessed: the candle is skipped and counted ("no price data").
+  - Optional limits, as in a session: stop the day after a loss of X or a profit of Y.
+- **One run can compare several strategies** on the same prices: the owner picks any of the five (and,
+  for each, its steps and multipliers), and each becomes a column of the result.
+- **Results, per strategy:** trades, chains, chains won at step k (a histogram), chains lost (exhausted),
+  win rate, total profit, the largest stake sent, the most money in play at once, the worst drawdown and
+  when, the longest run of lost chains, and the profit per day. Plus the list of chains (each trade:
+  times, direction, stake, entry, exit, result), to look at one in detail.
+- **Storage:** runs and their results in `data/history.db` (`backtests`), so they survive a restart and
+  can be compared later. A run stores its setup, the assumptions (payout, step delay) and the history it
+  used.
+- **API:**
+  - `POST /backtests` (setup; checked like a session form, including the 8-step limit of growing flip):
+    starts a run in the background, one at a time, with progress events.
+  - `GET /backtests`, `GET /backtests/{id}` (summary per strategy), `GET /backtests/{id}/chains`
+    (paged, filtered by strategy and result), `DELETE /backtests/{id}`, `POST /backtests/{id}/cancel`.
+  - "Start from a saved session": the setup can be copied from an existing session.
+- **`npm run backtest -- --asset 1HZ75V --from … --to … --strategy growing_flip …`** prints the same
+  summary in the terminal.
+
+**Acceptance criteria**
+- Hand-made tick series with known outcomes: a won CALL and a lost PUT on the same candle; an equal exit
+  loses; the entry is the first tick after the purchase, the exit the latest at or before the end; a
+  follow-up's entry is shifted by the step delay.
+- For each of the five strategies, a losing series gives exactly the live step directions and stakes
+  (the same expectations as the engine tests, growing flip included) and ends `exhausted`.
+- Both session modes, the soft stop at the window's end, the daily limits, and "no price data" skips.
+- The same ticks and setup always give the same result (deterministic).
+- A month of 1-second ticks with five strategies runs in under a minute on this PC (measured, reported).
+- API tests for every route; `ruff`, `mypy`, the whole test suite pass.
+
+---
+
+## Phase 28 — The Backtest page (dashboard)
+
+**Scope**
+- **A Backtest page** in the menu, with three parts:
+  - **Price history:** the assets held, the ranges covered and their size; a form to download more
+    (asset, from, to) with a live progress bar and Cancel; Delete per asset. Assets come from the Deriv
+    asset list (`/deriv/assets`).
+  - **New backtest:** a form shaped like the session form (asset, days and window, trade length, mode,
+    base stake, limits), "copy from a session", one or more strategies each with its steps and
+    multipliers, and the assumptions (payout %, step delay) shown and editable. It warns when the range is
+    not fully downloaded.
+  - **Results:** a table comparing the strategies (the figures of Phase 27), a cumulative profit chart
+    per strategy, a "chains won at step k / lost" bar chart, and the list of chains with a detail view of
+    each trade. Past runs are listed and can be reopened or deleted. Every result shows the assumptions
+    and "a backtest is not a prediction".
+- Progress of downloads and runs over the existing WebSocket events.
+- **Guides:** OPERATIONS (how to download and run a backtest, how to read it), DOMAIN (the replay rules),
+  API, ARCHITECTURE (the history file and the worker thread), DECISIONS (D-84 settled).
+
+**Acceptance criteria**
+- Component tests: the download form and its progress and cancel; the backtest form (validation like the
+  session form, the 8-step limit, several strategies); the results table and charts from a fixture; the
+  run list.
+- `eslint`, `tsc`, `vitest`, build and `api:check` pass, and the backend suite.
+- Self-test on `npm run demo` (the fake Deriv serves generated ticks): download a day, run all five
+  strategies, see the comparison.
+- **Owner's check:** download a week of `1HZ75V` from the page, run your session's setup with all five
+  strategies, and look at the results.
+
+**Not in Phases 26-28:** replaying stored Telegram signals (the "backtester over stored messages" in the
+backlog); Quotex price history (pyquotex has no reliable history); optimising multipliers automatically;
+historical payouts.
+
+---
+
 ## Later backlog (not scheduled)
 
 Telegram alerts to the owner; backtester over stored messages; more parsers + "test this message" tool;

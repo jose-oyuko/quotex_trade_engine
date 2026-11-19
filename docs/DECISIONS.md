@@ -888,6 +888,17 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **It is a flip strategy for D-9 and D-70:** in a Telegram group, one chain at a time, or the opposite pair
   if allowed.
 
+**D-84. Backtests on Deriv's price history (Phases 26-28, proposed).**
+- **Data:** price ticks from Deriv's public `ticks_history` (app id only, no token), on a connection of its
+  own, never the engine's. Stored in a separate SQLite file, `data/history.db`, not in the trading database.
+  Downloads are started from the dashboard or the terminal, one at a time, resumable and cancellable.
+- **Replay:** a session-shaped setup replayed on the ticks with the engine's own strategy code. Deriv's
+  result rule decides each trade (D-82). Follow-ups go out a set step delay after the previous trade ended.
+  Missing ticks skip the candle; nothing is guessed.
+- **Assumptions are shown on every result:** the payout % (Deriv keeps no past payouts) and the step delay.
+  Network, confirmation time and missed trades are not simulated.
+- **A backtest never trades** and never touches the brokers' accounts.
+
 ---
 
 ## Decisions to be made later (record here when decided)
