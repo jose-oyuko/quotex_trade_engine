@@ -113,6 +113,13 @@ Rules:
   — never silently dropped.
 - Demo and real data are separated by an `account_type` column on trades and chains, and every
   report filters on it.
+- **Past prices and backtests (D-84)** live in a second SQLite file, `data/history.db`
+  (`app/backtest/store.py`), not in the trading database: a month of a 1-second index is millions of
+  rows. It is plain `sqlite3`, always used from a worker thread (`asyncio.to_thread`), so the event loop
+  never waits on it. Its schema is created by the code itself (`CREATE TABLE IF NOT EXISTS`, version in
+  `PRAGMA user_version`), not by Alembic. Downloads use Deriv's public price socket on a connection of
+  their own (`app/deriv/history.py`); the replay (`app/backtest/replay.py`) is pure and runs in a worker
+  thread. Neither touches the execution path.
 
 ## 7. API surface (built in Phase 6; the complete guide is `docs/API.md`)
 

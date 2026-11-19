@@ -888,7 +888,7 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **It is a flip strategy for D-9 and D-70:** in a Telegram group, one chain at a time, or the opposite pair
   if allowed.
 
-**D-84. Backtests on Deriv's price history (Phases 26-28, proposed).**
+**D-84. Backtests on Deriv's price history (Phases 26-28).**
 - **Data:** price ticks from Deriv's public `ticks_history` (app id only, no token), on a connection of its
   own, never the engine's. Stored in a separate SQLite file, `data/history.db`, not in the trading database.
   Downloads are started from the dashboard or the terminal, one at a time, resumable and cancellable.
@@ -898,6 +898,18 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **Assumptions are shown on every result:** the payout % (Deriv keeps no past payouts) and the step delay.
   Network, confirmation time and missed trades are not simulated.
 - **A backtest never trades** and never touches the brokers' accounts.
+
+**D-84 settled in Phases 26-28.**
+- **Deriv's public socket** answers 1,000 prices per request and keeps about 364 days; for older periods
+  it sends today's prices without an error, so every page is filtered to the period asked for.
+- **A dropped connection** is opened again up to 5 times in a row (2, 4, 8… s apart); each page is
+  stored and recorded as it comes, so nothing is fetched twice.
+- **The routes are `/prices` and `/backtests`** ("history" already means the trade history).
+- **Progress** goes to the dashboard as `job.changed` WebSocket events (`kind`: `download` or
+  `backtest`); the page also polls while something runs.
+- **A follow-up is bought 1.5 s after the previous trade ended** by default (the 1 s step delay plus
+  the 0.5 s order delay), so its contract starts a second later: pairs and steps drift like they do
+  live.
 
 ---
 

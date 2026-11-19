@@ -2,6 +2,14 @@
 // handling; the `api` object below names every endpoint with its input and output types.
 import type {
   Account,
+  Backtest,
+  BacktestChains,
+  BacktestInput,
+  BacktestsOut,
+  Download,
+  DownloadInput,
+  DownloadsOut,
+  PricesOut,
   AuthState,
   AuthUser,
   AccountType,
@@ -153,6 +161,13 @@ export async function request<T>(method: string, path: string, options: Options 
   return (await response.json()) as T
 }
 
+export interface BacktestChainFilters {
+  strategy?: number
+  status?: 'completed' | 'exhausted' | 'failed'
+  limit?: number
+  offset?: number
+}
+
 interface ListFilters {
   limit?: number
   offset?: number
@@ -240,6 +255,30 @@ export const api = {
     /** Switch a broker off or on while the engine runs (decision D-81); remembered. */
     set: (broker: Broker, enabled: boolean) =>
       request<BrokersOut>('PUT', `/brokers/${broker}`, { body: { enabled } }),
+  },
+
+  prices: {
+    /** Past prices stored for backtests (decision D-84), and the download running now. */
+    list: (signal?: AbortSignal) => request<PricesOut>('GET', '/prices', { signal }),
+    downloads: (signal?: AbortSignal) =>
+      request<DownloadsOut>('GET', '/prices/downloads', { signal }),
+    download: (body: DownloadInput) => request<Download>('POST', '/prices/downloads', { body }),
+    cancel: (id: number) => request<Download>('POST', `/prices/downloads/${String(id)}/cancel`),
+    forget: (asset: string) => request<undefined>('DELETE', `/prices/${encodeURIComponent(asset)}`),
+  },
+
+  backtests: {
+    list: (signal?: AbortSignal) => request<BacktestsOut>('GET', '/backtests', { signal }),
+    get: (id: number, signal?: AbortSignal) =>
+      request<Backtest>('GET', `/backtests/${String(id)}`, { signal }),
+    start: (body: BacktestInput) => request<Backtest>('POST', '/backtests', { body }),
+    chains: (id: number, filters: BacktestChainFilters, signal?: AbortSignal) =>
+      request<BacktestChains>('GET', `/backtests/${String(id)}/chains`, {
+        query: filters,
+        signal,
+      }),
+    cancel: (id: number) => request<Backtest>('POST', `/backtests/${String(id)}/cancel`),
+    remove: (id: number) => request<undefined>('DELETE', `/backtests/${String(id)}`),
   },
 
   deriv: {

@@ -378,6 +378,43 @@ known, when Deriv marked it sold, and whether the two agree. Switch it on only i
 engine after changing it. Keep the PC's clock synchronised (Settings > Time > Sync now): the timeline is
 read against Deriv's end time.
 
+## Backtests (the Backtest page)
+
+How would a strategy have done on Deriv's real past prices? The **Backtest** page (decision D-84) answers
+it without trading anything.
+
+1. **Download prices** (*Price history*): choose an asset (`1HZ75V`, `R_75`, …) and the days, then
+   *Download*. The prices come from Deriv's public price service: no login, no token, nothing is traded.
+   - A day of a 1-second index takes about a minute (Deriv answers 1,000 prices per request).
+   - Days already stored are skipped, so downloading again is quick.
+   - *Cancel* keeps what was stored. A dropped connection is retried up to 5 times.
+   - Deriv keeps about a year of history.
+   - The same from the terminal: `npm run history:download -- --asset 1HZ75V --days 7`.
+   - The prices live in `backend/data/history.db` (about 2.5 MB per day of a 1-second index), apart from
+     the trading database. *Delete* forgets an asset's prices.
+2. **Describe the backtest** (*New backtest*): the same fields as a session (window, days of the week,
+   trade length, one pair at a time or a pair at every candle, base stake, limits per window), or *Copy
+   the setup of a session*. Then up to six strategies to compare, each with its multipliers (one per
+   step: `2, 4, 8` is three steps).
+3. **Check the assumptions:** the payout % of a win (Deriv keeps no past payouts; 88% is what `1HZ75V`
+   paid on the demo), the order delay (0.5 s) and the step delay (1 s, with the early result ON).
+4. ***Run the backtest.*** It runs in the background; the list shows its progress. A month of a
+   1-second index with five strategies takes about a minute.
+
+**Reading the result.** The comparison table puts the strategies side by side:
+- **profit**, and the **worst drawdown** (the deepest fall from a high point of the running profit: the
+  money you must be able to lose on the way);
+- the **largest stake** a step reached, and the **most money in play at once**;
+- the **chains won** (and at which step, in the chart below the table), the **chains lost** (every step
+  lost) and the **most chains lost in a row**.
+
+The chain list shows every chain, with each trade's entry and exit price.
+
+**What a backtest cannot tell you.** Network drops, missed steps, order refusals and payout changes are
+not simulated. A strategy changes how wins and losses bunch together, not the odds: on a random index
+with a payout under 100% the expected result is slightly negative. A backtest shows the risk you take,
+not a profit to expect.
+
 ## Real money
 
 Do not, until the demo account has run for a good while with the live checks in the phase reports

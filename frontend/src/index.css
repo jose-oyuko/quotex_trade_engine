@@ -807,3 +807,14 @@ summary {
   margin: 0;
   font-size: 1.1rem;
 }
+
+/* The Backtest page (decision D-84) */
+.plain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.plain-list li {
+  margin: 0.25rem 0;
+}

@@ -246,3 +246,25 @@ daily profit target, kill-switch state.
   differs, the trade is corrected, the day's figures with it, and the risk log says so
   (`early_result_corrected`). What the chain did on the early result cannot be undone. OFF by default,
   until the owner's `deriv:check --order --timeline` shows the two agree.
+- **Past prices (D-84).** Deriv's public socket (`.../options/ws/public`) answers `ticks_history` with
+  no token. It sends at most 1,000 prices per request, whatever `count` asks, and keeps about 364 days
+  (checked 2026-11-19 on `1HZ75V` and `R_75`). For a period older than that it does not refuse: it sends
+  *today's* prices, which the downloader drops because they are outside the period asked for.
+
+## 8. Backtests (D-84)
+
+A backtest replays a session-shaped setup on stored prices (`app/backtest/replay.py`):
+- **Chains:** each leg of a pair is a chain run by the engine's own `Chain` and strategy code, so the step
+  directions, stakes and the end of a chain are the live ones.
+- **Pairs:** the session rules of section 3. A pair at the window's start, then one at a time (the next
+  as soon as the last result is known, on the candle, after the pause) or one at every candle up to the
+  open-pair limit. A profit target, loss limit or maximum of pairs (per window) stops new pairs; running
+  chains finish.
+- **A trade:** Deriv's rule. The contract starts at the purchase second, which is `order_delay_s` after
+  the decision. The entry is the first price after the start; the exit is the latest price at or before
+  start + length. Rise wins strictly above the entry, Fall strictly below; equal loses. A win pays
+  `stake x payout %`.
+- **Timing:** a follow-up is decided `step_delay_s` after the previous trade ended. A result counts as
+  known 0.5 s after the end, which is when the next candle still sees the pair as open.
+- **Nothing is guessed:** a trade whose seconds were not downloaded, or that has no price, is not
+  decided. The pair is not opened (counted as "no price data"), or the chain ends there (`failed`).

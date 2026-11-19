@@ -2,7 +2,7 @@
 // replaces it, events patch it), so it never refetches by itself. Everything else is a normal query
 // that the live feed marks stale when something relevant happens.
 import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { api, type ReportFilters } from './client'
+import { api, type BacktestChainFilters, type ReportFilters } from './client'
 import type {
   AccountType,
   BreakdownKind,
@@ -230,6 +230,46 @@ export function useReportDepth(filters: ReportFilters) {
 
 /** How often the page asks "is anything wrong?". Short enough to notice a drop within moments. */
 export const HEALTH_POLL_MS = 15_000
+
+export function usePrices() {
+  return useQuery({
+    queryKey: keys.prices,
+    queryFn: ({ signal }) => api.prices.list(signal),
+    // `job.changed` events refresh it; while a download runs, poll too, in case one is missed
+    refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
+  })
+}
+
+export function usePriceDownloads() {
+  return useQuery({
+    queryKey: [...keys.prices, 'downloads'],
+    queryFn: ({ signal }) => api.prices.downloads(signal),
+  })
+}
+
+export function useBacktests() {
+  return useQuery({
+    queryKey: keys.backtests,
+    queryFn: ({ signal }) => api.backtests.list(signal),
+    refetchInterval: (query) =>
+      query.state.data?.items.some((b) => b.state === 'running') ? 3000 : false,
+  })
+}
+
+export function useBacktest(id: number) {
+  return useQuery({
+    queryKey: [...keys.backtests, id],
+    queryFn: ({ signal }) => api.backtests.get(id, signal),
+    refetchInterval: (query) => (query.state.data?.state === 'running' ? 2000 : false),
+  })
+}
+
+export function useBacktestChains(id: number, filters: BacktestChainFilters) {
+  return useQuery({
+    queryKey: [...keys.backtests, id, 'chains', filters],
+    queryFn: ({ signal }) => api.backtests.chains(id, filters, signal),
+  })
+}
 
 export function useHealth() {
   return useQuery({

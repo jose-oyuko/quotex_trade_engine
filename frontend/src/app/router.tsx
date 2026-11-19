@@ -66,6 +66,12 @@ export const routes: RouteObject[] = [
         }),
       },
       {
+        path: 'backtest',
+        lazy: async () => ({
+          Component: (await import('../features/backtest/BacktestPage')).default,
+        }),
+      },
+      {
         path: 'settings',
         lazy: async () => ({
           Component: (await import('../features/settings/SettingsPage')).default,

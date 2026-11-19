@@ -97,6 +97,22 @@ describe('LiveSocket', () => {
     expect(messages.map((m) => m.type)).toEqual(['snapshot', 'chain.advanced', 'chain.advanced'])
   })
 
+  it('passes on download and backtest progress without taking it for a gap', () => {
+    const { live, messages } = setup()
+    live.start()
+    current().open()
+    current().say(snapshot(5))
+    current().say({
+      type: 'job.changed',
+      seq: 6,
+      at: AT,
+      data: { kind: 'download', job_id: 1, state: 'running', detail: null },
+    })
+    current().say(event(7))
+    expect(messages.map((m) => m.type)).toEqual(['snapshot', 'job.changed', 'chain.advanced'])
+    expect(resyncs(current())).toBe(0)
+  })
+
   it('ignores events that arrive before the snapshot', () => {
     const { live, messages } = setup()
     live.start()
