@@ -91,10 +91,12 @@ class Executor:
         clock: Clock,
         bus: EventBus,
         result_margin_s: float = RESULT_MARGIN_S,
+        switched_off: set[Broker] | None = None,
     ) -> None:
         if not adapters:
             raise ValueError("the executor needs at least one broker")
         self._adapters = dict(adapters)
+        self._off = switched_off if switched_off is not None else set()  # shared with the engine
         self._guard = guard
         self._clock = clock
         self._bus = bus
@@ -108,6 +110,10 @@ class Executor:
     @property
     def adapters(self) -> Mapping[Broker, BrokerAdapter]:
         return self._adapters
+
+    def is_off(self, broker: Broker) -> bool:
+        """The owner switched this broker off (decision D-81)."""
+        return broker in self._off
 
     def adapter(self, broker: Broker) -> BrokerAdapter | None:
         """The broker's adapter, or None when it has no login (it was not built)."""
@@ -125,6 +131,8 @@ class Executor:
         adapter = self._adapters.get(broker)
         if adapter is None:
             return f"{broker.label} is not set up: its login is missing"
+        if broker in self._off:
+            return f"{broker.label} is switched off"
         if adapter.state is not ConnectionState.CONNECTED:
             return f"{broker.label} is not connected"
         return adapter.order_refusal(asset, duration_s)

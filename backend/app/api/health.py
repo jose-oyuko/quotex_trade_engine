@@ -79,8 +79,11 @@ async def health(request: Request) -> HealthResponse:
         else {
             broker: connections.get(broker.value)
             for broker in trading.adapters
-            # one broker alone is always shown; with two, only one that something trades on
-            if len(trading.adapters) == 1 or broker in trading.brokers_in_use()
+            # one broker alone is always shown; with two, only one that something trades on;
+            # never one the owner switched off, nor one that waits for the owner (said below)
+            if (len(trading.adapters) == 1 or broker in trading.brokers_in_use())
+            and broker not in trading.switched_off
+            and trading.login_problem(broker) is None
         },
         engine_failure=(
             state.controller.error
@@ -89,6 +92,10 @@ async def health(request: Request) -> HealthResponse:
         ),
         telegram_enabled=state.trading is None or state.trading.telegram_enabled,
     )
+    if trading is not None:
+        for broker in trading.adapters:
+            if (problem := trading.login_problem(broker)) is not None:
+                problems.append(f"{broker.label} needs you: {problem}")
     return HealthResponse(
         status="degraded" if problems else "ok",
         problems=problems,

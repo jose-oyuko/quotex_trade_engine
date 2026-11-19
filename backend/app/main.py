@@ -17,6 +17,7 @@ from app.api.hub import Hub
 from app.api.openapi import build_openapi
 from app.api.routers import (
     auth,
+    brokers,
     chains,
     control,
     deriv,
@@ -152,6 +153,7 @@ def create_app(
         flags = EngineFlags(session_factory, clock)
         stored_desired = await flags.desired()
         stored_real = await flags.allow_real()
+        brokers_off = await flags.brokers_off()
 
         async def build_engine_for(real_allowed: bool) -> Engine:
             resolved = await resolve_settings(cfg, app.state.vault, allow_real=real_allowed)
@@ -170,6 +172,7 @@ def create_app(
             clock=clock,
             desired=bool(stored_desired),  # nothing is started by surprise: only what was left on
             real_allowed=bool(stored_real),
+            brokers_off=brokers_off,
         )
         app.state.controller = controller
 
@@ -331,6 +334,7 @@ def create_app(
         engine.router,
         quotex.router,
         deriv.router,
+        brokers.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

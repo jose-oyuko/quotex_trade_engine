@@ -160,6 +160,20 @@ describe('the app shell', () => {
       expect(screen.getByText('Telegram: waiting')).toBeInTheDocument()
     })
 
+    it('say "off" for a broker the owner switched off, and "needs you" when it waits for them', async () => {
+      await renderApp(
+        '/',
+        makeSnapshot({
+          brokers: ['quotex', 'deriv'],
+          brokers_off: ['deriv'],
+          broker_problems: { quotex: 'Quotex asked for an email PIN.' },
+        }),
+      )
+      expect(screen.getByText('Deriv: off')).toBeInTheDocument()
+      const quotex = screen.getByText('Quotex: needs you')
+      expect(quotex).toHaveAttribute('title', 'Quotex asked for an email PIN.')
+    })
+
     it('say "not running" when the engine is off', async () => {
       await renderApp(
         '/',

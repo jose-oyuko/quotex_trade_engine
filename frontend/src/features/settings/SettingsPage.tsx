@@ -1,4 +1,5 @@
 import {
+  useBrokers,
   useEngine,
   useQuotexLogin,
   useSecrets,
@@ -7,6 +8,7 @@ import {
   useTelegramLogin,
 } from '../../api/queries'
 import { DataState } from '../../components/DataState'
+import { BrokersPanel } from './BrokersPanel'
 import { DerivPanel } from './DerivPanel'
 import { EnginePanel } from './EnginePanel'
 import { EnvLoginsNotice } from './EnvLoginsNotice'
@@ -22,6 +24,7 @@ export default function SettingsPage() {
   const quotex = useQuotexLogin()
   const settings = useSettings()
   const secrets = useSecrets()
+  const brokers = useBrokers()
   return (
     <section aria-labelledby="settings-heading">
       <h1 id="settings-heading">Settings</h1>
@@ -32,6 +35,7 @@ export default function SettingsPage() {
       <DataState query={engine}>
         {(info) => <EnginePanel engine={info} account={status.data?.account_type ?? 'demo'} />}
       </DataState>
+      <DataState query={brokers}>{(data) => <BrokersPanel data={data} />}</DataState>
       <DataState query={telegram}>{(data) => <TelegramPanel status={data} />}</DataState>
       <DataState query={settings}>{(data) => <SettingsForm data={data} />}</DataState>
       <DataState query={secrets}>{(data) => <SecretsPanel data={data} />}</DataState>

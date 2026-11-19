@@ -36,6 +36,15 @@ class SnapshotOut(BaseModel):
         default_factory=list,
         description="The brokers the running engine has (a login for each); empty when stopped.",
     )
+    brokers_off: list[Broker] = Field(
+        default_factory=list,
+        description="The brokers the owner switched off (decision D-81), engine running or not.",
+    )
+    broker_problems: dict[str, str] = Field(
+        default_factory=dict,
+        description="Brokers that stopped trying and wait for the owner (an e-mailed PIN, a "
+        "refused login), with the reason.",
+    )
     balance: BalanceOut | None = Field(
         description="The balance in use: Quotex's, or the only broker's. See `balances`."
     )

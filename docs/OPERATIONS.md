@@ -267,6 +267,11 @@ your passwords. Keep `backend/data/` private.
 - **Kill switch** (Live page): stops all new orders at once and ends the running chains. Remembered
   across restarts: after a crash it is still on until you release it.
 - **Pause a group**, **stop after the current trade**, **end a chain**: on the Groups and Live pages.
+- **Switch a broker off or on** (Settings page, *Brokers*; decision D-81): an off broker is not connected and
+  stops trying to log in (use it when you trade on Deriv only, so Quotex stops retrying), and the other broker,
+  Telegram and the dashboard carry on. Signals and sessions on an off broker are skipped, saying so. It is
+  remembered across restarts, and refused while that broker has open trades, running chains or a running
+  session. The top bar then shows "Quotex: off".
 - **Risk limits:** global and per group. The day for the daily limits starts at 00:00 UTC unless
   configured otherwise (D-38).
 - **Account type:** demo unless you allowed real money on the Settings page *and* switched to real there; both ask for your password again and are written to the risk log.

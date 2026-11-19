@@ -29,6 +29,7 @@ from app.brokers.errors import (
     AssetClosedError,
     BrokerConnectionError,
     BrokerError,
+    LoginRejectedError,
     NotConnectedError,
     RealAccountNotAllowedError,
     ResultTimeoutError,
@@ -106,6 +107,7 @@ class FakeBrokerAdapter:
 
         self._state = ConnectionState.DISCONNECTED
         self._connected_since: datetime | None = None
+        self._login_problem: str | None = None
         self._assets: dict[str, _Asset] = {}
         self._scripted: list[Decimal | TradeOutcome] = []
         self._order_failures: list[BrokerError] = []
@@ -202,6 +204,10 @@ class FakeBrokerAdapter:
     def connected_since(self) -> datetime | None:
         return self._connected_since
 
+    @property
+    def login_problem(self) -> str | None:
+        return self._login_problem
+
     def _set_state(self, state: ConnectionState, detail: str | None = None) -> None:
         if state is self._state:
             return
@@ -220,14 +226,17 @@ class FakeBrokerAdapter:
     async def connect(self, *, retry_forever: bool = False) -> None:
         if self._state is ConnectionState.CONNECTED:
             return
+        self._login_problem = None
         self._set_state(ConnectionState.CONNECTING)
         while True:
             self.connect_attempts += 1
             if self._connect_failures:
                 error = self._connect_failures.pop(0)
-                if retry_forever:
+                if retry_forever and not isinstance(error, LoginRejectedError):
                     await asyncio.sleep(0)
                     continue
+                if isinstance(error, LoginRejectedError):
+                    self._login_problem = str(error)
                 self._set_state(ConnectionState.DISCONNECTED, str(error))
                 raise error
             break

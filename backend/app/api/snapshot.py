@@ -88,6 +88,14 @@ class SnapshotBuilder:
                 for name, status in sorted(live.connections.items())
             },
             brokers=[] if engine is None else [b for b in Broker if b in engine.adapters],
+            brokers_off=[] if controller is None else sorted(controller.brokers_off),
+            broker_problems={}
+            if engine is None
+            else {
+                b.value: problem
+                for b in engine.adapters
+                if (problem := engine.login_problem(b)) is not None
+            },
             balance=balance_out(balance) if balance else None,
             balances=[balance_out(b) for b in live.balances_in_use()],
             controls=self.controls(),

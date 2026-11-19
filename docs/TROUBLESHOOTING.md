@@ -152,6 +152,13 @@ there for safety.
 asset is not open now (an OTC suffix may be needed), or its payout is under the group's minimum. The
 trade's error text says which. Not a fault.
 
+**Quotex keeps trying to log in although I only trade on Deriv** — switch Quotex off: Settings → *Brokers* →
+*Switch Quotex off*. It stops at once and stays off after a restart (decision D-81).
+
+**"Quotex: needs you" in the top bar** — Quotex asked for an e-mailed PIN (or refused the login), so the engine
+stopped trying instead of asking again every half minute. Log in on the Settings page (it asks for the PIN), then
+switch Quotex off and on in *Brokers* (or restart the engine).
+
 ## Deriv
 
 **Check says "Deriv refused the token (401 …)"** — the token or the app id is wrong, or the token has been

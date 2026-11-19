@@ -245,7 +245,7 @@ async def test_stopping_ends_a_login_that_is_still_retrying() -> None:
     await asyncio.sleep(0)
     await asyncio.wait_for(rig.engine.stop(), 2)
     assert retrying.stopped_trying  # its retry loop does not outlive the engine
-    assert rig.engine._connecting == []
+    assert rig.engine._connecting == {}
     await rig.tasks.shutdown()
 
 

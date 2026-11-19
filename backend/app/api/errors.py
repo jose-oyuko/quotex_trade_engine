@@ -27,6 +27,8 @@ from app.auth.service import (
 from app.core.errors import DomainError
 from app.engine.errors import (
     AccountSwitchRefusedError,
+    BrokerOffError,
+    BrokerSwitchRefusedError,
     EngineBusyError,
     EngineStartError,
     NoActiveRunError,
@@ -105,6 +107,8 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     NoActiveRunError: (409, "no_active_run"),
     SessionNotLoadedError: (409, "session_not_loaded"),
     UnknownChainError: (404, "chain_not_running"),
+    BrokerSwitchRefusedError: (409, "broker_switch_refused"),
+    BrokerOffError: (409, "broker_off"),
     AccountSwitchRefusedError: (409, "account_switch_refused"),
     EngineBusyError: (409, "engine_busy"),
     EngineStartError: (409, "engine_start_failed"),

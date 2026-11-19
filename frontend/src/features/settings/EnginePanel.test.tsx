@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EngineInfo, Snapshot } from '../../api/types'
-import { makeSnapshot } from '../../test/fixtures'
+import { makeSnapshot, makeBrokers } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
 import { quotexStatus } from './quotexFixtures'
@@ -24,6 +24,7 @@ function setup(
   account: Snapshot['account_type'] = 'demo',
 ) {
   const api = mockApi([
+    ['GET', '/brokers', json(makeBrokers())],
     ['GET', '/engine', () => json(engine())],
     ['GET', '/status', json(makeSnapshot({ account_type: account }))],
     ['GET', '/settings', json(SETTINGS)],

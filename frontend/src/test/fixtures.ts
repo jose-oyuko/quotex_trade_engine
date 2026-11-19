@@ -1,5 +1,6 @@
 // Builders for the shapes the API returns, with sensible defaults: override only what a test cares about.
 import type {
+  BrokersOut,
   Chain,
   Group,
   Page,
@@ -321,5 +322,15 @@ export function makeSessionRun(overrides: Partial<SessionRun> = {}): SessionRun 
     end_reason: null,
     note: null,
     ...overrides,
+  }
+}
+
+/** Both brokers switched on and connected (`GET /brokers`, decision D-81). */
+export function makeBrokers(): BrokersOut {
+  return {
+    items: [
+      { broker: 'quotex', enabled: true, state: 'connected', detail: null },
+      { broker: 'deriv', enabled: true, state: 'connected', detail: null },
+    ],
   }
 }

@@ -40,6 +40,7 @@ export const keys = {
   envLogins: ['settings', 'env-logins'] as const,
   secrets: ['secrets'] as const,
   derivAssets: ['deriv', 'assets'] as const,
+  brokers: ['brokers'] as const,
 }
 
 export function useStatus() {
@@ -95,6 +96,10 @@ export function useDerivAssets(enabled = true) {
     enabled,
     staleTime: 60_000,
   })
+}
+
+export function useBrokers() {
+  return useQuery({ queryKey: keys.brokers, queryFn: ({ signal }) => api.brokers.list(signal) })
 }
 
 export function useRisk() {

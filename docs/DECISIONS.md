@@ -813,7 +813,7 @@ s while stalled). Ctrl+C asks for a normal stop; if the loop has not stopped 15 
 anyway, and the next start settles what was in flight (D-78). It never restarts the engine by itself: the
 owner, or a service manager on the VPS, does that.
 
-**D-81. A switch per broker (Phase 23, proposed).** Each broker can be switched off and on from the dashboard
+**D-81. A switch per broker (Phase 23).** Each broker can be switched off and on from the dashboard
 while the engine runs; the choice is stored. Off closes its connection and stops its login attempts; on
 connects at once; nothing else is touched. Switching off is refused while that broker has open trades, active
 chains or a running session. Signals and sessions on an off broker are skipped with that reason. A login
@@ -850,6 +850,17 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **The watchdog** checks every second and reports after 10 s without a turn; Ctrl+C (SIGINT, and SIGBREAK
   and SIGTERM where they exist) also starts its 15 s exit clock. The brokers now close at the same time
   when the engine stops, so a normal stop takes at most 10 s.
+
+**D-81 settled in Phase 23.**
+- **Where the switch is.** On the Settings page (*Brokers*), with each broker's state in words; the top-bar badge
+  shows "off" or "needs you" (the reason as its tooltip) but has no menu of its own.
+- **Stored** as `broker.<name>.enabled` next to the engine's other remembered choices (D-63). It can be set with
+  the engine stopped; a started engine never connects an off broker.
+- **"Needs you"** is a login error the adapter marks as one more attempts cannot fix (`LoginRejectedError`):
+  Quotex's e-mailed PIN, Deriv's refused token. Switching the broker off and on (or restarting the engine)
+  tries again. Network and Cloudflare errors keep the backoff, as before.
+- **A session on an off broker:** *Start now* is refused (409 `broker_off`); a scheduled run starts and every
+  round is skipped with "Deriv is switched off", so the run's history says why nothing traded.
 
 ---
 

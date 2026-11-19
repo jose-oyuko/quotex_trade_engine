@@ -122,6 +122,12 @@ class BrokerAdapter(Protocol):
         connection was down: that step was missed (decision D-79)."""
         ...
 
+    @property
+    def login_problem(self) -> str | None:
+        """Why the adapter stopped trying to connect and waits for the owner (a refused login, an
+        e-mailed PIN), or None. Cleared by the next `connect` (decision D-81)."""
+        ...
+
     async def connect(self, *, retry_forever: bool = False) -> None:
         """Log in and open the connection. Raises `BrokerConnectionError` if it fails, unless
         `retry_forever` is set, in which case it keeps trying with backoff until it works or

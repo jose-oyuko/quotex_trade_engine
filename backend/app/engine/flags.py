@@ -6,9 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import Clock
 from app.db.repositories import AppSettingsRepository
+from app.domain.enums import Broker
 
 KEY_DESIRED = "engine.desired"  # True: start the engine when the application starts
 KEY_ALLOW_REAL = "engine.allow_real"  # True: switching to the REAL account is permitted
+
+
+def broker_key(broker: Broker) -> str:
+    """False: the owner switched this broker off (decision D-81); missing or True: on."""
+    return f"broker.{broker.value}.enabled"
 
 
 class EngineFlags:
@@ -37,3 +43,10 @@ class EngineFlags:
 
     async def set_allow_real(self, value: bool) -> None:
         await self._set(KEY_ALLOW_REAL, value)
+
+    async def brokers_off(self) -> set[Broker]:
+        """The brokers the owner switched off."""
+        return {broker for broker in Broker if await self._get(broker_key(broker)) is False}
+
+    async def set_broker_enabled(self, broker: Broker, enabled: bool) -> None:
+        await self._set(broker_key(broker), enabled)

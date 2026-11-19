@@ -6,7 +6,9 @@ fake Telegram source and fake adapters; the application builds it with the real 
 Telegram source (none is logged in) the engine runs with signals off: trading sessions still work.
 
 There is one adapter per broker that has a login, Quotex and Deriv side by side (decision D-75).
-They share one demo/real switch and one real-money permission.
+They share one demo/real switch and one real-money permission. The owner can switch either broker
+off and on while the engine runs (decision D-81): an off broker is not connected, and what would
+trade on it is skipped with that reason.
 """
 
 from __future__ import annotations
@@ -28,7 +30,11 @@ from app.db.recovery import RecoveryState
 from app.domain.enums import AccountType, Broker, GroupSource
 from app.domain.ids import new_id
 from app.domain.records import GroupRecord, GroupSettingsRecord, RiskEventRecord, SessionRecord
-from app.engine.errors import AccountSwitchRefusedError, TelegramNotConnectedError
+from app.engine.errors import (
+    AccountSwitchRefusedError,
+    BrokerSwitchRefusedError,
+    TelegramNotConnectedError,
+)
 from app.engine.executor import RESULT_MARGIN_S, Executor
 from app.engine.manager import ChainManager, RecoverySummary
 from app.engine.risk import RiskGuard, RiskLimits
@@ -80,7 +86,8 @@ class Engine:
         if not brokers:
             raise ValueError("the engine needs at least one broker")
         self.adapters: Mapping[Broker, BrokerAdapter] = brokers
-        self._connecting: list[asyncio.Task[None]] = []
+        self._connecting: dict[Broker, asyncio.Task[None]] = {}
+        self._off: set[Broker] = set()  # switched off by the owner (decision D-81)
         self._enabled_groups: set[int] = set()  # Telegram groups that are switched on
         self._source = source
         self._tasks = tasks
@@ -88,7 +95,12 @@ class Engine:
         self._clock = clock
         self.guard = RiskGuard(clock=clock, bus=bus, limits=risk_limits)
         self.executor = Executor(
-            brokers, guard=self.guard, clock=clock, bus=bus, result_margin_s=result_margin_s
+            brokers,
+            guard=self.guard,
+            clock=clock,
+            bus=bus,
+            result_margin_s=result_margin_s,
+            switched_off=self._off,
         )
         self.manager = ChainManager(
             executor=self.executor, guard=self.guard, bus=bus, clock=clock, tasks=tasks
@@ -131,10 +143,84 @@ class Engine:
         return self.executor.account_type
 
     def brokers_in_use(self) -> set[Broker]:
-        """The brokers an enabled group or session trades on (for the "not connected" banner)."""
+        """The brokers an enabled group or session trades on (for the "not connected" banner);
+        a broker the owner switched off is not in use."""
         used = {self.manager.group_broker(g) for g in self._enabled_groups}
         used |= {c.session.broker for c in self.scheduler.sessions() if c.session.enabled}
-        return used
+        return used - self._off
+
+    # --- switching a broker off and on (decision D-81) ---
+
+    @property
+    def switched_off(self) -> frozenset[Broker]:
+        return frozenset(self._off)
+
+    def set_switched_off(self, brokers: set[Broker]) -> None:
+        """The stored choice, given before `start`: these brokers are not connected."""
+        self._off.clear()
+        self._off.update(brokers)
+
+    def login_problem(self, broker: Broker) -> str | None:
+        """Why the broker stopped trying and waits for the owner, if it did."""
+        adapter = self.adapters.get(broker)
+        return None if adapter is None or broker in self._off else adapter.login_problem
+
+    async def set_broker_enabled(self, broker: Broker, enabled: bool) -> None:
+        """Switch one broker off (its connection closes, its login attempts stop) or on (it
+        connects at once); nothing else is touched. Switching off is refused while something
+        trades on it."""
+        adapter = self.adapters.get(broker)
+        if enabled:
+            if adapter is None:
+                raise BrokerSwitchRefusedError(
+                    f"{broker.label} cannot be switched on: its login is not stored. Store it on "
+                    "the Settings page, then restart the engine."
+                )
+            self._off.discard(broker)
+            task = self._connecting.get(broker)
+            if task is None or task.done():  # not already connecting (or connected and watched)
+                self._start_connecting(broker, adapter)
+            log.info("broker_switched_on", broker=broker.value)
+            return
+        if broker in self._off:
+            return
+        if (reason := self._in_use(broker)) is not None:
+            raise BrokerSwitchRefusedError(
+                f"{broker.label} cannot be switched off while {reason}: wait for them to finish, "
+                "or stop them first."
+            )
+        self._off.add(broker)
+        task = self._connecting.pop(broker, None)
+        if task is not None:
+            task.cancel()
+        if adapter is not None:
+            await self._disconnect(broker, adapter)
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
+        log.info("broker_switched_off", broker=broker.value)
+
+    def _in_use(self, broker: Broker) -> str | None:
+        trades = self.guard.open_trades_of(broker)
+        if trades:
+            return f"{trades} trade(s) are open on it"
+        chains = [c for c in self.manager.active_chains() if c.spec.broker is broker]
+        if chains:
+            return f"{len(chains)} chain(s) are running on it"
+        if self.scheduler.active_broker is broker:
+            return "a trading session is running on it"
+        return None
+
+    def _start_connecting(self, broker: Broker, adapter: BrokerAdapter) -> None:
+        self._connecting[broker] = self._tasks.spawn(
+            self._connect(broker, adapter), name=f"{broker}-connect"
+        )
+
+    @staticmethod
+    async def _connect(broker: Broker, adapter: BrokerAdapter) -> None:
+        try:
+            await adapter.connect(retry_forever=True)
+        except BrokerError as exc:  # a login only the owner can fix: the adapter says why
+            log.warning("broker_needs_owner", broker=broker.value, error=str(exc)[:300])
 
     @property
     def telegram_enabled(self) -> bool:
@@ -276,9 +362,10 @@ class Engine:
         # Connecting may take long (retries with backoff): it must not hold up start-up, and
         # signals that come before it succeeds are skipped ("... is not connected").
         for broker, adapter in self.adapters.items():
-            self._connecting.append(
-                self._tasks.spawn(adapter.connect(retry_forever=True), name=f"{broker}-connect")
-            )
+            if broker in self._off:
+                log.info("broker_off", broker=broker.value)
+                continue
+            self._start_connecting(broker, adapter)
         if self.listener is not None:
             self.listener.start()
         self.scheduler.start()
@@ -294,7 +381,7 @@ class Engine:
         await self.manager.stop()
         # A broker still trying to log in is told to stop first (otherwise its retry loop would
         # outlive the engine), then each one closes, with a time limit: Ctrl+C must never hang.
-        for task in self._connecting:
+        for task in self._connecting.values():
             task.cancel()
         # All brokers close at the same time, so stopping takes at most one time limit (the stall
         # watchdog ends the process if a stop takes much longer, decision D-80).
@@ -302,7 +389,7 @@ class Engine:
             *(self._disconnect(broker, adapter) for broker, adapter in self.adapters.items())
         )
         if self._connecting:
-            await asyncio.gather(*self._connecting, return_exceptions=True)
+            await asyncio.gather(*self._connecting.values(), return_exceptions=True)
             self._connecting.clear()
 
     @staticmethod

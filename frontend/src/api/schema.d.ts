@@ -142,6 +142,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brokers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Brokers
+         * @description Each broker: switched on or off, and where its connection is.
+         */
+        get: operations["list_brokers_api_v1_brokers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brokers/{broker}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Broker
+         * @description Switch a broker off (its connection closes and its login attempts stop) or on (it connects
+         *     at once). Remembered across restarts. Switching off is refused (409 `broker_switch_refused`)
+         *     while it has open trades, running chains or a running session.
+         */
+        put: operations["set_broker_api_v1_brokers__broker__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chains": {
         parameters: {
             query?: never;
@@ -1368,6 +1410,32 @@ export interface components {
          * @enum {string}
          */
         Broker: "quotex" | "deriv";
+        /** BrokerOut */
+        BrokerOut: {
+            broker: components["schemas"]["Broker"];
+            /** Detail */
+            detail?: string | null;
+            /**
+             * Enabled
+             * @description False: the owner switched it off (remembered).
+             */
+            enabled: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "off" | "needs_you" | "connected" | "connecting" | "reconnecting" | "disconnected" | "no_login" | "engine_stopped";
+        };
+        /** BrokerSwitchIn */
+        BrokerSwitchIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** BrokersOut */
+        BrokersOut: {
+            /** Items */
+            items: components["schemas"]["BrokerOut"][];
+        };
         /** ChainAdvancedMessage */
         ChainAdvancedMessage: {
             /**
@@ -2958,10 +3026,22 @@ export interface components {
              */
             balances?: components["schemas"]["BalanceOut"][];
             /**
+             * Broker Problems
+             * @description Brokers that stopped trying and wait for the owner (an e-mailed PIN, a refused login), with the reason.
+             */
+            broker_problems?: {
+                [key: string]: string;
+            };
+            /**
              * Brokers
              * @description The brokers the running engine has (a login for each); empty when stopped.
              */
             brokers?: components["schemas"]["Broker"][];
+            /**
+             * Brokers Off
+             * @description The brokers the owner switched off (decision D-81), engine running or not.
+             */
+            brokers_off?: components["schemas"]["Broker"][];
             /** Connections */
             connections: {
                 [key: string]: components["schemas"]["ConnectionOut"];
@@ -3710,6 +3790,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStateOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_brokers_api_v1_brokers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokersOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_broker_api_v1_brokers__broker__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                broker: components["schemas"]["Broker"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrokerSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokersOut"];
                 };
             };
             /** @description Not Found */

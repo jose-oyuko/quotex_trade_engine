@@ -46,3 +46,12 @@ class NoActiveRunError(ControlError):
 class SessionNotLoadedError(ControlError):
     """The running engine does not know the session (it was saved a moment ago, or the engine is
     starting)."""
+
+
+class BrokerSwitchRefusedError(ControlError):
+    """A broker cannot be switched off while something trades on it (open trades, running chains,
+    a running session), or switched on without its login (decision D-81)."""
+
+
+class BrokerOffError(ControlError):
+    """Something was asked of a broker the owner switched off (decision D-81)."""

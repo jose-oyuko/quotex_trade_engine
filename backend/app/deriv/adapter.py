@@ -138,6 +138,7 @@ class DerivAdapter:
         self._conn: DerivConnection | None = None
         self._connected_as: AccountType | None = None
         self._connected_since: datetime | None = None
+        self._login_problem: str | None = None
         self._wanted = False
         self._monitor: asyncio.Task[None] | None = None
         self._currency = ""
@@ -163,6 +164,10 @@ class DerivAdapter:
     @property
     def connected_since(self) -> datetime | None:
         return self._connected_since
+
+    @property
+    def login_problem(self) -> str | None:
+        return self._login_problem
 
     @property
     def currency(self) -> str:
@@ -195,6 +200,7 @@ class DerivAdapter:
         if self._monitor is not None:
             return
         self._wanted = True
+        self._login_problem = None
         self._set_state(ConnectionState.CONNECTING)
         attempt = 0
         while True:
@@ -204,6 +210,8 @@ class DerivAdapter:
             except BrokerConnectionError as exc:
                 if not retry_forever or not self._wanted or isinstance(exc, LoginRejectedError):
                     self._wanted = False
+                    if isinstance(exc, LoginRejectedError):
+                        self._login_problem = str(exc)
                     self._set_state(ConnectionState.DISCONNECTED, str(exc))
                     raise
                 delay = backoff_delay(attempt, self._backoff, self._rng)
@@ -377,6 +385,7 @@ class DerivAdapter:
                 return
             except LoginRejectedError as exc:
                 self._wanted = False  # a refused login does not get better by trying again
+                self._login_problem = str(exc)
                 self._set_state(ConnectionState.DISCONNECTED, str(exc))
                 log.error("deriv_login_rejected", error=str(exc))
                 return

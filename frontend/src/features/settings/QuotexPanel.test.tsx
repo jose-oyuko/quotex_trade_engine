@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { QuotexLoginStatus } from '../../api/types'
-import { makeSnapshot } from '../../test/fixtures'
+import { makeSnapshot, makeBrokers } from '../../test/fixtures'
 import { apiError, json, mockApi } from '../../test/utils'
 import { engineInfo } from './engineFixtures'
 import { quotexStatus } from './quotexFixtures'
@@ -22,6 +22,7 @@ function setup(login: () => QuotexLoginStatus, extra: Parameters<typeof mockApi>
     ['GET', '/quotex/login', () => json(login())],
     ['GET', '/settings/env-logins', json({ items: [] })],
     ['GET', '/telegram/login', json(telegramStatus())],
+    ['GET', '/brokers', json(makeBrokers())],
     ['GET', '/engine', json(engineInfo())],
     ['GET', '/status', json(makeSnapshot())],
     ['GET', '/settings', json(SETTINGS)],

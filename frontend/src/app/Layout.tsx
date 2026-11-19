@@ -22,10 +22,17 @@ const NAV = [
 ]
 
 function Connection({ name, status }: { name: string; status: Snapshot }) {
-  const connection = status.connections[name.toLowerCase()]
+  const key = name.toLowerCase()
+  const connection = status.connections[key]
+  const problem = status.broker_problems?.[key]
   let tone: Tone = 'muted'
   let text = 'not running'
-  if (status.engine.running) {
+  if ((status.brokers_off ?? []).some((broker) => broker === key)) {
+    text = 'off' // switched off by the owner (decision D-81)
+  } else if (problem !== undefined) {
+    tone = 'bad'
+    text = 'needs you'
+  } else if (status.engine.running) {
     if (connection === undefined) {
       tone = 'warn'
       text = 'waiting'
@@ -38,7 +45,7 @@ function Connection({ name, status }: { name: string; status: Snapshot }) {
     }
   }
   return (
-    <Badge tone={tone} title={connection?.detail ?? undefined}>
+    <Badge tone={tone} title={problem ?? connection?.detail ?? undefined}>
       {name}: {text}
     </Badge>
   )

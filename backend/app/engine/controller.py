@@ -26,7 +26,7 @@ import structlog
 from app.core.clock import Clock
 from app.core.errors import DomainError
 from app.db.recovery import RecoveryState
-from app.domain.enums import AccountType
+from app.domain.enums import AccountType, Broker
 from app.domain.ids import new_id
 from app.domain.records import RiskEventRecord
 from app.engine.engine import Engine
@@ -68,6 +68,7 @@ class EngineController:
         clock: Clock,
         desired: bool,
         real_allowed: bool,
+        brokers_off: set[Broker] | None = None,
     ) -> None:
         self._build = build
         self._recovery = recovery
@@ -78,6 +79,7 @@ class EngineController:
         self._clock = clock
         self._desired = desired
         self._real_allowed = real_allowed
+        self._brokers_off: set[Broker] = set(brokers_off or ())
         self._engine: Engine | None = None
         self._state = EngineState.STOPPED
         self._error: str | None = None
@@ -110,6 +112,11 @@ class EngineController:
     @property
     def engine(self) -> Engine | None:
         return self._engine
+
+    @property
+    def brokers_off(self) -> frozenset[Broker]:
+        """The brokers the owner switched off (decision D-81), engine running or not."""
+        return frozenset(self._brokers_off)
 
     def _enter(self, state: EngineState, error: str | None = None) -> None:
         self._state = state
@@ -168,6 +175,7 @@ class EngineController:
         engine: Engine | None = None
         try:
             engine = await self._build(self._real_allowed)
+            engine.set_switched_off(set(self._brokers_off))
             await self._flush()  # the database must be up to date before it is read
             summary = await engine.start(await self._recovery())
         except Exception as exc:
@@ -210,6 +218,20 @@ class EngineController:
             self._desired = False
             await self._flags.set_desired(False)
         self._enter(EngineState.STOPPED, error)
+
+    # --- a switch per broker (decision D-81) ---
+
+    async def set_broker_enabled(self, broker: Broker, enabled: bool) -> None:
+        """Switch a broker off or on. With the engine running it takes effect at once (and may be
+        refused: see `Engine.set_broker_enabled`); either way it is remembered."""
+        engine = self._engine
+        if engine is not None:
+            await engine.set_broker_enabled(broker, enabled)
+        await self._flags.set_broker_enabled(broker, enabled)
+        if enabled:
+            self._brokers_off.discard(broker)
+        else:
+            self._brokers_off.add(broker)
 
     # --- real money ---
 

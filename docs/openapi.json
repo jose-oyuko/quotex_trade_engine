@@ -259,6 +259,79 @@
         "title": "Broker",
         "type": "string"
       },
+      "BrokerOut": {
+        "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/Broker"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "enabled": {
+            "description": "False: the owner switched it off (remembered).",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "off",
+              "needs_you",
+              "connected",
+              "connecting",
+              "reconnecting",
+              "disconnected",
+              "no_login",
+              "engine_stopped"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "broker",
+          "enabled",
+          "state"
+        ],
+        "title": "BrokerOut",
+        "type": "object"
+      },
+      "BrokerSwitchIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "BrokerSwitchIn",
+        "type": "object"
+      },
+      "BrokersOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BrokersOut",
+        "type": "object"
+      },
       "ChainAdvancedMessage": {
         "properties": {
           "at": {
@@ -4265,12 +4338,28 @@
             "title": "Balances",
             "type": "array"
           },
+          "broker_problems": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Brokers that stopped trying and wait for the owner (an e-mailed PIN, a refused login), with the reason.",
+            "title": "Broker Problems",
+            "type": "object"
+          },
           "brokers": {
             "description": "The brokers the running engine has (a login for each); empty when stopped.",
             "items": {
               "$ref": "#/components/schemas/Broker"
             },
             "title": "Brokers",
+            "type": "array"
+          },
+          "brokers_off": {
+            "description": "The brokers the owner switched off (decision D-81), engine running or not.",
+            "items": {
+              "$ref": "#/components/schemas/Broker"
+            },
+            "title": "Brokers Off",
             "type": "array"
           },
           "connections": {
@@ -5491,6 +5580,190 @@
         "summary": "Get State",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/brokers": {
+      "get": {
+        "description": "Each broker: switched on or off, and where its connection is.",
+        "operationId": "list_brokers_api_v1_brokers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokersOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Brokers",
+        "tags": [
+          "brokers"
+        ]
+      }
+    },
+    "/api/v1/brokers/{broker}": {
+      "put": {
+        "description": "Switch a broker off (its connection closes and its login attempts stop) or on (it connects\nat once). Remembered across restarts. Switching off is refused (409 `broker_switch_refused`)\nwhile it has open trades, running chains or a running session.",
+        "operationId": "set_broker_api_v1_brokers__broker__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "broker",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Broker"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrokerSwitchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrokersOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Set Broker",
+        "tags": [
+          "brokers"
         ]
       }
     },

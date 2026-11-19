@@ -11,6 +11,7 @@ import type {
   ChainDetail,
   ChainStatus,
   Controls,
+  BrokersOut,
   DerivAccount,
   DerivAssets,
   EngineInfo,
@@ -232,6 +233,13 @@ export const api = {
       cancel: () => request<QuotexLoginStatus>('POST', '/quotex/login/cancel'),
     },
     logout: () => request<QuotexLoginStatus>('POST', '/quotex/logout'),
+  },
+
+  brokers: {
+    list: (signal?: AbortSignal) => request<BrokersOut>('GET', '/brokers', { signal }),
+    /** Switch a broker off or on while the engine runs (decision D-81); remembered. */
+    set: (broker: Broker, enabled: boolean) =>
+      request<BrokersOut>('PUT', `/brokers/${broker}`, { body: { enabled } }),
   },
 
   deriv: {

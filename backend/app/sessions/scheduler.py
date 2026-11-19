@@ -35,6 +35,7 @@ from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.domain.enums import (
     RESULT_TRADE_STATUSES,
+    Broker,
     ChainStatus,
     Direction,
     RunEndReason,
@@ -49,7 +50,12 @@ from app.domain.records import (
     SessionRunRecord,
     SignalRecord,
 )
-from app.engine.errors import NoActiveRunError, SessionNotLoadedError, SessionRunActiveError
+from app.engine.errors import (
+    BrokerOffError,
+    NoActiveRunError,
+    SessionNotLoadedError,
+    SessionRunActiveError,
+)
 from app.engine.executor import Executor
 from app.engine.manager import ChainManager
 from app.engine.risk import KEY_KILL_SWITCH, RiskGuard
@@ -155,6 +161,11 @@ class SessionScheduler:
     @property
     def active_run(self) -> SessionRunRecord | None:
         return self._run.record if self._run is not None else None
+
+    @property
+    def active_broker(self) -> Broker | None:
+        """The broker of the run in progress, if one is."""
+        return self._run.cfg.session.broker if self._run is not None else None
 
     def active_run_of(self, session_id: int) -> SessionRunRecord | None:
         run = self._run
@@ -312,6 +323,11 @@ class SessionScheduler:
             raise SessionRunActiveError(
                 f"A session is already running (run of session {self._run.record.session_id}): "
                 "only one session runs at a time. Stop it first."
+            )
+        broker = config.session.broker
+        if self._executor.is_off(broker):
+            raise BrokerOffError(
+                f"{broker.label} is switched off: switch it on in Settings to run this session."
             )
         now = self._clock.now()
         length = window_length(config.session.start_time, config.session.end_time)
@@ -544,6 +560,8 @@ class SessionScheduler:
         adapter = self._executor.adapter(broker)
         if adapter is None:
             return f"{broker.label} is not set up: its login is missing"
+        if self._executor.is_off(broker):
+            return f"{broker.label} is switched off"
         if adapter.state is not ConnectionState.CONNECTED:
             return f"{broker.label} is not connected"
         if (refused := adapter.order_refusal(session.asset, session.duration_s)) is not None:

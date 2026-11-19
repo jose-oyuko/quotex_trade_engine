@@ -41,6 +41,7 @@ from pyquotex.qxtypes import ReconnectPolicy
 from pyquotex.stable_api import Quotex
 from pyquotex.utils.account_type import AccountType as QxAccountType
 
+from app.brokers.errors import LoginRejectedError
 from app.domain.enums import Direction
 from app.quotex.errors import (
     AssetClosedError,
@@ -61,7 +62,7 @@ STALE_SESSION_MARKER = "rejected"  # substring of the library's "Websocket conne
 async def refuse_pin(prompt: str) -> str:
     """Default for unattended use: `input()` would freeze the whole application, so a login that
     needs an email PIN fails with an explanation instead."""
-    raise QuotexConnectionError(
+    raise LoginRejectedError(  # more attempts cannot fix it: the owner must act (D-81)
         "Quotex asked for an email PIN. Log in to Quotex on the Settings page (it asks for the PIN "
         "there), then start the engine again."
     )

@@ -23,6 +23,7 @@ from decimal import Decimal
 import structlog
 
 from app.brokers.base import AssetOffer
+from app.brokers.errors import LoginRejectedError
 from app.core.backoff import BackoffPolicy, backoff_delay
 from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
@@ -94,6 +95,7 @@ class PyQuotexAdapter:
         self._state = ConnectionState.DISCONNECTED
         self._client: QuotexClient | None = None
         self._connected_since: datetime | None = None
+        self._login_problem: str | None = None
         self._wanted = False
         self._monitor: asyncio.Task[None] | None = None
         self._order_lock = asyncio.Lock()
@@ -113,6 +115,10 @@ class PyQuotexAdapter:
     @property
     def connected_since(self) -> datetime | None:
         return self._connected_since
+
+    @property
+    def login_problem(self) -> str | None:
+        return self._login_problem
 
     def _set_state(self, state: ConnectionState, detail: str | None = None) -> None:
         if state is self._state and detail is None:
@@ -136,6 +142,7 @@ class PyQuotexAdapter:
         if self._monitor is not None:
             return
         self._wanted = True
+        self._login_problem = None
         self._set_state(ConnectionState.CONNECTING)
         attempt = 0
         while True:
@@ -143,8 +150,12 @@ class PyQuotexAdapter:
                 await self._establish()
                 break
             except QuotexConnectionError as exc:
-                if not retry_forever or not self._wanted:
+                refused = isinstance(exc, LoginRejectedError)
+                if not retry_forever or not self._wanted or refused:
+                    # a login only the owner can fix (an e-mailed PIN) is not retried (D-81)
                     self._wanted = False
+                    if refused:
+                        self._login_problem = str(exc)
                     self._set_state(ConnectionState.DISCONNECTED, str(exc))
                     raise
                 delay = backoff_delay(attempt, self._backoff, self._rng)
@@ -208,6 +219,12 @@ class PyQuotexAdapter:
         while self._wanted:
             try:
                 await self._establish()
+                return
+            except LoginRejectedError as exc:
+                self._wanted = False  # more attempts cannot fix it: the owner must act (D-81)
+                self._login_problem = str(exc)
+                self._set_state(ConnectionState.DISCONNECTED, str(exc))
+                log.error("quotex_login_needs_owner", error=str(exc))
                 return
             except QuotexConnectionError as exc:
                 delay = backoff_delay(attempt, self._backoff, self._rng)
