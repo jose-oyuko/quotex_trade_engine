@@ -33,7 +33,7 @@ agent to start the next phase.
 | 25 | The growing flip strategy | Done — committed; live check pending |
 | 26 | Price history: download and store (backend) | Done — committed (`0ea8bd2`); checked live on Deriv's public price service |
 | 27 | The backtest engine and its API (backend) | Done — committed (`c41cd66`); run on the owner's real downloaded prices |
-| 28 | The Backtest page (dashboard) | Done — committed; the owner's look in a browser pending |
+| 28 | The Backtest page (dashboard) | Done — committed (`7840d3d`); the owner's look in a browser pending |
 
 States: `Not started` → `In progress` → `Done — awaiting owner approval` → `Approved`.
 
