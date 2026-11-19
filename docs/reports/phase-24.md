@@ -159,11 +159,6 @@ The engine knew each result the moment the tick of the end second arrived, a med
 Deriv's "sold" update, and all three agreed with Deriv (no correction). Connected in 3.8 s, no failure.
 **Verdict: the early result can be switched ON.**
 
-~~Still to do:~~ (done above) one complete 3-trade timeline with the fixed code
-(`npm run deriv:check -- --asset 1HZ75V --order --timeline`), on a steady connection (laptop plugged in, or a
-cable). If all three show "result used by the engine" about 2 s before "sold" and "agrees", switch *Deriv early
-result* ON. It stays OFF until then.
-
 ## 8. Measurements
 
 See section 4. The early result's own effect can only be measured on your demo (section 7).
