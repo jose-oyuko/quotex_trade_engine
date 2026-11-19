@@ -62,6 +62,7 @@ def build_deriv_adapter(
         account_type=account_type,
         allow_real=settings.quotex_allow_real,
         real_available=bool(real_token),
+        early_result=settings.deriv_early_result == "ON",
     )
 
 

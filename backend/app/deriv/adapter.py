@@ -9,6 +9,11 @@ official API.
   refreshed every 30 s: Deriv does not stream Rise/Fall quotes on every index).
 - **Orders** are not serialised (unlike D-27 on Quotex): each `buy` waits for its own reply. No
   reply in time means the order *may* exist (`OrderAckTimeoutError`), never a retry.
+- **The early result** (decision D-82, off unless the owner switches it on): the asset's price ticks
+  are followed, and a contract's result is decided as soon as its exit price is certain (the latest
+  tick at or before its end time, once a tick at or after it has come), instead of waiting the few
+  seconds until Deriv marks it sold. Deriv's own result is still followed; if it differs, the
+  correction handler is told, so the trade is corrected and flagged.
 - **Results** come from a `proposal_open_contract` subscription; after a reconnect it is made
   again, so a contract that ended while the socket was down is still reported. A wait for a result
   never retries on a socket it already saw closed: it waits for the next connection (decision D-78;
@@ -20,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import random
+from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime
 from decimal import Decimal
@@ -54,13 +60,16 @@ from app.core.clock import Clock
 from app.core.tasks import TaskSupervisor
 from app.deriv.connection import ConnectionLostError, DerivConnection, Message
 from app.deriv.protocol import (
+    ContractTerms,
     DerivAsset,
     LengthRange,
     allows,
     deriv_symbol,
     describe_lengths,
     duration_params,
+    early_profit,
     error_of,
+    exit_quote,
     human_length,
     is_rise_fall,
     login_kind,
@@ -68,6 +77,7 @@ from app.deriv.protocol import (
     payout_percent,
     rise_fall_lengths,
     settled_profit,
+    tick_of,
     to_money,
 )
 from app.domain.enums import AccountType, Broker, Direction
@@ -86,6 +96,8 @@ REFERENCE_STAKE = Decimal("10.00")
 # How long a wait for a result pauses before it looks at the connection again, when the one it had
 # answered nothing in time (the same socket is then tried again).
 RESULT_RETRY_PAUSE_S = 0.5
+TICKS_KEPT = 300  # price ticks remembered per asset (five minutes of a one-second index)
+VERIFY_TIMEOUT_S = 180.0  # how long Deriv's own result is waited for after an early result
 _CONTRACT = {Direction.CALL: "CALL", Direction.PUT: "PUT"}
 
 
@@ -111,6 +123,7 @@ class DerivAdapter:
         assets_refresh_s: float = 300.0,
         preload_lengths: bool = True,
         lengths_per_tick: int = 5,
+        early_result: bool = False,
     ) -> None:
         if account_type is AccountType.REAL and not allow_real:
             raise RealAccountNotAllowedError("real trading is not enabled")
@@ -132,6 +145,13 @@ class DerivAdapter:
         self._assets_refresh_s = assets_refresh_s
         self._preload_lengths = preload_lengths
         self._lengths_per_tick = lengths_per_tick
+        self._early = early_result
+        self._ticks: dict[str, deque[tuple[int, Decimal]]] = {}
+        self._tick_listeners: dict[str, set[Callable[[], None]]] = {}
+        self._tick_streams: set[str] = set()  # symbols whose ticks are followed, this connection
+        self._symbol_of: dict[int, str] = {}  # contract id -> symbol, for contracts bought here
+        self._correction: Callable[[TradeResult], None] | None = None
+        self._observer: Callable[[str, Any], None] | None = None  # the check script's timeline
 
         self._state = ConnectionState.DISCONNECTED
         self._up = asyncio.Event()
@@ -273,6 +293,8 @@ class DerivAdapter:
         self._payouts.clear()
         self._lengths.clear()
         self._lengths_tried.clear()
+        self._tick_streams.clear()
+        self._ticks.clear()
         self._last_ping = self._last_quotes = self._last_assets = self._seconds()
         self._connected_since = self._clock.now()
         self._set_state(ConnectionState.CONNECTED)
@@ -634,9 +656,23 @@ class DerivAdapter:
         contract_id = bought.get("contract_id") if isinstance(bought, Mapping) else None
         if contract_id is None:
             raise OrderRejectedError("Deriv confirmed the order without a contract id")
+        if isinstance(contract_id, int):
+            self._symbol_of[contract_id] = symbol
         return OrderAck(order_id=str(contract_id), t_order_sent_ns=t_sent, t_order_acked_ns=t_acked)
 
+    def observe(self, observer: Callable[[str, Any], None] | None) -> None:
+        """For `npm run deriv:check -- --timeline` only: every contract update ("contract", its
+        fields) and price tick ("tick", (epoch, quote)) the adapter receives, as it receives it."""
+        self._observer = observer
+
+    def set_correction_handler(self, handler: Callable[[TradeResult], None]) -> None:
+        """Told when Deriv's own result differs from an early one (decision D-82)."""
+        self._correction = handler
+
     async def await_result(self, order_id: str, timeout_s: float) -> TradeResult:
+        return await self._await(order_id, timeout_s, early=self._early)
+
+    async def _await(self, order_id: str, timeout_s: float, *, early: bool) -> TradeResult:
         self._require_connection()
         if not order_id.isdigit():
             raise ResultTimeoutError(f"{order_id!r} is not a Deriv contract id")
@@ -646,7 +682,7 @@ class DerivAdapter:
                 while True:
                     conn = await self._connection_other_than(dead)
                     try:
-                        profit = await self._follow_contract(conn, int(order_id))
+                        profit = await self._follow_contract(conn, int(order_id), early=early)
                     except (ConnectionLostError, NotConnectedError):
                         dead = conn  # follow it again on the next connection, never on this one
                         continue
@@ -669,44 +705,138 @@ class DerivAdapter:
                 return conn
             await asyncio.sleep(RESULT_RETRY_PAUSE_S)
 
-    async def _follow_contract(self, conn: DerivConnection, contract_id: int) -> Decimal:
-        settled: asyncio.Future[Decimal] = asyncio.get_running_loop().create_future()
+    async def _follow_contract(
+        self, conn: DerivConnection, contract_id: int, *, early: bool = False
+    ) -> Decimal:
+        """The contract's profit: Deriv's own, or with `early` the one decided from its exit price
+        as soon as that is certain (Deriv's own is then checked in the background)."""
+        loop = asyncio.get_running_loop()
+        settled: asyncio.Future[Decimal] = loop.create_future()
+        decided: asyncio.Future[Decimal] = loop.create_future()
+        terms = ContractTerms()
+        symbol = self._symbol_of.get(contract_id)
+
+        def try_early() -> None:
+            expiry = terms.expiry
+            if decided.done() or settled.done() or expiry is None or symbol is None:
+                return
+            exit_price = exit_quote(self._ticks.get(symbol, ()), expiry)
+            if exit_price is not None and (profit := early_profit(terms, exit_price)) is not None:
+                decided.set_result(profit)
 
         def on_update(message: Message) -> None:
+            nonlocal symbol
             contract = message.get("proposal_open_contract")
-            if isinstance(contract, Mapping) and not settled.done():
-                try:
-                    profit = settled_profit(contract)
-                except BrokerError as exc:
-                    settled.set_exception(exc)
-                    return
-                if profit is not None:
-                    settled.set_result(profit)
+            if not isinstance(contract, Mapping) or settled.done():
+                return
+            if self._observer is not None:
+                self._observer("contract", contract)
+            terms.update(contract)
+            if symbol is None:
+                named = contract.get("underlying_symbol") or contract.get("underlying")
+                symbol = named if isinstance(named, str) else None
+            try:
+                profit = settled_profit(contract)
+            except BrokerError as exc:
+                settled.set_exception(exc)
+                return
+            if profit is not None:
+                settled.set_result(profit)
+            elif early:
+                try_early()
 
         first = await conn.request(
             {"proposal_open_contract": 1, "contract_id": contract_id, "subscribe": 1},
             timeout_s=self._ack_timeout_s,
             on_update=on_update,
         )
+        listening: str | None = None
         try:
             if (problem := error_of(first)) is not None:
                 raise ResultTimeoutError(
                     f"Deriv could not report contract {contract_id}: {problem[1]}"
                 )
             on_update(first)
+            if early and symbol is not None and not settled.done():
+                listening = symbol
+                self._tick_listeners.setdefault(symbol, set()).add(try_early)
+                await self._follow_ticks(conn, symbol)
+                try_early()
             closed = asyncio.ensure_future(conn.wait_closed())
             try:
-                watched: set[asyncio.Future[Any]] = {settled, closed}
+                watched: set[asyncio.Future[Any]] = {settled, decided, closed}
                 await asyncio.wait(watched, return_when=asyncio.FIRST_COMPLETED)
             finally:
                 closed.cancel()
-            if not settled.done():
-                raise ConnectionLostError("the connection to Deriv was lost")
-            return settled.result()
+            if settled.done():
+                return settled.result()
+            if decided.done():
+                profit = decided.result()
+                self._tasks.spawn(
+                    self._verify(str(contract_id), profit), name=f"deriv_verify_{contract_id}"
+                )
+                return profit
+            raise ConnectionLostError("the connection to Deriv was lost")
         finally:
-            if not settled.done():
-                settled.cancel()
+            if listening is not None:
+                self._tick_listeners.get(listening, set()).discard(try_early)
+            for future in (settled, decided):
+                if not future.done():
+                    future.cancel()
             self._tasks.spawn(conn.forget(first), name="deriv_forget")
+
+    async def _verify(self, order_id: str, early: Decimal) -> None:
+        """Wait for Deriv's own result of a contract decided early; tell the handler if it
+        differs."""
+        try:
+            official = await self._await(order_id, VERIFY_TIMEOUT_S, early=False)
+        except BrokerError as exc:
+            log.warning("deriv_early_result_unconfirmed", contract_id=order_id, error=str(exc))
+            return
+        if official.profit == early:
+            log.info("deriv_early_result_confirmed", contract_id=order_id)
+            return
+        log.error(
+            "deriv_early_result_mismatch",
+            contract_id=order_id,
+            early=str(early),
+            deriv=str(official.profit),
+        )
+        if self._correction is not None:
+            self._correction(official)
+
+    async def _follow_ticks(self, conn: DerivConnection, symbol: str) -> None:
+        """Follow the asset's price ticks on this connection (once per asset)."""
+        if symbol in self._tick_streams:
+            return
+        self._tick_streams.add(symbol)
+
+        def on_tick(message: Message) -> None:
+            tick = tick_of(message)
+            if tick is None:
+                return
+            if self._observer is not None:
+                self._observer("tick", tick)
+            ticks = self._ticks.setdefault(symbol, deque(maxlen=TICKS_KEPT))
+            if ticks and tick[0] <= ticks[-1][0]:
+                return  # already known
+            ticks.append(tick)
+            for listener in list(self._tick_listeners.get(symbol, ())):
+                listener()
+
+        try:
+            first = await conn.request(
+                {"ticks": symbol, "subscribe": 1}, timeout_s=self._ack_timeout_s, on_update=on_tick
+            )
+        except (BrokerError, TimeoutError) as exc:
+            self._tick_streams.discard(symbol)
+            log.warning("deriv_ticks_failed", symbol=symbol, error=str(exc))
+            return
+        if error_of(first) is not None:
+            self._tick_streams.discard(symbol)
+            log.warning("deriv_ticks_refused", symbol=symbol, error=str(error_of(first)))
+            return
+        on_tick(first)
 
     # ---- helpers -----------------------------------------------------------------------------
 

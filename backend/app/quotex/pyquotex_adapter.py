@@ -345,6 +345,9 @@ class PyQuotexAdapter:
             t_acked = self._clock.monotonic_ns()
         return OrderAck(order_id=order_id, t_order_sent_ns=t_sent, t_order_acked_ns=t_acked)
 
+    def set_correction_handler(self, handler: Callable[[TradeResult], None]) -> None:
+        """Quotex results are never reported early: nothing to correct."""
+
     async def await_result(self, order_id: str, timeout_s: float) -> TradeResult:
         client = self._require_client()
         profit = await client.wait_result(order_id, timeout_s)

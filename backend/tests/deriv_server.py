@@ -54,10 +54,13 @@ class Contract:
     stake: Decimal
     profit: Decimal | None = None  # None while open
     planned: Decimal | None = None  # the scripted result, fixed when it was bought
+    entry_tick: Decimal | None = None  # set by `set_terms`, as Deriv does after the first tick
+    date_expiry: int | None = None
+    payout: Decimal | None = None
 
     def state(self) -> dict[str, Any]:
         settled = self.profit is not None
-        return {
+        state: dict[str, Any] = {
             "contract_id": self.contract_id,
             "underlying_symbol": self.symbol,
             "contract_type": self.contract_type,
@@ -67,6 +70,13 @@ class Contract:
             "status": ("won" if self.profit and self.profit > 0 else "lost") if settled else "open",
             "profit": f"{self.profit:.2f}" if settled else "0.00",
         }
+        if self.payout is not None:
+            state["payout"] = float(self.payout)
+        if self.entry_tick is not None:
+            state["entry_tick"] = float(self.entry_tick)
+        if self.date_expiry is not None:
+            state["date_expiry"] = self.date_expiry
+        return state
 
 
 @dataclass
@@ -136,6 +146,7 @@ class FakeDerivServer:
     _balance_streams: list[tuple[ServerConnection, int, str, AccountType]] = field(
         default_factory=list
     )
+    _tick_streams: dict[str, list[tuple[ServerConnection, int, str]]] = field(default_factory=dict)
 
     async def start(self) -> None:
         self._server = await serve(self._handle, "127.0.0.1", 0)
@@ -166,6 +177,28 @@ class FakeDerivServer:
 
     def sent(self, name: str) -> list[dict[str, Any]]:
         return [message for message in self.received if name in message]
+
+    async def set_terms(
+        self, contract_id: int, *, entry: Decimal, expiry: int, payout: Decimal | None = None
+    ) -> None:
+        """What Deriv says once the contract started: its entry tick, end time and payout."""
+        contract = self.contracts[contract_id]
+        contract.entry_tick, contract.date_expiry = entry, expiry
+        contract.payout = payout if payout is not None else contract.stake * Decimal("1.95")
+        await self._push_contract(contract, keep_watching=True)
+
+    async def push_tick(self, symbol: str, epoch: int, quote: Decimal) -> None:
+        """A price tick of `symbol`, to every subscriber of its `ticks` stream."""
+        for ws, req_id, sub in list(self._tick_streams.get(symbol, [])):
+            await self._send(
+                ws,
+                {
+                    "msg_type": "tick",
+                    "req_id": req_id,
+                    "tick": {"symbol": symbol, "epoch": epoch, "quote": float(quote)},
+                    "subscription": {"id": sub},
+                },
+            )
 
     async def settle(self, contract_id: int, profit: Decimal | None = None) -> None:
         contract = self.contracts[contract_id]
@@ -287,6 +320,10 @@ class FakeDerivServer:
                     "subscription": {"id": sub},
                 },
             )
+        elif "ticks" in msg:
+            sub = uuid.uuid4().hex
+            self._tick_streams.setdefault(msg["ticks"], []).append((ws, req_id, sub))
+            await self._send(ws, {**base, "msg_type": "tick", "subscription": {"id": sub}})
         elif "ping" in msg:
             await self._send(ws, {**base, "msg_type": "ping", "ping": "pong"})
         elif "forget" in msg:
@@ -351,7 +388,14 @@ class FakeDerivServer:
     async def _after_settle(self, contract: Contract) -> None:
         if contract.profit is not None and contract.profit > 0:
             self.balances[AccountType.DEMO] += contract.stake + contract.profit
-        for ws, req_id, sub in self._watchers.pop(contract.contract_id, []):
+        await self._push_contract(contract, keep_watching=False)
+        await self._push_balance(AccountType.DEMO)
+
+    async def _push_contract(self, contract: Contract, *, keep_watching: bool) -> None:
+        watchers = self._watchers.get(contract.contract_id, [])
+        if not keep_watching:
+            self._watchers.pop(contract.contract_id, None)
+        for ws, req_id, sub in list(watchers):
             update: dict[str, Any] = {
                 "msg_type": "proposal_open_contract",
                 "proposal_open_contract": contract.state(),
@@ -360,7 +404,6 @@ class FakeDerivServer:
             if self.stream_req_id:
                 update["req_id"] = req_id
             await self._send(ws, update)
-        await self._push_balance(AccountType.DEMO)
 
     def _balance(self, kind: AccountType, sub: str) -> dict[str, Any]:
         return {

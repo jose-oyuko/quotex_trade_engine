@@ -229,3 +229,13 @@ daily profit target, kill-switch state.
   60 s was confirmed in 510 ms.
 - **Orders are not serialised** (unlike Quotex, D-27): each `buy` waits for its own reply, so both legs
   of a session pair go out together.
+- **When a result is known (D-82).** Deriv's schema: the entry tick is "the next tick after the start
+  time"; the exit tick is "the latest tick at the end time", possibly a few seconds before it on an asset
+  that does not tick every second. Deriv marks the contract sold later: on 2026-11-17/18 a median 3.6 s
+  after the end on R_75 (it ticks every 2 s; `1HZ75V` ticks every second). With **Deriv early result** ON
+  (Settings), the engine follows the asset's ticks and uses the result as soon as a tick at or after the
+  end time has come: Rise wins when the exit is strictly above the entry, Fall when strictly below, equal
+  loses; a win pays the contract's payout minus the stake. Deriv's own result is still awaited; if it
+  differs, the trade is corrected, the day's figures with it, and the risk log says so
+  (`early_result_corrected`). What the chain did on the early result cannot be undone. OFF by default,
+  until the owner's `deriv:check --order --timeline` shows the two agree.

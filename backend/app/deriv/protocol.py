@@ -8,6 +8,7 @@ to the network, so every rule can be tested on its own.
 
 from __future__ import annotations
 
+import contextlib
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -266,3 +267,93 @@ def socket_kind(url: str) -> AccountType | None:
     if path.endswith("/ws/real"):
         return AccountType.REAL
     return None
+
+
+# ---- the early result (decision D-82) --------------------------------------------------------
+#
+# Deriv's schema for `proposal_open_contract`: the entry tick "for contracts starting immediately
+# is the next tick after the start time"; the exit tick is "the latest tick at the end time" and
+# "may be a few seconds before the end time" on assets that do not tick every second. A Rise
+# (CALL) wins when the exit is strictly higher than the entry, a Fall (PUT) when strictly lower;
+# an equal exit is a loss (D-77). Deriv's own result, when it comes, is the one kept.
+
+
+@dataclass(slots=True)
+class ContractTerms:
+    """What a Rise/Fall contract's result depends on, gathered from its updates (an update may
+    leave out what an earlier one said)."""
+
+    contract_type: str | None = None
+    entry: Decimal | None = None
+    expiry: int | None = None  # epoch seconds
+    payout: Decimal | None = None
+    stake: Decimal | None = None
+
+    def update(self, contract: Mapping[str, Any]) -> None:
+        if isinstance(contract.get("contract_type"), str):
+            self.contract_type = str(contract["contract_type"])
+        if (entry := _quote(contract.get("entry_tick"))) is not None:
+            self.entry = entry
+        expiry = contract.get("date_expiry")
+        if isinstance(expiry, int) and not isinstance(expiry, bool):
+            self.expiry = expiry
+        for name, attr in (("payout", "payout"), ("buy_price", "stake")):
+            value = contract.get(name)
+            if value is not None:
+                with contextlib.suppress(PayoutSanityError):
+                    setattr(self, attr, to_money(value))
+
+    @property
+    def complete(self) -> bool:
+        return (
+            self.contract_type in ("CALL", "PUT")
+            and self.entry is not None
+            and self.expiry is not None
+            and self.payout is not None
+            and self.stake is not None
+        )
+
+
+def _quote(value: object) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        quote = Decimal(str(value))
+    except InvalidOperation:
+        return None
+    return quote if quote.is_finite() else None
+
+
+def tick_of(message: Mapping[str, Any]) -> tuple[int, Decimal] | None:
+    """`(epoch, quote)` of a `ticks` stream message, or None."""
+    tick = message.get("tick")
+    if not isinstance(tick, Mapping):
+        return None
+    epoch, quote = tick.get("epoch"), _quote(tick.get("quote"))
+    if not isinstance(epoch, int) or isinstance(epoch, bool) or quote is None:
+        return None
+    return epoch, quote
+
+
+def exit_quote(ticks: Iterable[tuple[int, Decimal]], expiry: int) -> Decimal | None:
+    """The exit price once it is certain: the latest tick at or before `expiry`, known only when a
+    tick at or after `expiry` has been seen (until then a later one could still come first).
+    None while not certain, or when the ticks before the end time were not seen."""
+    before: Decimal | None = None
+    certain = False
+    for epoch, quote in sorted(ticks, key=lambda t: t[0]):
+        if epoch <= expiry:
+            before = quote
+        if epoch >= expiry:
+            certain = True
+            break
+    return before if certain else None
+
+
+def early_profit(terms: ContractTerms, exit_price: Decimal) -> Decimal | None:
+    """The contract's profit decided from its exit price, or None if the terms are incomplete."""
+    entry, payout, stake = terms.entry, terms.payout, terms.stake
+    if not terms.complete or entry is None or payout is None or stake is None:
+        return None
+    won = exit_price > entry if terms.contract_type == "CALL" else exit_price < entry
+    return payout - stake if won else -stake

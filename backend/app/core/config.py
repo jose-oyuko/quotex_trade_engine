@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     quotex_allow_real: bool = Field(default=False, validation_alias="_runtime_quotex_allow_real")
     # TIME = expire at the next clock-aligned expiry, TIMER = a countdown of the given length.
     quotex_time_mode: Literal["TIME", "TIMER"] = "TIME"
+    # ON: act on a Deriv result as soon as its exit price is certain, instead of waiting a few
+    # seconds for Deriv to mark the contract sold; Deriv's own result still corrects it (D-82).
+    deriv_early_result: Literal["ON", "OFF"] = "OFF"
 
     # Telegram. api_id/api_hash come from https://my.telegram.org (API development tools); the login
     # code and any 2FA password are typed into `npm run telegram:login` and never stored here.

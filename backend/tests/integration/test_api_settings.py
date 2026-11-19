@@ -22,7 +22,12 @@ def item(body: dict[str, Any], key: str) -> dict[str, Any]:
 async def test_the_settings_are_listed_with_where_each_value_comes_from(tmp_path: Path) -> None:
     async with running_api(tmp_path, quotex_host="qxbroker.example") as rig:
         body = (await rig.client.get(f"{API}/settings")).json()
-        assert [i["key"] for i in body["items"]] == ["log_level", "quotex_host", "quotex_time_mode"]
+        assert [i["key"] for i in body["items"]] == [
+            "log_level",
+            "quotex_host",
+            "quotex_time_mode",
+            "deriv_early_result",
+        ]
         assert "next start" in body["apply_note"]
         host = item(body, "quotex_host")
         assert host["value"] == "qxbroker.example" and host["source"] == "environment"

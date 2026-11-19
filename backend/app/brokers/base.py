@@ -7,6 +7,7 @@ needs (`balance`, `payout`, `is_open`) are answered from memory and never wait.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -181,6 +182,11 @@ class BrokerAdapter(Protocol):
         self, asset: str, direction: Direction, duration_s: int, amount: Decimal
     ) -> OrderAck:
         """Send an order and wait for the broker to confirm it (not for its result)."""
+        ...
+
+    def set_correction_handler(self, handler: Callable[[TradeResult], None]) -> None:
+        """Who to tell when a result reported early turns out different from the broker's own
+        (decision D-82). Only Deriv reports early; the others never call it."""
         ...
 
     async def await_result(self, order_id: str, timeout_s: float) -> TradeResult:

@@ -83,6 +83,17 @@ FIELDS: tuple[ConfigField, ...] = (
         ("TIME", "TIMER"),
         _choice("TIME", "TIMER", label="Trade expiry mode"),
     ),
+    ConfigField(
+        "deriv_early_result",
+        "Deriv early result",
+        "ON: a Deriv trade's result is used as soon as its closing price is certain, instead "
+        "of when Deriv marks it sold (about 3.6 s after it ends), so martingale steps go out "
+        "sooner. Deriv's own result is still checked and corrects any difference, "
+        "loudly. OFF until you have checked it on the demo.",
+        "choice",
+        ("OFF", "ON"),
+        _choice("OFF", "ON", label="Deriv early result"),
+    ),
 )
 FIELD_BY_KEY = {f.key: f for f in FIELDS}
 

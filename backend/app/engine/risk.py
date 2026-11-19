@@ -309,6 +309,21 @@ class RiskGuard:
                 at or self._clock.now(),
             )
 
+    def rebook(self, before: TradeRecord, after: TradeRecord) -> None:
+        """A settled trade's result was corrected (decision D-82): book the difference, on the
+        day the trade settled."""
+        old = before.profit if before.status in RESULT_TRADE_STATUSES and before.profit else None
+        new = after.profit if after.status in RESULT_TRADE_STATUSES and after.profit else None
+        difference = (new or Decimal(0)) - (old or Decimal(0))
+        if difference:
+            self._book(
+                after.broker,
+                after.account_type,
+                after.group_id,
+                difference,
+                after.settled_at or self._clock.now(),
+            )
+
     @property
     def open_trades(self) -> int:
         """Open trades on every broker (for "may the account be switched?")."""

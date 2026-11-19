@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -622,3 +623,111 @@ async def test_the_connection_time_is_known_and_cleared_when_the_socket_goes(
             break
         await asyncio.sleep(0.01)
     assert deriv.connected_since is not None and deriv.connected_since > first
+
+
+# ---- the early result (decision D-82) -----------------------------------------------------------
+
+EXPIRY = 1_800_000_060  # the contract's end time (epoch seconds) in these tests
+
+
+async def bought_with_terms(
+    rig: Rig, deriv: DerivAdapter, *, direction: Direction = Direction.CALL
+) -> tuple[str, asyncio.Future[Any]]:
+    """A contract bought, started at entry 100.00 with a payout of 1.95 on a 1.00 stake, its result
+    awaited; returns once the adapter follows the asset's ticks."""
+    rig.server.settle_after_s = None
+    ack = await deriv.place_order("R_75", direction, 60, D("1.00"))
+    await rig.server.set_terms(int(ack.order_id), entry=D("100.00"), expiry=EXPIRY)
+    waiting = asyncio.ensure_future(deriv.await_result(ack.order_id, 10))
+    for _ in range(200):
+        if rig.server.sent("ticks"):
+            break
+        await asyncio.sleep(0.01)
+    return ack.order_id, waiting
+
+
+async def test_with_the_early_result_a_win_is_known_from_the_ticks_before_deriv_settles(
+    rig: Rig,
+) -> None:
+    deriv = rig.adapter(early_result=True)
+    await deriv.connect()
+    corrections: list[Any] = []
+    deriv.set_correction_handler(corrections.append)
+    order_id, waiting = await bought_with_terms(rig, deriv)
+    assert rig.server.sent("ticks")[0]["ticks"] == "R_75"
+
+    await rig.server.push_tick("R_75", EXPIRY - 2, D("99.50"))
+    await rig.server.push_tick("R_75", EXPIRY - 1, D("100.25"))
+    await asyncio.sleep(0.05)
+    assert not waiting.done()  # a later tick at or before the end time could still come
+    await rig.server.push_tick("R_75", EXPIRY + 1, D("99.00"))  # after the end: the exit is 100.25
+    result = await asyncio.wait_for(waiting, 2)
+    assert (result.outcome, result.profit) == (TradeOutcome.WON, D("0.95"))
+    assert rig.server.contracts[int(order_id)].profit is None  # Deriv had not settled it yet
+
+    await rig.server.settle(int(order_id), D("0.95"))  # Deriv agrees
+    await asyncio.sleep(0.1)
+    assert corrections == []
+    await deriv.disconnect()
+
+
+async def test_a_tick_exactly_at_the_end_time_is_the_exit_and_an_equal_exit_is_a_loss(
+    rig: Rig,
+) -> None:
+    deriv = rig.adapter(early_result=True)
+    await deriv.connect()
+    _, waiting = await bought_with_terms(rig, deriv, direction=Direction.PUT)
+    await rig.server.push_tick("R_75", EXPIRY, D("100.00"))  # equal to the entry
+    result = await asyncio.wait_for(waiting, 2)
+    assert (result.outcome, result.profit) == (TradeOutcome.LOST, D("-1.00"))
+    await deriv.disconnect()
+
+
+async def test_when_deriv_disagrees_the_trade_is_corrected(rig: Rig) -> None:
+    deriv = rig.adapter(early_result=True)
+    await deriv.connect()
+    corrections: list[Any] = []
+    deriv.set_correction_handler(corrections.append)
+    order_id, waiting = await bought_with_terms(rig, deriv)
+    await rig.server.push_tick("R_75", EXPIRY, D("101.00"))
+    assert (await asyncio.wait_for(waiting, 2)).profit == D("0.95")
+
+    await rig.server.settle(int(order_id), D("-1.00"))  # Deriv says otherwise
+    for _ in range(200):
+        if corrections:
+            break
+        await asyncio.sleep(0.01)
+    [official] = corrections
+    assert (official.order_id, official.outcome, official.profit) == (
+        order_id,
+        TradeOutcome.LOST,
+        D("-1.00"),
+    )
+    await deriv.disconnect()
+
+
+async def test_without_the_early_result_deriv_s_own_result_is_awaited(rig: Rig) -> None:
+    deriv = rig.adapter()  # off by default
+    await deriv.connect()
+    rig.server.settle_after_s = None
+    ack = await deriv.place_order("R_75", Direction.CALL, 60, D("1.00"))
+    await rig.server.set_terms(int(ack.order_id), entry=D("100.00"), expiry=EXPIRY)
+    waiting = asyncio.ensure_future(deriv.await_result(ack.order_id, 10))
+    await asyncio.sleep(0.1)
+    assert rig.server.sent("ticks") == []  # no ticks are followed
+    assert not waiting.done()
+    await rig.server.settle(int(ack.order_id), D("-1.00"))
+    assert (await asyncio.wait_for(waiting, 2)).profit == D("-1.00")
+    await deriv.disconnect()
+
+
+async def test_no_early_result_when_the_ticks_before_the_end_were_not_seen(rig: Rig) -> None:
+    deriv = rig.adapter(early_result=True)
+    await deriv.connect()
+    order_id, waiting = await bought_with_terms(rig, deriv)
+    await rig.server.push_tick("R_75", EXPIRY + 1, D("101.00"))  # the first tick seen is too late
+    await asyncio.sleep(0.1)
+    assert not waiting.done()  # the exit price is not known: wait for Deriv
+    await rig.server.settle(int(order_id), D("0.95"))
+    assert (await asyncio.wait_for(waiting, 2)).profit == D("0.95")
+    await deriv.disconnect()

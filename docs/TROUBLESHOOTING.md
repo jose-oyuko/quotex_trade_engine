@@ -194,6 +194,13 @@ connection (or the program) came back after that trade expired, so its next step
 was not sent late (decision D-79). The trade itself has its real result. Not a fault of the app; if it happens
 often, see "A steadier connection on a home PC" in [OPERATIONS.md](OPERATIONS.md).
 
+**A trade says "corrected by Deriv: reported early as won …", and the risk log has `early_result_corrected`**
+— with *Deriv early result* ON, the engine used the result from the closing price, and Deriv's own result then
+differed (decision D-82). The trade and the day's figures now show Deriv's result; what the chain did on the
+early one (a next step, or none) could not be undone. If this happens at all, switch *Deriv early result* OFF
+on the Settings page, restart the engine, and keep the log lines `deriv_early_result_mismatch`: they show
+both results.
+
 **A trade says "result read from the broker after a restart"** — it was open (or `unknown`) when the program
 stopped, and Deriv told us how it ended at the next start (decision D-78).
 

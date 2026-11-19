@@ -820,7 +820,7 @@ chains or a running session. Signals and sessions on an off broker are skipped w
 failure that more attempts cannot fix (an email PIN, a refused password or token) stops the retries and waits
 for the owner ("needs you"); network and Cloudflare errors keep the backoff.
 
-**D-82. Deriv results as soon as they are certain (Phase 24, proposed).** Deriv marks a contract sold about
+**D-82. Deriv results as soon as they are certain (Phase 24).** Deriv marks a contract sold about
 3.6 s after its expiry, and each martingale step waits for that. The engine may act on the result as soon as
 the exit price is known (from the contract update that carries it, or from the asset's price stream, chosen
 after the owner's live measurement), by Deriv's Rise/Fall rule (equal is a loss). Deriv's own result is the one
@@ -861,6 +861,21 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
   tries again. Network and Cloudflare errors keep the backoff, as before.
 - **A session on an off broker:** *Start now* is refused (409 `broker_off`); a scheduled run starts and every
   round is skipped with "Deriv is switched off", so the run's history says why nothing traded.
+
+**D-82 settled in Phase 24.**
+- **From the price stream, not from the contract updates.** Deriv's schema says what the exit tick is but
+  not when it appears in `proposal_open_contract`; the price stream (`ticks`) says it the moment a tick at
+  or after the end time arrives. The engine follows the ticks of an asset while it has a contract on it;
+  the exit price is the latest tick at or before `date_expiry`, certain once a tick at or after it has
+  come. If the ticks before the end time were not seen (the stream started too late), there is no early
+  result: Deriv's own is awaited.
+- **Off by default** (`deriv_early_result`, Settings): the owner switches it on after
+  `deriv:check --order --timeline` showed the early result and Deriv's agree on the demo.
+- **A correction** (Deriv's own result differs): the trade is stored with Deriv's result and a note, the
+  risk guard books the difference on the trade's day, and a `risk.tripped` event
+  `early_result_corrected` is published. The chain is not touched (it already acted).
+- **The latency report** gains `expiry -> result` and `expiry -> next`, measured on the wall clock from the
+  times stored on each trade.
 
 ---
 

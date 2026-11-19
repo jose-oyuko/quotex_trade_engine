@@ -116,3 +116,38 @@ async def test_the_text_report_and_the_command(
     assert format_report({}).startswith("No timed trades yet")
     assert main(["--database", str(path), "--account", "demo", "--days", "7"]) == 0
     assert main(["--database", str(tmp_path / "missing.db")]) == 1
+
+
+async def test_the_time_from_expiry_to_the_result_and_to_the_next_step(
+    session_factory: Factory, tmp_path: Path
+) -> None:
+    """Measured on the wall clock: a step that expired at 12:01:00, its result known 3.6 s later,
+    and the chain's next step sent at 12:01:04.1 (decision D-82)."""
+    async with session_factory.begin() as session:
+        group = await GroupRepository(session).add(make_group())
+        assert group.id is not None
+        chain = make_chain(group.id)
+        await ChainRepository(session).upsert(chain)
+        expiry = NOW + timedelta(minutes=1)
+        trades = TradeRepository(session)
+        await trades.upsert(
+            make_trade(
+                chain.id, group.id, step=0, status=TradeStatus.LOST, created_at=NOW,
+                expires_at=expiry, settled_at=expiry + timedelta(seconds=3.6),
+            )
+        )  # fmt: skip
+        await trades.upsert(
+            make_trade(
+                chain.id, group.id, step=1, status=TradeStatus.OPEN,
+                created_at=expiry + timedelta(seconds=4.1),
+                expires_at=expiry + timedelta(seconds=64.6),
+            )
+        )  # fmt: skip
+    path = session_factory.kw["bind"].url.database
+    with sqlite3.connect(path) as db:
+        demo = collect(db)["demo"]
+        text = format_report(collect(db))
+    result, following = demo["expiry -> result"], demo["expiry -> next"]
+    assert result is not None and (result.count, result.median_ms) == (1, 3600.0)  # open: not yet
+    assert following is not None and (following.count, following.median_ms) == (1, 4100.0)
+    assert "expiry -> result" in text and "expiry -> next" in text

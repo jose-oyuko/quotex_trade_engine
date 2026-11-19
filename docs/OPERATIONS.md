@@ -364,6 +364,18 @@ first trade of each chain, plus "decision to order" and "order to Quotex's confi
 numbers each trade stored about itself, so it describes your real runs. It does not include the time
 the message took to reach you from Telegram's servers.
 
+Two more lines (Phase 24) answer "why does each martingale step start later?": **expiry -> result** (how
+long after a trade ended its result was known) and **expiry -> next** (how long after a trade ended the
+chain's next step was sent; this adds up along a chain).
+
+**Deriv early result** (Settings; decision D-82): ON uses a Deriv result as soon as its closing price is
+certain instead of when Deriv marks the contract sold. Before switching it on, run
+`npm run deriv:check -- --asset 1HZ75V --order --timeline` (three 1.00 trades on the **demo** account): it
+prints, for each trade, when every update and price tick arrived after the end time, when the result was
+known, when Deriv marked it sold, and whether the two agree. Switch it on only if they agreed; restart the
+engine after changing it. Keep the PC's clock synchronised (Settings > Time > Sync now): the timeline is
+read against Deriv's end time.
+
 ## Real money
 
 Do not, until the demo account has run for a good while with the live checks in the phase reports

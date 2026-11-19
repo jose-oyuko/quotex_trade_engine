@@ -8,6 +8,7 @@ import pytest
 
 from app.brokers.errors import PayoutSanityError
 from app.deriv.protocol import (
+    ContractTerms,
     LengthRange,
     allows,
     asset_name,
@@ -15,7 +16,9 @@ from app.deriv.protocol import (
     describe_lengths,
     duration_params,
     duration_seconds,
+    early_profit,
     error_of,
+    exit_quote,
     is_demo_account,
     is_demo_login,
     login_kind,
@@ -24,6 +27,7 @@ from app.deriv.protocol import (
     rise_fall_lengths,
     settled_profit,
     socket_kind,
+    tick_of,
     to_money,
 )
 from app.domain.enums import AccountType
@@ -242,3 +246,52 @@ def test_the_socket_link_says_which_account_it_opens() -> None:
         socket_kind("wss://api.derivws.com/trading/v1/options/ws/real?otp=abc") is AccountType.REAL
     )
     assert socket_kind("wss://example.com/ws/other?otp=abc") is None
+
+
+# ---- the early result (decision D-82) --------------------------------------------------------
+
+
+def _terms(contract_type: str = "CALL", entry: str = "100.00") -> ContractTerms:
+    terms = ContractTerms()
+    terms.update(
+        {
+            "contract_type": contract_type,
+            "entry_tick": float(entry),
+            "date_expiry": 1000,
+            "payout": "1.95",
+            "buy_price": "1.00",
+        }
+    )
+    return terms
+
+
+def test_the_terms_are_gathered_from_updates_that_leave_things_out() -> None:
+    terms = ContractTerms()
+    terms.update({"contract_type": "CALL", "buy_price": 1, "payout": 1.95})
+    assert not terms.complete  # no entry tick yet (it comes after the first tick)
+    terms.update({"entry_tick": 100.5, "date_expiry": 1000})
+    terms.update({"status": "open"})  # an update without them keeps what was known
+    assert terms.complete and terms.entry == Decimal("100.5") and terms.expiry == 1000
+
+
+def test_the_exit_is_the_latest_tick_at_or_before_the_end_once_a_later_one_is_seen() -> None:
+    ticks = [(998, Decimal("1")), (999, Decimal("2"))]
+    assert exit_quote(ticks, 1000) is None  # a tick at 1000 could still come
+    assert exit_quote([*ticks, (1001, Decimal("3"))], 1000) == Decimal("2")
+    assert exit_quote([*ticks, (1000, Decimal("4"))], 1000) == Decimal("4")  # exactly at the end
+    assert exit_quote([(1001, Decimal("3"))], 1000) is None  # the ticks before were not seen
+    assert exit_quote([(1001, Decimal("3")), (999, Decimal("2"))], 1000) == Decimal("2")
+
+
+def test_rise_and_fall_are_decided_strictly_and_an_equal_exit_loses() -> None:
+    assert early_profit(_terms("CALL"), Decimal("100.01")) == Decimal("0.95")
+    assert early_profit(_terms("CALL"), Decimal("100.00")) == Decimal("-1.00")
+    assert early_profit(_terms("PUT"), Decimal("99.99")) == Decimal("0.95")
+    assert early_profit(_terms("PUT"), Decimal("100.00")) == Decimal("-1.00")
+    assert early_profit(ContractTerms(), Decimal("1")) is None  # nothing known: no guess
+
+
+def test_a_tick_message_is_read_or_ignored() -> None:
+    assert tick_of({"tick": {"epoch": 5, "quote": 101.25}}) == (5, Decimal("101.25"))
+    assert tick_of({"tick": {"epoch": "5", "quote": 1}}) is None
+    assert tick_of({"msg_type": "tick"}) is None

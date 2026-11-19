@@ -15,6 +15,7 @@ its chain's broker.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import timedelta
@@ -22,21 +23,22 @@ from enum import StrEnum
 
 import structlog
 
-from app.brokers.base import BrokerAdapter, ConnectionState, TradeOutcome
+from app.brokers.base import BrokerAdapter, ConnectionState, TradeOutcome, TradeResult
 from app.brokers.errors import BrokerError, OrderAckTimeoutError, ResultTimeoutError
 from app.core.clock import Clock
 from app.domain.enums import AccountType, Broker, TradeStatus
 from app.domain.ids import new_id
-from app.domain.records import TradeRecord
+from app.domain.records import RiskEventRecord, TradeRecord
 from app.engine.chain import Chain
 from app.engine.risk import BlockKind, OrderRequest, RiskGuard
 from app.engine.strategies import StepPlan
 from app.events.bus import EventBus
-from app.events.types import TradeOpened, TradeSettled
+from app.events.types import RiskTripped, TradeOpened, TradeSettled
 
 log = structlog.get_logger()
 
 RESULT_MARGIN_S = 60.0  # how long past the expiry we wait for a result before calling it unknown
+REMEMBERED_RESULTS = 2_000  # settled trades kept in memory, in case the broker corrects one (D-82)
 
 
 class StepKind(StrEnum):
@@ -97,6 +99,9 @@ class Executor:
             raise ValueError("the executor needs at least one broker")
         self._adapters = dict(adapters)
         self._off = switched_off if switched_off is not None else set()  # shared with the engine
+        self._settled: OrderedDict[str, TradeRecord] = OrderedDict()  # by broker order id
+        for adapter in self._adapters.values():
+            adapter.set_correction_handler(self._corrected)
         self._guard = guard
         self._clock = clock
         self._bus = bus
@@ -257,7 +262,44 @@ class Executor:
         )
         self._guard.settled(settled)  # frees the reservation and books the profit for the day
         self._bus.publish(TradeSettled(occurred_at=now, trade=settled))
+        self._settled[order_id] = settled
+        while len(self._settled) > REMEMBERED_RESULTS:
+            self._settled.popitem(last=False)
         return StepOutcome(_OUTCOME_KIND[result.outcome], settled)
+
+    def _corrected(self, result: TradeResult) -> None:
+        """The broker's own result differs from the one it reported early (decision D-82): the
+        trade is corrected and the day's figures with it, loudly. What the chain already did on
+        the early result (a next step, or none) cannot be undone."""
+        trade = self._settled.pop(result.order_id, None)
+        if trade is None:
+            log.error("result_correction_for_unknown_trade", order_id=result.order_id)
+            return
+        now = self._clock.now()
+        corrected = replace(
+            trade,
+            status=_OUTCOME_STATUS[result.outcome],
+            profit=result.profit,
+            error=(
+                f"corrected by {trade.broker.label}: reported early as {trade.status.value} "
+                f"{trade.profit}, its own result is {result.outcome.value} {result.profit}"
+            ),
+        )
+        self._guard.rebook(trade, corrected)
+        self._bus.publish(TradeSettled(occurred_at=now, trade=corrected))
+        self._bus.publish(
+            RiskTripped(
+                occurred_at=now,
+                risk_event=RiskEventRecord(
+                    id=new_id(),
+                    occurred_at=now,
+                    kind="early_result_corrected",
+                    message=f"{trade.asset} step {trade.step}: {corrected.error}. The chain had "
+                    "already acted on the early result.",
+                    group_id=trade.group_id,
+                ),
+            )
+        )
 
     # --- internals ---
 

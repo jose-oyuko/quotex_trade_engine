@@ -10,6 +10,7 @@ by the contract tests in tests/contract/. `FakeQuotexAdapter` (app.quotex.fake) 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -108,6 +109,7 @@ class FakeBrokerAdapter:
         self._state = ConnectionState.DISCONNECTED
         self._connected_since: datetime | None = None
         self._login_problem: str | None = None
+        self._correction: Callable[[TradeResult], None] | None = None
         self._assets: dict[str, _Asset] = {}
         self._scripted: list[Decimal | TradeOutcome] = []
         self._order_failures: list[BrokerError] = []
@@ -328,6 +330,14 @@ class FakeBrokerAdapter:
             else:
                 self._deliver(pending)
         return OrderAck(placed.order_id, t_sent, t_acked)
+
+    def set_correction_handler(self, handler: Callable[[TradeResult], None]) -> None:
+        self._correction = handler
+
+    def correct(self, order_id: str, profit: Decimal) -> None:
+        """Pretend the broker's own result of `order_id` differs from the one reported."""
+        if self._correction is not None:
+            self._correction(TradeResult(order_id, classify_profit(profit), profit))
 
     async def await_result(self, order_id: str, timeout_s: float) -> TradeResult:
         self._require_connected()
