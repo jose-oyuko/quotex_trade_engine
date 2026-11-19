@@ -877,6 +877,17 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **The latency report** gains `expiry -> result` and `expiry -> next`, measured on the wall clock from the
   times stored on each trade.
 
+**D-83. The growing flip strategy (Phase 25, proposed; owner's design).**
+- **The rule:** a fifth strategy, `growing_flip` ("Growing flip"). Step k goes in the first trade's direction
+  or the opposite, in blocks of 1, 1, 2, 2, 3: same, flipped, same, same, flipped, flipped, same, same, same.
+  From Buy: Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy; from Sell, the mirror.
+- **How a chain runs:** at most 9 trades (8 follow-ups, 8 multipliers). A win ends the chain; the ninth loss
+  ends it `exhausted`, like the other strategies.
+- **In a session** each leg follows the pattern from its own first direction, so the CALL and PUT legs are
+  mirrors of each other.
+- **It is a flip strategy for D-9 and D-70:** in a Telegram group, one chain at a time, or the opposite pair
+  if allowed.
+
 ---
 
 ## Decisions to be made later (record here when decided)

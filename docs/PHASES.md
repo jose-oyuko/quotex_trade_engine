@@ -701,6 +701,64 @@ so each step of a chain starts about 1.5 s after the previous one ends instead o
 
 ---
 
+## Phase 25 — The growing flip strategy (decision D-83)
+
+**Why (owner's request, 2026-11-19):** a fifth strategy whose steps change direction in growing blocks:
+Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy, or the mirror starting with Sell. It is used mainly in
+trading sessions: the pair's two legs go out on the same candle in opposite directions, as with the flip
+strategies today.
+
+**Fixed by the owner:**
+- **The name** is "Growing flip".
+- **The direction is relative to the chain's first trade.** A leg that starts with Buy follows the first
+  line; one that starts with Sell follows the mirror. In a session the CALL leg follows the first line and
+  the PUT leg the second, automatically.
+- **When the steps are used up and the last trade loses,** the chain is lost (`exhausted`), like the other
+  strategies.
+
+**The rule.** Step k (0 = the first trade) goes in the first trade's direction ("same") or the opposite
+("flipped"):
+
+| step | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| direction | same | flipped | same | same | flipped | flipped | same | same | same |
+| starting with Buy | Buy | Sell | Buy | Buy | Sell | Sell | Buy | Buy | Buy |
+| starting with Sell | Sell | Buy | Sell | Sell | Buy | Buy | Sell | Sell | Sell |
+
+- **Blocks of 1, 1, 2, 2, 3 trades.** A win ends the chain; a loss moves to the next step at
+  base × that step's multiplier.
+- **At most 9 trades:** the first trade plus up to **8** follow-ups, so 8 multipliers. Fewer steps simply
+  stop earlier.
+
+**Scope**
+- **Backend:**
+  - `Strategy.GROWING_FLIP` (`growing_flip`) and its step directions in `app/engine/strategies.py`.
+  - It joins `FLIP_STRATEGIES`, so a Telegram group using it keeps D-9 and D-70 (one chain at a time, or the
+    opposite pair if allowed).
+  - The API refuses more than 8 steps for it (422, with the reason).
+  - A migration only if the stored column checks the list of strategies (it is a plain text column today).
+  - `openapi.json` regenerated.
+- **Dashboard:**
+  - "Growing flip" in the strategy picker of the group and session forms, with a one-line description of the
+    pattern.
+  - The forms allow at most 8 steps for it.
+  - Reports and history show the strategy's name like the others.
+- **Guides:** DOMAIN §2 (the strategies), OPERATIONS (sessions), DECISIONS (D-83).
+
+**Acceptance criteria**
+- Unit tests: the directions for steps 0-8, from Buy and from Sell. The stakes follow the multipliers. A win
+  at any step ends the chain. A ninth loss ends it `exhausted`. More than 8 steps is refused.
+- Engine test: a session pair on growing flip, with both legs losing step after step. The CALL leg sends
+  Buy, Sell, Buy, Buy, Sell…; the PUT leg sends the mirror, each leg's step going out the moment its loss is
+  known.
+- Form tests: the choice, the 8-step limit and the description.
+- `ruff`, `mypy`, the whole test suite, `eslint`, `tsc`, `vitest`, build and `api:check` pass.
+- Self-test on `npm run demo`: a growing-flip session sends the pattern.
+
+**Not in this phase:** continuing the pattern beyond 9 trades; other patterns or a pattern editor.
+
+---
+
 ## Later backlog (not scheduled)
 
 Telegram alerts to the owner; backtester over stored messages; more parsers + "test this message" tool;
