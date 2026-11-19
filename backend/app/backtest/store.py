@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: backtests (Phase 27)
 
 _SCHEMA = (
     """CREATE TABLE IF NOT EXISTS assets (
@@ -54,6 +54,31 @@ _SCHEMA = (
         created_at TEXT NOT NULL,
         finished_at TEXT
     )""",
+    """CREATE TABLE IF NOT EXISTS backtests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        state TEXT NOT NULL,
+        progress REAL NOT NULL DEFAULT 0,
+        setup TEXT NOT NULL,
+        summary TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        finished_at TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS backtest_chains (
+        backtest_id INTEGER NOT NULL,
+        strategy INTEGER NOT NULL,
+        seq INTEGER NOT NULL,
+        day TEXT NOT NULL,
+        pair_no INTEGER NOT NULL,
+        origin TEXT NOT NULL,
+        started INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        steps INTEGER NOT NULL,
+        profit TEXT NOT NULL,
+        trades TEXT NOT NULL,
+        PRIMARY KEY (backtest_id, strategy, seq)
+    ) WITHOUT ROWID""",
 )
 
 
@@ -113,6 +138,10 @@ class PriceStore:
             cut = db.execute(
                 "UPDATE downloads SET state='failed', error=?, finished_at=? WHERE state=?",
                 ("The program stopped during the download.", now.isoformat(), ACTIVE_DOWNLOAD),
+            ).rowcount
+            cut += db.execute(
+                "UPDATE backtests SET state='failed', error=?, finished_at=? WHERE state=?",
+                ("The program stopped during the backtest.", now.isoformat(), ACTIVE_DOWNLOAD),
             ).rowcount
         return int(cut)
 
@@ -314,3 +343,167 @@ def subtract(span: tuple[int, int], held: Sequence[tuple[int, int]]) -> list[tup
     if cursor <= end:
         gaps.append((cursor, end))
     return gaps
+
+
+# ---- backtests (Phase 27) ----------------------------------------------------------------------
+
+
+@dataclass(slots=True, frozen=True)
+class BacktestRow:
+    id: int
+    name: str
+    state: str  # running, done, failed, cancelled
+    progress: float
+    setup: str  # JSON
+    summary: str | None  # JSON, once done
+    error: str | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+@dataclass(slots=True, frozen=True)
+class ChainRow:
+    strategy: int
+    seq: int
+    day: str
+    pair_no: int
+    origin: str
+    started: int
+    status: str
+    steps: int
+    profit: str
+    trades: str  # JSON
+
+
+def _backtest(row: Sequence[object]) -> BacktestRow:
+    (backtest_id, name, state, progress, setup, summary, error, created, finished) = row
+    return BacktestRow(
+        id=int(str(backtest_id)),
+        name=str(name),
+        state=str(state),
+        progress=float(str(progress)),
+        setup=str(setup),
+        summary=None if summary is None else str(summary),
+        error=None if error is None else str(error),
+        created_at=datetime.fromisoformat(str(created)),
+        finished_at=None if finished is None else datetime.fromisoformat(str(finished)),
+    )
+
+
+class BacktestStore(PriceStore):
+    """The price store plus the backtests run on it (the same file)."""
+
+    def new_backtest(self, name: str, setup: str, now: datetime) -> BacktestRow:
+        with self._db() as db:
+            backtest_id = db.execute(
+                "INSERT INTO backtests (name, state, setup, created_at) VALUES (?, ?, ?, ?)",
+                (name, ACTIVE_DOWNLOAD, setup, now.isoformat()),
+            ).lastrowid
+        found = self.backtest(int(backtest_id or 0))
+        assert found is not None  # noqa: S101 - just written
+        return found
+
+    def update_backtest(
+        self,
+        backtest_id: int,
+        *,
+        state: str | None = None,
+        progress: float | None = None,
+        summary: str | None = None,
+        error: str | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        fields: dict[str, object] = {
+            "state": state,
+            "progress": progress,
+            "summary": summary,
+            "error": error,
+            "finished_at": finished_at.isoformat() if finished_at else None,
+        }
+        changes = {k: v for k, v in fields.items() if v is not None}
+        if not changes:
+            return
+        assignments = ", ".join(f"{k}=?" for k in changes)
+        with self._db() as db:
+            db.execute(
+                f"UPDATE backtests SET {assignments} WHERE id=?",  # noqa: S608 - fixed names
+                (*changes.values(), backtest_id),
+            )
+
+    def backtest(self, backtest_id: int) -> BacktestRow | None:
+        with self._db() as db:
+            row = db.execute(
+                "SELECT id, name, state, progress, setup, summary, error, created_at, "
+                "finished_at FROM backtests WHERE id=?",
+                (backtest_id,),
+            ).fetchone()
+        return None if row is None else _backtest(row)
+
+    def backtests(self, limit: int = 50) -> list[BacktestRow]:
+        """The latest backtests, newest first, without their (large) summaries."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT id, name, state, progress, setup, NULL, error, created_at, finished_at "
+                "FROM backtests ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [_backtest(row) for row in rows]
+
+    def add_chains(self, backtest_id: int, chains: Sequence[ChainRow]) -> None:
+        with self._db() as db:
+            db.executemany(
+                "INSERT INTO backtest_chains (backtest_id, strategy, seq, day, pair_no, origin, "
+                "started, status, steps, profit, trades) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    (
+                        backtest_id,
+                        c.strategy,
+                        c.seq,
+                        c.day,
+                        c.pair_no,
+                        c.origin,
+                        c.started,
+                        c.status,
+                        c.steps,
+                        c.profit,
+                        c.trades,
+                    )
+                    for c in chains
+                ),
+            )
+
+    def chains(
+        self,
+        backtest_id: int,
+        *,
+        strategy: int | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[ChainRow], int]:
+        """A page of a backtest's chains in time order, and how many match."""
+        where = ["backtest_id=?"]
+        params: list[object] = [backtest_id]
+        if strategy is not None:
+            where.append("strategy=?")
+            params.append(strategy)
+        if status is not None:
+            where.append("status=?")
+            params.append(status)
+        condition = " AND ".join(where)
+        with self._db() as db:
+            total = db.execute(
+                f"SELECT COUNT(*) FROM backtest_chains WHERE {condition}",  # noqa: S608
+                params,
+            ).fetchone()[0]
+            columns = "strategy, seq, day, pair_no, origin, started, status, steps, profit, trades"
+            query = f"SELECT {columns} FROM backtest_chains WHERE {condition}"  # noqa: S608
+            rows = db.execute(
+                f"{query} ORDER BY strategy, seq LIMIT ? OFFSET ?", (*params, limit, offset)
+            ).fetchall()
+        return [ChainRow(*row) for row in rows], int(total)
+
+    def delete_backtest(self, backtest_id: int) -> bool:
+        with self._db() as db:
+            db.execute("DELETE FROM backtest_chains WHERE backtest_id=?", (backtest_id,))
+            return bool(db.execute("DELETE FROM backtests WHERE id=?", (backtest_id,)).rowcount)

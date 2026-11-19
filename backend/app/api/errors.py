@@ -40,6 +40,11 @@ from app.engine.errors import (
 from app.engine.risk import RiskConfigError
 from app.quotex.errors import NotConnectedError, QuotexError, RealAccountNotAllowedError
 from app.services.app_config import InvalidSettingError
+from app.services.backtests import (
+    BacktestNotFoundError,
+    BacktestRunningError,
+    InvalidBacktestError,
+)
 from app.services.deriv import (
     DerivNotConfiguredError,
     DerivRefusedError,
@@ -153,6 +158,9 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     DownloadRunningError: (409, "download_running"),
     DownloadNotFoundError: (404, "download_not_found"),
     AssetBusyError: (409, "asset_downloading"),
+    InvalidBacktestError: (422, "invalid_backtest"),
+    BacktestRunningError: (409, "backtest_running"),
+    BacktestNotFoundError: (404, "backtest_not_found"),
 }
 
 HTTP_CODES = {

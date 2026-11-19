@@ -133,6 +133,827 @@
         "title": "AuthStateOut",
         "type": "object"
       },
+      "BacktestChainOut": {
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Direction",
+            "description": "The leg: the first trade's direction."
+          },
+          "pair_no": {
+            "title": "Pair No",
+            "type": "integer"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "started": {
+            "format": "date-time",
+            "title": "Started",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChainStatus",
+            "description": "`completed` (won), `exhausted`, or `failed`."
+          },
+          "steps": {
+            "description": "Trades in the chain.",
+            "title": "Steps",
+            "type": "integer"
+          },
+          "strategy": {
+            "description": "Index into the backtest's strategies.",
+            "title": "Strategy",
+            "type": "integer"
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestTradeOut"
+            },
+            "title": "Trades",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategy",
+          "seq",
+          "day",
+          "pair_no",
+          "origin",
+          "started",
+          "status",
+          "steps",
+          "profit",
+          "trades"
+        ],
+        "title": "BacktestChainOut",
+        "type": "object"
+      },
+      "BacktestChainsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestChainOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BacktestChainsOut",
+        "type": "object"
+      },
+      "BacktestIn-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "asset": {
+            "maxLength": 30,
+            "minLength": 2,
+            "pattern": "^\\w+$",
+            "title": "Asset",
+            "type": "string"
+          },
+          "base_stake": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Base Stake"
+          },
+          "duration_s": {
+            "description": "The trade (and candle) length.",
+            "maximum": 86400.0,
+            "minimum": 15.0,
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "end_time": {
+            "description": "Before `start_time`: the window crosses midnight.",
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "first_day": {
+            "description": "The first day replayed, in `timezone`.",
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "last_day": {
+            "description": "The last day replayed (included). At most 92 days.",
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "loss_limit": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Loss Limit"
+          },
+          "max_open_pairs": {
+            "default": 1,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Open Pairs",
+            "type": "integer"
+          },
+          "max_pairs": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Max Pairs"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode",
+            "default": "sequential"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown in the list; made up if empty.",
+            "title": "Name"
+          },
+          "order_delay_s": {
+            "default": 0.5,
+            "description": "From deciding a trade to its purchase.",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Order Delay S",
+            "type": "number"
+          },
+          "pause_s": {
+            "default": 0,
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Pause S",
+            "type": "integer"
+          },
+          "payout_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": "88",
+            "description": "Assumed: a win pays stake x this %. Deriv keeps no past payouts.",
+            "title": "Payout Pct"
+          },
+          "profit_target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Profit Target"
+          },
+          "start_time": {
+            "description": "The session window, wall-clock in `timezone`.",
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "step_delay_s": {
+            "default": 1.0,
+            "description": "From a trade's end to deciding the next step.",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Step Delay S",
+            "type": "number"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestStrategyIn-Input"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Strategies",
+            "type": "array"
+          },
+          "timezone": {
+            "default": "UTC",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "weekdays": {
+            "description": "0 = Monday ... 6 = Sunday.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Weekdays",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asset",
+          "first_day",
+          "last_day",
+          "start_time",
+          "end_time",
+          "duration_s",
+          "base_stake",
+          "strategies"
+        ],
+        "title": "BacktestIn",
+        "type": "object"
+      },
+      "BacktestIn-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "asset": {
+            "maxLength": 30,
+            "minLength": 2,
+            "pattern": "^\\w+$",
+            "title": "Asset",
+            "type": "string"
+          },
+          "base_stake": {
+            "title": "Base Stake",
+            "type": "string"
+          },
+          "duration_s": {
+            "description": "The trade (and candle) length.",
+            "maximum": 86400.0,
+            "minimum": 15.0,
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "end_time": {
+            "description": "Before `start_time`: the window crosses midnight.",
+            "format": "time",
+            "title": "End Time",
+            "type": "string"
+          },
+          "first_day": {
+            "description": "The first day replayed, in `timezone`.",
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "last_day": {
+            "description": "The last day replayed (included). At most 92 days.",
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "loss_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Loss Limit"
+          },
+          "max_open_pairs": {
+            "default": 1,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Open Pairs",
+            "type": "integer"
+          },
+          "max_pairs": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Max Pairs"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SessionMode",
+            "default": "sequential"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown in the list; made up if empty.",
+            "title": "Name"
+          },
+          "order_delay_s": {
+            "default": 0.5,
+            "description": "From deciding a trade to its purchase.",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Order Delay S",
+            "type": "number"
+          },
+          "pause_s": {
+            "default": 0,
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Pause S",
+            "type": "integer"
+          },
+          "payout_pct": {
+            "default": "88",
+            "description": "Assumed: a win pays stake x this %. Deriv keeps no past payouts.",
+            "title": "Payout Pct",
+            "type": "string"
+          },
+          "profit_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per window.",
+            "title": "Profit Target"
+          },
+          "start_time": {
+            "description": "The session window, wall-clock in `timezone`.",
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "step_delay_s": {
+            "default": 1.0,
+            "description": "From a trade's end to deciding the next step.",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Step Delay S",
+            "type": "number"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestStrategyIn-Output"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Strategies",
+            "type": "array"
+          },
+          "timezone": {
+            "default": "UTC",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          },
+          "weekdays": {
+            "description": "0 = Monday ... 6 = Sunday.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Weekdays",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asset",
+          "first_day",
+          "last_day",
+          "start_time",
+          "end_time",
+          "duration_s",
+          "base_stake",
+          "strategies"
+        ],
+        "title": "BacktestIn",
+        "type": "object"
+      },
+      "BacktestItemOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "progress": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/Strategy"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "progress",
+          "error",
+          "created_at",
+          "finished_at",
+          "asset",
+          "first_day",
+          "last_day",
+          "strategies"
+        ],
+        "title": "BacktestItemOut",
+        "type": "object"
+      },
+      "BacktestOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "progress": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "setup": {
+            "$ref": "#/components/schemas/BacktestIn-Output"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "done",
+              "failed",
+              "cancelled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/Strategy"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BacktestSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "progress",
+          "error",
+          "created_at",
+          "finished_at",
+          "asset",
+          "first_day",
+          "last_day",
+          "strategies",
+          "setup",
+          "summary"
+        ],
+        "title": "BacktestOut",
+        "type": "object"
+      },
+      "BacktestStrategyIn-Input": {
+        "additionalProperties": false,
+        "description": "One strategy to compare: the same rules as a session's (steps and multipliers).",
+        "properties": {
+          "max_steps": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "multipliers": {
+            "items": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1000.0,
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 20,
+            "title": "Multipliers",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "max_steps"
+        ],
+        "title": "BacktestStrategyIn",
+        "type": "object"
+      },
+      "BacktestStrategyIn-Output": {
+        "additionalProperties": false,
+        "description": "One strategy to compare: the same rules as a session's (steps and multipliers).",
+        "properties": {
+          "max_steps": {
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "multipliers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Multipliers",
+            "type": "array"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "max_steps"
+        ],
+        "title": "BacktestStrategyIn",
+        "type": "object"
+      },
+      "BacktestSummaryOut": {
+        "properties": {
+          "seconds": {
+            "description": "How long the replay took.",
+            "title": "Seconds",
+            "type": "number"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StrategyResultOut"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "windows": {
+            "title": "Windows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "windows",
+          "seconds",
+          "strategies"
+        ],
+        "title": "BacktestSummaryOut",
+        "type": "object"
+      },
+      "BacktestTradeOut": {
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "entry": {
+            "title": "Entry",
+            "type": "number"
+          },
+          "exit": {
+            "title": "Exit",
+            "type": "number"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "stake": {
+            "title": "Stake",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "direction",
+          "stake",
+          "entry",
+          "exit",
+          "profit"
+        ],
+        "title": "BacktestTradeOut",
+        "type": "object"
+      },
+      "BacktestsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BacktestsOut",
+        "type": "object"
+      },
       "BalanceOut": {
         "properties": {
           "account_type": {
@@ -1541,7 +2362,7 @@
           },
           "points": {
             "items": {
-              "$ref": "#/components/schemas/EquityPointOut"
+              "$ref": "#/components/schemas/app__api__schemas__reports__EquityPointOut"
             },
             "title": "Points",
             "type": "array"
@@ -1552,34 +2373,6 @@
           "points"
         ],
         "title": "EquityOut",
-        "type": "object"
-      },
-      "EquityPointOut": {
-        "properties": {
-          "cumulative": {
-            "title": "Cumulative",
-            "type": "string"
-          },
-          "day": {
-            "title": "Day",
-            "type": "string"
-          },
-          "profit": {
-            "title": "Profit",
-            "type": "string"
-          },
-          "trades": {
-            "title": "Trades",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "day",
-          "trades",
-          "profit",
-          "cumulative"
-        ],
-        "title": "EquityPointOut",
         "type": "object"
       },
       "ErrorBody": {
@@ -3449,7 +4242,7 @@
           "day": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DayOut"
+                "$ref": "#/components/schemas/app__api__schemas__risk__DayOut"
               },
               {
                 "type": "null"
@@ -4772,6 +5565,160 @@
         "title": "Strategy",
         "type": "string"
       },
+      "StrategyResultOut": {
+        "properties": {
+          "chains": {
+            "title": "Chains",
+            "type": "integer"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/app__api__schemas__backtests__DayOut"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "equity": {
+            "items": {
+              "$ref": "#/components/schemas/app__api__schemas__backtests__EquityPointOut"
+            },
+            "title": "Equity",
+            "type": "array"
+          },
+          "exhausted": {
+            "description": "Chains that lost every step.",
+            "title": "Exhausted",
+            "type": "integer"
+          },
+          "largest_stake": {
+            "title": "Largest Stake",
+            "type": "string"
+          },
+          "longest_losing_run": {
+            "description": "Chains lost one after another, at most.",
+            "title": "Longest Losing Run",
+            "type": "integer"
+          },
+          "max_steps": {
+            "title": "Max Steps",
+            "type": "integer"
+          },
+          "most_in_play": {
+            "description": "The most money in open trades at one moment.",
+            "title": "Most In Play",
+            "type": "string"
+          },
+          "multipliers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Multipliers",
+            "type": "array"
+          },
+          "no_data_chains": {
+            "description": "Chains cut short for lack of price data.",
+            "title": "No Data Chains",
+            "type": "integer"
+          },
+          "no_data_rounds": {
+            "description": "Pairs not opened for lack of price data.",
+            "title": "No Data Rounds",
+            "type": "integer"
+          },
+          "pairs": {
+            "title": "Pairs",
+            "type": "integer"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "skipped_rounds": {
+            "description": "Candles with too many pairs open (every candle).",
+            "title": "Skipped Rounds",
+            "type": "integer"
+          },
+          "staked": {
+            "title": "Staked",
+            "type": "string"
+          },
+          "stops": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "How the windows ended: `window_ended`, ...",
+            "title": "Stops",
+            "type": "object"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          },
+          "trades_won": {
+            "title": "Trades Won",
+            "type": "integer"
+          },
+          "windows": {
+            "title": "Windows",
+            "type": "integer"
+          },
+          "won_at_step": {
+            "description": "Chains won at step 0, 1, 2 ...",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Won At Step",
+            "type": "array"
+          },
+          "worst_drawdown": {
+            "description": "The deepest fall from a running-profit peak.",
+            "title": "Worst Drawdown",
+            "type": "string"
+          },
+          "worst_drawdown_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst Drawdown At"
+          }
+        },
+        "required": [
+          "strategy",
+          "max_steps",
+          "multipliers",
+          "windows",
+          "pairs",
+          "chains",
+          "trades",
+          "trades_won",
+          "won_at_step",
+          "exhausted",
+          "no_data_chains",
+          "skipped_rounds",
+          "no_data_rounds",
+          "profit",
+          "staked",
+          "largest_stake",
+          "most_in_play",
+          "worst_drawdown",
+          "worst_drawdown_at",
+          "longest_losing_run",
+          "stops",
+          "days",
+          "equity"
+        ],
+        "title": "StrategyResultOut",
+        "type": "object"
+      },
       "StreaksOut": {
         "properties": {
           "current": {
@@ -5206,6 +6153,117 @@
           "dropped"
         ],
         "title": "WriterHealth",
+        "type": "object"
+      },
+      "app__api__schemas__backtests__DayOut": {
+        "properties": {
+          "chains": {
+            "title": "Chains",
+            "type": "integer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "lost": {
+            "description": "Chains that lost every step.",
+            "title": "Lost",
+            "type": "integer"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "profit",
+          "chains",
+          "lost"
+        ],
+        "title": "DayOut",
+        "type": "object"
+      },
+      "app__api__schemas__backtests__EquityPointOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "profit": {
+            "description": "The running profit when this result was known.",
+            "title": "Profit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "profit"
+        ],
+        "title": "EquityPointOut",
+        "type": "object"
+      },
+      "app__api__schemas__reports__EquityPointOut": {
+        "properties": {
+          "cumulative": {
+            "title": "Cumulative",
+            "type": "string"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "profit": {
+            "title": "Profit",
+            "type": "string"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "trades",
+          "profit",
+          "cumulative"
+        ],
+        "title": "EquityPointOut",
+        "type": "object"
+      },
+      "app__api__schemas__risk__DayOut": {
+        "description": "The day the daily limits count, for the account in use.",
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "by_broker": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Net result since `since` per broker (`quotex`, `deriv`).",
+            "title": "By Broker",
+            "type": "object"
+          },
+          "pnl": {
+            "description": "Net result since `since` on every broker added up; negative is a loss. Each broker's own figure is in `by_broker` (the daily limits count per broker).",
+            "title": "Pnl",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_type",
+          "since",
+          "pnl"
+        ],
+        "title": "DayOut",
         "type": "object"
       }
     }
@@ -5901,6 +6959,597 @@
         "summary": "Get State",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/backtests": {
+      "get": {
+        "description": "The latest backtests, newest first (without their results).",
+        "operationId": "list_backtests_api_v1_backtests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Backtests",
+        "tags": [
+          "backtests"
+        ]
+      },
+      "post": {
+        "description": "Replay the setup on the stored prices, every strategy on the same prices, in the\nbackground. 422 `invalid_backtest` (no window on those days, no prices stored), 409\n`backtest_running`.",
+        "operationId": "start_backtest_api_v1_backtests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestIn-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Backtest",
+        "tags": [
+          "backtests"
+        ]
+      }
+    },
+    "/api/v1/backtests/{backtest_id}": {
+      "delete": {
+        "operationId": "delete_backtest_api_v1_backtests__backtest_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backtest_id",
+            "required": true,
+            "schema": {
+              "title": "Backtest Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Delete Backtest",
+        "tags": [
+          "backtests"
+        ]
+      },
+      "get": {
+        "description": "One backtest: its setup and, once done, the figures of each strategy.",
+        "operationId": "get_backtest_api_v1_backtests__backtest_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backtest_id",
+            "required": true,
+            "schema": {
+              "title": "Backtest Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Backtest",
+        "tags": [
+          "backtests"
+        ]
+      }
+    },
+    "/api/v1/backtests/{backtest_id}/cancel": {
+      "post": {
+        "description": "Stop a running backtest (nothing of it is kept but the setup).",
+        "operationId": "cancel_backtest_api_v1_backtests__backtest_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backtest_id",
+            "required": true,
+            "schema": {
+              "title": "Backtest Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Cancel Backtest",
+        "tags": [
+          "backtests"
+        ]
+      }
+    },
+    "/api/v1/backtests/{backtest_id}/chains": {
+      "get": {
+        "description": "The chains of a backtest in time order, with every trade (filter by strategy index and\nby `status`: `completed`, `exhausted`, `failed`).",
+        "operationId": "list_chains_api_v1_backtests__backtest_id__chains_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backtest_id",
+            "required": true,
+            "schema": {
+              "title": "Backtest Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChainStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestChainsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Chains",
+        "tags": [
+          "backtests"
         ]
       }
     },

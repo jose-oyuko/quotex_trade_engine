@@ -15,6 +15,7 @@ from app.core.config import Settings
 from app.engine.controller import EngineController
 from app.engine.engine import Engine
 from app.services.app_config import ConfigService
+from app.services.backtests import BacktestService
 from app.services.deriv import DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
@@ -125,6 +126,11 @@ def get_price_history(request: Request) -> PriceHistoryService:
     return service
 
 
+def get_backtests(request: Request) -> BacktestService:
+    service: BacktestService = request.app.state.backtests
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -159,3 +165,4 @@ ControllerDep = Annotated[EngineController, Depends(get_controller)]
 ConfigDep = Annotated[ConfigService, Depends(get_config)]
 VaultDep = Annotated[SecretStore, Depends(get_vault)]
 PriceHistoryDep = Annotated[PriceHistoryService, Depends(get_price_history)]
+BacktestsDep = Annotated[BacktestService, Depends(get_backtests)]

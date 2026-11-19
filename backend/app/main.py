@@ -17,6 +17,7 @@ from app.api.hub import Hub
 from app.api.openapi import build_openapi
 from app.api.routers import (
     auth,
+    backtests,
     brokers,
     chains,
     control,
@@ -36,7 +37,7 @@ from app.api.security import SecurityMiddleware, TokenBucket
 from app.api.snapshot import SnapshotBuilder
 from app.api.static import mount_frontend
 from app.auth.service import AuthService
-from app.backtest.store import PriceStore
+from app.backtest.store import BacktestStore
 from app.brokers.history import PriceHistory
 from app.core.clock import SystemClock
 from app.core.config import Settings, get_settings
@@ -57,6 +58,7 @@ from app.events.bus import EventBus
 from app.quotex.base import LoginRequest, QuotexLogin
 from app.quotex.factory import new_quotex_login
 from app.services.app_config import ConfigService
+from app.services.backtests import BacktestService
 from app.services.deriv import AccountChecker, DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
@@ -239,14 +241,18 @@ def create_app(
         )
         await app.state.auth.prepare()
         # Past prices for backtests (decision D-84): a file of their own, Deriv's public socket.
+        history_store = BacktestStore(cfg.history_path)
         app.state.prices = PriceHistoryService(
-            store=PriceStore(cfg.history_path),
+            store=history_store,
             history=(price_history or build_price_history)(cfg, app.state.tasks),
             bus=app.state.bus,
             tasks=app.state.tasks,
             clock=clock,
         )
         await app.state.prices.prepare()
+        app.state.backtests = BacktestService(
+            store=history_store, bus=app.state.bus, tasks=app.state.tasks, clock=clock
+        )
         app.state.risk_settings = RiskSettingsService(
             app.state.bus, clock, live, lambda: app.state.trading
         )
@@ -316,6 +322,7 @@ def create_app(
     app.state.env_import = None
     app.state.deriv = None
     app.state.prices = None
+    app.state.backtests = None
 
     development = settings.environment == "development"
     app.add_middleware(
@@ -352,6 +359,7 @@ def create_app(
         deriv.router,
         brokers.router,
         prices.router,
+        backtests.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

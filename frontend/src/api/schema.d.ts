@@ -142,6 +142,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Backtests
+         * @description The latest backtests, newest first (without their results).
+         */
+        get: operations["list_backtests_api_v1_backtests_get"];
+        put?: never;
+        /**
+         * Start Backtest
+         * @description Replay the setup on the stored prices, every strategy on the same prices, in the
+         *     background. 422 `invalid_backtest` (no window on those days, no prices stored), 409
+         *     `backtest_running`.
+         */
+        post: operations["start_backtest_api_v1_backtests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{backtest_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Backtest
+         * @description One backtest: its setup and, once done, the figures of each strategy.
+         */
+        get: operations["get_backtest_api_v1_backtests__backtest_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Backtest */
+        delete: operations["delete_backtest_api_v1_backtests__backtest_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{backtest_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Backtest
+         * @description Stop a running backtest (nothing of it is kept but the setup).
+         */
+        post: operations["cancel_backtest_api_v1_backtests__backtest_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{backtest_id}/chains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Chains
+         * @description The chains of a backtest in time order, with every trade (filter by strategy index and
+         *     by `status`: `completed`, `exhausted`, `failed`).
+         */
+        get: operations["list_chains_api_v1_backtests__backtest_id__chains_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brokers": {
         parameters: {
             query?: never;
@@ -1438,6 +1526,381 @@ export interface components {
             setup_required: boolean;
             user?: components["schemas"]["UserOut"] | null;
         };
+        /** BacktestChainOut */
+        BacktestChainOut: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** @description The leg: the first trade's direction. */
+            origin: components["schemas"]["Direction"];
+            /** Pair No */
+            pair_no: number;
+            /** Profit */
+            profit: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Started
+             * Format: date-time
+             */
+            started: string;
+            /** @description `completed` (won), `exhausted`, or `failed`. */
+            status: components["schemas"]["ChainStatus"];
+            /**
+             * Steps
+             * @description Trades in the chain.
+             */
+            steps: number;
+            /**
+             * Strategy
+             * @description Index into the backtest's strategies.
+             */
+            strategy: number;
+            /** Trades */
+            trades: components["schemas"]["BacktestTradeOut"][];
+        };
+        /** BacktestChainsOut */
+        BacktestChainsOut: {
+            /** Items */
+            items: components["schemas"]["BacktestChainOut"][];
+            /** Total */
+            total: number;
+        };
+        /** BacktestIn */
+        "BacktestIn-Input": {
+            /** Asset */
+            asset: string;
+            /** Base Stake */
+            base_stake: number | string;
+            /**
+             * Duration S
+             * @description The trade (and candle) length.
+             */
+            duration_s: number;
+            /**
+             * End Time
+             * Format: time
+             * @description Before `start_time`: the window crosses midnight.
+             */
+            end_time: string;
+            /**
+             * First Day
+             * Format: date
+             * @description The first day replayed, in `timezone`.
+             */
+            first_day: string;
+            /**
+             * Last Day
+             * Format: date
+             * @description The last day replayed (included). At most 92 days.
+             */
+            last_day: string;
+            /**
+             * Loss Limit
+             * @description Per window.
+             */
+            loss_limit?: number | string | null;
+            /**
+             * Max Open Pairs
+             * @default 1
+             */
+            max_open_pairs: number;
+            /**
+             * Max Pairs
+             * @description Per window.
+             */
+            max_pairs?: number | null;
+            /** @default sequential */
+            mode: components["schemas"]["SessionMode"];
+            /**
+             * Name
+             * @description Shown in the list; made up if empty.
+             */
+            name?: string | null;
+            /**
+             * Order Delay S
+             * @description From deciding a trade to its purchase.
+             * @default 0.5
+             */
+            order_delay_s: number;
+            /**
+             * Pause S
+             * @default 0
+             */
+            pause_s: number;
+            /**
+             * Payout Pct
+             * @description Assumed: a win pays stake x this %. Deriv keeps no past payouts.
+             * @default 88
+             */
+            payout_pct: number | string;
+            /**
+             * Profit Target
+             * @description Per window.
+             */
+            profit_target?: number | string | null;
+            /**
+             * Start Time
+             * Format: time
+             * @description The session window, wall-clock in `timezone`.
+             */
+            start_time: string;
+            /**
+             * Step Delay S
+             * @description From a trade's end to deciding the next step.
+             * @default 1
+             */
+            step_delay_s: number;
+            /** Strategies */
+            strategies: components["schemas"]["BacktestStrategyIn-Input"][];
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /**
+             * Weekdays
+             * @description 0 = Monday ... 6 = Sunday.
+             */
+            weekdays?: number[];
+        };
+        /** BacktestIn */
+        "BacktestIn-Output": {
+            /** Asset */
+            asset: string;
+            /** Base Stake */
+            base_stake: string;
+            /**
+             * Duration S
+             * @description The trade (and candle) length.
+             */
+            duration_s: number;
+            /**
+             * End Time
+             * Format: time
+             * @description Before `start_time`: the window crosses midnight.
+             */
+            end_time: string;
+            /**
+             * First Day
+             * Format: date
+             * @description The first day replayed, in `timezone`.
+             */
+            first_day: string;
+            /**
+             * Last Day
+             * Format: date
+             * @description The last day replayed (included). At most 92 days.
+             */
+            last_day: string;
+            /**
+             * Loss Limit
+             * @description Per window.
+             */
+            loss_limit?: string | null;
+            /**
+             * Max Open Pairs
+             * @default 1
+             */
+            max_open_pairs: number;
+            /**
+             * Max Pairs
+             * @description Per window.
+             */
+            max_pairs?: number | null;
+            /** @default sequential */
+            mode: components["schemas"]["SessionMode"];
+            /**
+             * Name
+             * @description Shown in the list; made up if empty.
+             */
+            name?: string | null;
+            /**
+             * Order Delay S
+             * @description From deciding a trade to its purchase.
+             * @default 0.5
+             */
+            order_delay_s: number;
+            /**
+             * Pause S
+             * @default 0
+             */
+            pause_s: number;
+            /**
+             * Payout Pct
+             * @description Assumed: a win pays stake x this %. Deriv keeps no past payouts.
+             * @default 88
+             */
+            payout_pct: string;
+            /**
+             * Profit Target
+             * @description Per window.
+             */
+            profit_target?: string | null;
+            /**
+             * Start Time
+             * Format: time
+             * @description The session window, wall-clock in `timezone`.
+             */
+            start_time: string;
+            /**
+             * Step Delay S
+             * @description From a trade's end to deciding the next step.
+             * @default 1
+             */
+            step_delay_s: number;
+            /** Strategies */
+            strategies: components["schemas"]["BacktestStrategyIn-Output"][];
+            /**
+             * Timezone
+             * @default UTC
+             */
+            timezone: string;
+            /**
+             * Weekdays
+             * @description 0 = Monday ... 6 = Sunday.
+             */
+            weekdays?: number[];
+        };
+        /** BacktestItemOut */
+        BacktestItemOut: {
+            /** Asset */
+            asset: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /** Id */
+            id: number;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Name */
+            name: string;
+            /** Progress */
+            progress: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "failed" | "cancelled";
+            /** Strategies */
+            strategies: components["schemas"]["Strategy"][];
+        };
+        /** BacktestOut */
+        BacktestOut: {
+            /** Asset */
+            asset: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * First Day
+             * Format: date
+             */
+            first_day: string;
+            /** Id */
+            id: number;
+            /**
+             * Last Day
+             * Format: date
+             */
+            last_day: string;
+            /** Name */
+            name: string;
+            /** Progress */
+            progress: number;
+            setup: components["schemas"]["BacktestIn-Output"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "running" | "done" | "failed" | "cancelled";
+            /** Strategies */
+            strategies: components["schemas"]["Strategy"][];
+            summary: components["schemas"]["BacktestSummaryOut"] | null;
+        };
+        /**
+         * BacktestStrategyIn
+         * @description One strategy to compare: the same rules as a session's (steps and multipliers).
+         */
+        "BacktestStrategyIn-Input": {
+            /** Max Steps */
+            max_steps: number;
+            /** Multipliers */
+            multipliers?: (number | string)[];
+            strategy: components["schemas"]["Strategy"];
+        };
+        /**
+         * BacktestStrategyIn
+         * @description One strategy to compare: the same rules as a session's (steps and multipliers).
+         */
+        "BacktestStrategyIn-Output": {
+            /** Max Steps */
+            max_steps: number;
+            /** Multipliers */
+            multipliers?: string[];
+            strategy: components["schemas"]["Strategy"];
+        };
+        /** BacktestSummaryOut */
+        BacktestSummaryOut: {
+            /**
+             * Seconds
+             * @description How long the replay took.
+             */
+            seconds: number;
+            /** Strategies */
+            strategies: components["schemas"]["StrategyResultOut"][];
+            /** Windows */
+            windows: number;
+        };
+        /** BacktestTradeOut */
+        BacktestTradeOut: {
+            direction: components["schemas"]["Direction"];
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Entry */
+            entry: number;
+            /** Exit */
+            exit: number;
+            /** Profit */
+            profit: string;
+            /** Stake */
+            stake: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** BacktestsOut */
+        BacktestsOut: {
+            /** Items */
+            items: components["schemas"]["BacktestItemOut"][];
+        };
         /** BalanceOut */
         BalanceOut: {
             account_type: components["schemas"]["AccountType"];
@@ -2051,18 +2514,7 @@ export interface components {
         EquityOut: {
             filter: components["schemas"]["FilterOut"];
             /** Points */
-            points: components["schemas"]["EquityPointOut"][];
-        };
-        /** EquityPointOut */
-        EquityPointOut: {
-            /** Cumulative */
-            cumulative: string;
-            /** Day */
-            day: string;
-            /** Profit */
-            profit: string;
-            /** Trades */
-            trades: number;
+            points: components["schemas"]["app__api__schemas__reports__EquityPointOut"][];
         };
         /** ErrorBody */
         ErrorBody: {
@@ -2772,7 +3224,7 @@ export interface components {
         RiskOut: {
             controls: components["schemas"]["ControlsOut"];
             /** @description Null while the engine is not running. */
-            day: components["schemas"]["DayOut"] | null;
+            day: components["schemas"]["app__api__schemas__risk__DayOut"] | null;
             /** Open Exposure */
             open_exposure: string | null;
             /** Open Trades */
@@ -3295,6 +3747,83 @@ export interface components {
          * @enum {string}
          */
         Strategy: "no_martingale" | "martingale" | "flip_every_loss" | "two_step_flip" | "growing_flip";
+        /** StrategyResultOut */
+        StrategyResultOut: {
+            /** Chains */
+            chains: number;
+            /** Days */
+            days: components["schemas"]["app__api__schemas__backtests__DayOut"][];
+            /** Equity */
+            equity: components["schemas"]["app__api__schemas__backtests__EquityPointOut"][];
+            /**
+             * Exhausted
+             * @description Chains that lost every step.
+             */
+            exhausted: number;
+            /** Largest Stake */
+            largest_stake: string;
+            /**
+             * Longest Losing Run
+             * @description Chains lost one after another, at most.
+             */
+            longest_losing_run: number;
+            /** Max Steps */
+            max_steps: number;
+            /**
+             * Most In Play
+             * @description The most money in open trades at one moment.
+             */
+            most_in_play: string;
+            /** Multipliers */
+            multipliers: string[];
+            /**
+             * No Data Chains
+             * @description Chains cut short for lack of price data.
+             */
+            no_data_chains: number;
+            /**
+             * No Data Rounds
+             * @description Pairs not opened for lack of price data.
+             */
+            no_data_rounds: number;
+            /** Pairs */
+            pairs: number;
+            /** Profit */
+            profit: string;
+            /**
+             * Skipped Rounds
+             * @description Candles with too many pairs open (every candle).
+             */
+            skipped_rounds: number;
+            /** Staked */
+            staked: string;
+            /**
+             * Stops
+             * @description How the windows ended: `window_ended`, ...
+             */
+            stops: {
+                [key: string]: number;
+            };
+            strategy: components["schemas"]["Strategy"];
+            /** Trades */
+            trades: number;
+            /** Trades Won */
+            trades_won: number;
+            /** Windows */
+            windows: number;
+            /**
+             * Won At Step
+             * @description Chains won at step 0, 1, 2 ...
+             */
+            won_at_step: number[];
+            /**
+             * Worst Drawdown
+             * @description The deepest fall from a running-profit peak.
+             */
+            worst_drawdown: string;
+            /** Worst Drawdown At */
+            worst_drawdown_at: string | null;
+        };
         /** StreaksOut */
         StreaksOut: {
             /**
@@ -3458,6 +3987,71 @@ export interface components {
             retrying: boolean;
             /** Written */
             written: number;
+        };
+        /** DayOut */
+        app__api__schemas__backtests__DayOut: {
+            /** Chains */
+            chains: number;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Lost
+             * @description Chains that lost every step.
+             */
+            lost: number;
+            /** Profit */
+            profit: string;
+        };
+        /** EquityPointOut */
+        app__api__schemas__backtests__EquityPointOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Profit
+             * @description The running profit when this result was known.
+             */
+            profit: string;
+        };
+        /** EquityPointOut */
+        app__api__schemas__reports__EquityPointOut: {
+            /** Cumulative */
+            cumulative: string;
+            /** Day */
+            day: string;
+            /** Profit */
+            profit: string;
+            /** Trades */
+            trades: number;
+        };
+        /**
+         * DayOut
+         * @description The day the daily limits count, for the account in use.
+         */
+        app__api__schemas__risk__DayOut: {
+            account_type: components["schemas"]["AccountType"];
+            /**
+             * By Broker
+             * @description Net result since `since` per broker (`quotex`, `deriv`).
+             */
+            by_broker?: {
+                [key: string]: string;
+            };
+            /**
+             * Pnl
+             * @description Net result since `since` on every broker added up; negative is a loss. Each broker's own figure is in `by_broker` (the daily limits count per broker).
+             */
+            pnl: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
         };
     };
     responses: never;
@@ -4018,6 +4612,465 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStateOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_backtests_api_v1_backtests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    start_backtest_api_v1_backtests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestIn-Input"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_backtest_api_v1_backtests__backtest_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backtest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_backtest_api_v1_backtests__backtest_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backtest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cancel_backtest_api_v1_backtests__backtest_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backtest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_chains_api_v1_backtests__backtest_id__chains_get: {
+        parameters: {
+            query?: {
+                strategy?: number | null;
+                status?: components["schemas"]["ChainStatus"] | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                backtest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestChainsOut"];
                 };
             };
             /** @description Not Found */

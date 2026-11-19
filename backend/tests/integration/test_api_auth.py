@@ -64,8 +64,10 @@ PUBLIC = {
 async def test_every_route_but_the_public_ones_refuses_a_visitor_without_a_session(
     tmp_path: Path,
 ) -> None:
-    """Adding a route without protecting it fails here, not in production."""
-    async with running_api(tmp_path, logged_in=False) as rig:
+    """Adding a route without protecting it fails here, not in production. The command rate
+    limit is raised here: the walk sends one command per route, and is not about that limit
+    (tested in test_api_errors_security.py)."""
+    async with running_api(tmp_path, logged_in=False, api_command_burst=10_000) as rig:
         checked = 0
         for template, methods in rig.app.openapi()["paths"].items():
             path = re.sub(r"\{[^}]+\}", "1", template)
