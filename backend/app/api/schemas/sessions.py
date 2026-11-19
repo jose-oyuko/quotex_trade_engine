@@ -19,6 +19,7 @@ from app.domain.enums import (
     SessionMode,
     Strategy,
 )
+from app.engine.strategies import max_steps_of
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 Money = Annotated[Decimal, Field(gt=0, le=MAX_BASE_STAKE, max_digits=12, decimal_places=2)]
@@ -47,6 +48,11 @@ class SessionStrategyIn(BaseModel):
             raise ValueError(
                 "need exactly one multiplier per step: "
                 f"max_steps={self.max_steps}, got {len(self.multipliers)}"
+            )
+        limit = max_steps_of(self.strategy)
+        if limit is not None and self.max_steps > limit:
+            raise ValueError(
+                f"growing flip has at most {limit} steps (9 trades in all), got {self.max_steps}"
             )
         return self
 

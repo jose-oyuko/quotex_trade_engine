@@ -197,3 +197,19 @@ describe('what the server says', () => {
     expect(serverProblems(new Error('offline')).message).toBe('offline')
   })
 })
+
+describe('the growing flip strategy (decision D-83)', () => {
+  const steps = (n: number) => Array.from({ length: n }, () => ({ value: '2' }))
+
+  it('takes up to 8 steps', () => {
+    expect(
+      problems({ ...valid, strategy: 'growing_flip', max_steps: 8, multipliers: steps(8) }),
+    ).toEqual([])
+  })
+
+  it('refuses a ninth step, saying why', () => {
+    expect(
+      problems({ ...valid, strategy: 'growing_flip', max_steps: 9, multipliers: steps(9) }),
+    ).toEqual(['max_steps: Growing flip has at most 8 steps (9 trades in all)'])
+  })
+})

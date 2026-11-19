@@ -27,6 +27,7 @@ const STRATEGIES: { value: Strategy; label: string }[] = [
   { value: 'martingale', label: 'Martingale' },
   { value: 'flip_every_loss', label: 'Flip every loss' },
   { value: 'two_step_flip', label: 'Two-step flip' },
+  { value: 'growing_flip', label: 'Growing flip' },
 ]
 
 /** What every report below is about. Demo and real are always one or the other, never mixed. */

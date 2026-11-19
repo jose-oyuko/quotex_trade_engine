@@ -4,7 +4,12 @@
 import { z } from 'zod'
 import { ApiError } from '../../api/client'
 import type { Session, SessionInput } from '../../api/types'
-import { MAX_STEPS, STRATEGIES, DEFAULT_MULTIPLIER } from '../groups/groupSchema'
+import {
+  MAX_STEPS,
+  STRATEGIES,
+  DEFAULT_MULTIPLIER,
+  GROWING_FLIP_MAX_STEPS,
+} from '../groups/groupSchema'
 
 export { MAX_STEPS, STRATEGIES, DEFAULT_MULTIPLIER }
 
@@ -104,7 +109,13 @@ export const sessionSchema = z
         .trim()
         .regex(/^[1-9]\d{0,4}$/, 'Enter a whole number, or leave it empty for no limit'),
     ]),
-    strategy: z.enum(['no_martingale', 'martingale', 'flip_every_loss', 'two_step_flip']),
+    strategy: z.enum([
+      'no_martingale',
+      'martingale',
+      'flip_every_loss',
+      'two_step_flip',
+      'growing_flip',
+    ]),
     base_stake: stake,
     max_steps: whole(`Enter a whole number from 0 to ${String(MAX_STEPS)}`, 0, MAX_STEPS),
     multipliers: z.array(z.object({ value: multiplier })),
@@ -134,6 +145,13 @@ export const sessionSchema = z
         code: 'custom',
         path: ['max_steps'],
         message: `Need exactly one multiplier per step (${String(values.max_steps)} steps, ${String(values.multipliers.length)} multipliers)`,
+      })
+    }
+    if (values.strategy === 'growing_flip' && values.max_steps > GROWING_FLIP_MAX_STEPS) {
+      context.addIssue({
+        code: 'custom',
+        path: ['max_steps'],
+        message: `Growing flip has at most ${String(GROWING_FLIP_MAX_STEPS)} steps (9 trades in all)`,
       })
     }
   })

@@ -198,3 +198,21 @@ describe('the broker (decision D-75)', () => {
     expect(toCreate(valid()).broker).toBe('quotex')
   })
 })
+
+describe('the growing flip strategy in a group (decision D-83)', () => {
+  const steps = (n: number) => Array.from({ length: n }, () => ({ value: '2' }))
+
+  it('is a flip strategy with at most 8 steps and says what it does', async () => {
+    const { FLIP_STRATEGIES, STRATEGIES } = await import('./groupSchema')
+    expect(FLIP_STRATEGIES).toContain('growing_flip')
+    const growing = STRATEGIES.find((s) => s.value === 'growing_flip')
+    expect(growing?.label).toBe('Growing flip')
+    expect(growing?.help).toContain('Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy')
+    expect(
+      problems(valid({ strategy: 'growing_flip', max_steps: 8, multipliers: steps(8) })),
+    ).toEqual({})
+    expect(
+      problems(valid({ strategy: 'growing_flip', max_steps: 9, multipliers: steps(9) })),
+    ).toHaveProperty('max_steps', 'Growing flip has at most 8 steps (9 trades in all)')
+  })
+})

@@ -82,7 +82,9 @@ application keeps running: no `.env` edit, no restart.
 
 A trading session trades by the clock, with no Telegram signal: you set it up once, and while its window is
 open it opens **pairs** (a CALL and a PUT on one asset, together) by itself. The one that loses recovers by the
-strategy you chose; the one that wins ends. You set it up on the **Sessions** page (the API is in `docs/API.md`).
+strategy you chose; the one that wins ends. With **Growing flip** (decision D-83) each leg's steps change direction in
+blocks of 1, 1, 2, 2, 3: the CALL leg goes Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy and the PUT leg the
+mirror, at most 9 trades (8 steps). You set it up on the **Sessions** page (the API is in `docs/API.md`).
 
 1. **Save a session:** open **Sessions**, press *Add a session* and fill in asset (for example `EURUSD`, or `EURUSD_otc` at the weekend), trade length (M5 = 300 s),
    start and end time with their time zone, how often it repeats (*once*: the next window only, or chosen

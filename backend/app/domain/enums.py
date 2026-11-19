@@ -36,6 +36,7 @@ class Strategy(StrEnum):
     MARTINGALE = "martingale"
     FLIP_EVERY_LOSS = "flip_every_loss"
     TWO_STEP_FLIP = "two_step_flip"
+    GROWING_FLIP = "growing_flip"  # blocks of 1, 1, 2, 2, 3 (decision D-83)
 
 
 class AssetSuffixMode(StrEnum):

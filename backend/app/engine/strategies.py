@@ -1,4 +1,4 @@
-"""The four strategies as pure functions (docs/DOMAIN.md section 2). No state, no I/O.
+"""The strategies as pure functions (docs/DOMAIN.md section 2). No state, no I/O.
 
 `k` is the number of consecutive losses so far, which is also the index of the follow-up being
 planned: step 0 is the original signal trade, step k the k-th follow-up. Multiplier `m_k` is the
@@ -16,7 +16,19 @@ from app.domain.enums import Direction, Strategy
 CENT = Decimal("0.01")
 
 # While a chain of one of these is running, new signals of the same group are ignored (D-9).
-FLIP_STRATEGIES = frozenset({Strategy.FLIP_EVERY_LOSS, Strategy.TWO_STEP_FLIP})
+FLIP_STRATEGIES = frozenset(
+    {Strategy.FLIP_EVERY_LOSS, Strategy.TWO_STEP_FLIP, Strategy.GROWING_FLIP}
+)
+
+# Growing flip (decision D-83): whether step k goes the opposite way to the first trade, in blocks
+# of 1, 1, 2, 2, 3 -- from Buy: Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy.
+GROWING_FLIP_PATTERN = (False, True, False, False, True, True, False, False, False)
+GROWING_FLIP_MAX_STEPS = len(GROWING_FLIP_PATTERN) - 1  # follow-ups after the first trade
+
+
+def max_steps_of(strategy: Strategy) -> int | None:
+    """The most follow-ups a strategy allows by itself, or None if only the global limit holds."""
+    return GROWING_FLIP_MAX_STEPS if strategy is Strategy.GROWING_FLIP else None
 
 
 @dataclass(slots=True, frozen=True)
@@ -47,6 +59,12 @@ def step_direction(strategy: Strategy, step: int, origin: Direction) -> Directio
         return origin
     if strategy is Strategy.FLIP_EVERY_LOSS:
         return flipped(origin) if step % 2 == 1 else origin
+    if strategy is Strategy.GROWING_FLIP:
+        if step >= len(GROWING_FLIP_PATTERN):
+            raise ValueError(
+                f"growing flip has at most {GROWING_FLIP_MAX_STEPS} follow-ups, not step {step}"
+            )
+        return flipped(origin) if GROWING_FLIP_PATTERN[step] else origin
     # TWO_STEP_FLIP: origin, origin, flipped, flipped, origin, origin, ...
     return flipped(origin) if (step // 2) % 2 == 1 else origin
 

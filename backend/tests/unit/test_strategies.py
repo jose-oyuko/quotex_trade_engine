@@ -12,6 +12,7 @@ from app.engine.strategies import (
     StepPlan,
     flipped,
     has_follow_up,
+    max_steps_of,
     max_trades,
     plan_step,
     step_stake,
@@ -119,7 +120,38 @@ def test_the_legacy_martingale_one_trade_short_quirk_is_gone() -> None:
 
 
 def test_only_the_flip_strategies_block_new_signals() -> None:
-    assert {Strategy.FLIP_EVERY_LOSS, Strategy.TWO_STEP_FLIP} == FLIP_STRATEGIES
+    assert {Strategy.FLIP_EVERY_LOSS, Strategy.TWO_STEP_FLIP, Strategy.GROWING_FLIP} == (
+        FLIP_STRATEGIES
+    )
+
+
+# --- growing flip (decision D-83) ---
+
+EIGHT = tuple(D(m) for m in ("2", "4", "8", "16", "32", "64", "128", "256"))
+
+
+def directions(origin: Direction, steps: int = 8) -> list[Direction]:
+    return [
+        plan_step(Strategy.GROWING_FLIP, k, origin, BASE, EIGHT).direction for k in range(steps + 1)
+    ]
+
+
+def test_growing_flip_from_buy_goes_in_blocks_of_1_1_2_2_3() -> None:
+    assert directions(CALL) == [CALL, PUT, CALL, CALL, PUT, PUT, CALL, CALL, CALL]
+
+
+def test_growing_flip_from_sell_is_the_mirror() -> None:
+    assert directions(PUT) == [PUT, CALL, PUT, PUT, CALL, CALL, PUT, PUT, PUT]
+
+
+def test_growing_flip_stakes_follow_the_multipliers_and_stop_after_nine_trades() -> None:
+    stakes = [plan_step(Strategy.GROWING_FLIP, k, CALL, BASE, EIGHT).stake for k in range(9)]
+    assert stakes == [BASE, *(BASE * m for m in EIGHT)]
+    assert max_trades(Strategy.GROWING_FLIP, 8) == 9
+    assert not has_follow_up(Strategy.GROWING_FLIP, 8, 8)  # the ninth loss ends the chain
+    assert max_steps_of(Strategy.GROWING_FLIP) == 8 and max_steps_of(Strategy.MARTINGALE) is None
+    with pytest.raises(ValueError, match="at most 8 follow-ups"):
+        plan_step(Strategy.GROWING_FLIP, 9, CALL, BASE, (*EIGHT, D("2")))
 
 
 # --- stakes ---

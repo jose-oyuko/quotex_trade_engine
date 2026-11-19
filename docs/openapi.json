@@ -4446,7 +4446,8 @@
           "no_martingale",
           "martingale",
           "flip_every_loss",
-          "two_step_flip"
+          "two_step_flip",
+          "growing_flip"
         ],
         "title": "Strategy",
         "type": "string"

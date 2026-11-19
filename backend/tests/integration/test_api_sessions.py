@@ -103,6 +103,9 @@ async def test_the_form_says_what_it_does_not_like(tmp_path: Path) -> None:
             "a day that does not exist": session_body(weekdays=[7]),
             "a target of zero": session_body(profit_target="0"),
             "a multiplier missing": session_body(strategy={"max_steps": 3}),
+            "growing flip with 9 steps": session_body(
+                strategy={"strategy": "growing_flip", "max_steps": 9, "multipliers": ["2"] * 9}
+            ),
         }
         for what, body in cases.items():
             response = await rig.client.post(API, json=body)
@@ -431,3 +434,13 @@ async def test_a_deriv_session_refuses_otc_pairs_and_quotex_refuses_deriv_names(
         index = await rig.client.post(API, json=session_body(asset="R_75", duration_s=60))
         assert index.status_code == 422
         assert "not a Quotex asset name" in index.json()["error"]["message"]
+
+
+async def test_a_growing_flip_session_with_eight_steps_is_saved(tmp_path: Path) -> None:
+    async with running_api(tmp_path) as rig:
+        body = session_body(
+            strategy={"strategy": "growing_flip", "max_steps": 8, "multipliers": ["2"] * 8}
+        )
+        response = await rig.client.post(API, json=body)
+        assert response.status_code == 201, response.text
+        assert response.json()["strategy"]["strategy"] == "growing_flip"

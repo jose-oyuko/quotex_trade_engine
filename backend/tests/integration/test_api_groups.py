@@ -88,6 +88,11 @@ async def test_a_missing_group_is_a_404_everywhere(tmp_path: Path) -> None:
         ({"settings": {"min_payout_pct": 101}}, "settings.min_payout_pct", "less than or equal"),
         ({"settings": {"strategy": "yolo"}}, "settings.strategy", "Input should be"),
         ({"settings": {"max_steps": 21, "multipliers": ["2"] * 21}}, "settings.max_steps", "20"),
+        (
+            {"settings": {"strategy": "growing_flip", "max_steps": 9, "multipliers": ["2"] * 9}},
+            "settings",
+            "growing flip has at most 8 steps",
+        ),
         ({"settings": {"nonsense": 1}}, "settings.nonsense", "Extra inputs"),
         ({"title": "   "}, "title", "at least 1"),
         ({"telegram_chat_id": 0}, "telegram_chat_id", "cannot be 0"),

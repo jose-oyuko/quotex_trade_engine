@@ -637,3 +637,28 @@ async def test_the_chains_of_a_session_are_not_limited_by_decision_d9() -> None:
     await open_first_pair(s)
     assert len(s.rig.engine.manager.active_chains(SESSION_GROUP)) == 2
     await s.stop()
+
+
+async def test_a_growing_flip_pair_mirrors_its_two_legs_step_by_step() -> None:
+    """Decision D-83: both legs on the same candle, each following the pattern from its own first
+    direction; every loss sends the next step at once; the ninth loss ends the chain."""
+    from app.events.types import TradeOpened
+
+    s = make_session_rig(strategy=Strategy.GROWING_FLIP, multipliers=("2.0",) * 8)
+    s.adapter.script_results(*([LOST] * 18))
+    await open_first_pair(s)
+    for step in range(1, 9):
+        s.adapter.settle_all()
+        await s.rig.until(lambda step=step: len(s.adapter.orders) == 2 * (step + 1))
+    s.adapter.settle_all()
+    await s.rig.idle()
+
+    legs: dict[object, list[Direction]] = {}
+    for event in s.rig.collect():
+        if isinstance(event, TradeOpened) and event.trade.broker_order_id is not None:
+            legs.setdefault(event.trade.chain_id, []).append(event.trade.direction)
+    call_leg, put_leg = sorted(legs.values(), key=lambda d: d[0] is not CALL)
+    assert call_leg == [CALL, PUT, CALL, CALL, PUT, PUT, CALL, CALL, CALL]
+    assert put_leg == [PUT, CALL, PUT, PUT, CALL, CALL, PUT, PUT, PUT]
+    assert {c.status for c in s.chains()} == {ChainStatus.EXHAUSTED}
+    await s.stop()

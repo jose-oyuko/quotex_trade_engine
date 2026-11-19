@@ -29,10 +29,22 @@ export const STRATEGIES = [
     label: 'Two-step flip',
     help: 'The direction changes after every second loss. New signals are ignored while a chain runs (unless the opposite pair below is allowed).',
   },
+  {
+    value: 'growing_flip',
+    label: 'Growing flip',
+    help: 'After each loss the direction follows blocks of 1, 1, 2, 2, 3: from Buy it goes Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy (from Sell, the mirror). At most 8 steps. New signals are ignored while a chain runs (unless the opposite pair below is allowed).',
+  },
 ] as const
 
+/** Growing flip has 9 trades at most: the first and 8 follow-ups (decision D-83). */
+export const GROWING_FLIP_MAX_STEPS = 8
+
 /** The strategies that run one chain at a time, and so may allow the opposite pair. */
-export const FLIP_STRATEGIES: readonly string[] = ['flip_every_loss', 'two_step_flip']
+export const FLIP_STRATEGIES: readonly string[] = [
+  'flip_every_loss',
+  'two_step_flip',
+  'growing_flip',
+]
 
 export const SUFFIX_MODES = [
   { value: 'otc', label: 'Always OTC (EURUSD becomes EURUSD_otc)' },
@@ -69,7 +81,13 @@ export const groupSchema = z
     parser: z.string().trim().min(1, 'Choose a parser'),
     asset_suffix_mode: z.enum(['otc', 'none', 'auto']),
     timezone: z.string().trim().min(1, 'Enter a time zone, like UTC-3').max(64),
-    strategy: z.enum(['no_martingale', 'martingale', 'flip_every_loss', 'two_step_flip']),
+    strategy: z.enum([
+      'no_martingale',
+      'martingale',
+      'flip_every_loss',
+      'two_step_flip',
+      'growing_flip',
+    ]),
     base_stake: stake,
     max_steps: z
       .number({ error: `Enter a whole number from 0 to ${String(MAX_STEPS)}` })
@@ -90,6 +108,13 @@ export const groupSchema = z
         code: 'custom',
         path: ['max_steps'],
         message: `Need exactly one multiplier per step (${String(values.max_steps)} steps, ${String(values.multipliers.length)} multipliers)`,
+      })
+    }
+    if (values.strategy === 'growing_flip' && values.max_steps > GROWING_FLIP_MAX_STEPS) {
+      context.addIssue({
+        code: 'custom',
+        path: ['max_steps'],
+        message: `Growing flip has at most ${String(GROWING_FLIP_MAX_STEPS)} steps (9 trades in all)`,
       })
     }
   })

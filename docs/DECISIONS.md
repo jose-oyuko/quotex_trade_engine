@@ -877,7 +877,7 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
 - **The latency report** gains `expiry -> result` and `expiry -> next`, measured on the wall clock from the
   times stored on each trade.
 
-**D-83. The growing flip strategy (Phase 25, proposed; owner's design).**
+**D-83. The growing flip strategy (Phase 25; owner's design).**
 - **The rule:** a fifth strategy, `growing_flip` ("Growing flip"). Step k goes in the first trade's direction
   or the opposite, in blocks of 1, 1, 2, 2, 3: same, flipped, same, same, flipped, flipped, same, same, same.
   From Buy: Buy, Sell, Buy, Buy, Sell, Sell, Buy, Buy, Buy; from Sell, the mirror.

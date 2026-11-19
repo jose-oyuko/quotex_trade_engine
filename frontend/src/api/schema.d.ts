@@ -3066,7 +3066,7 @@ export interface components {
          * Strategy
          * @enum {string}
          */
-        Strategy: "no_martingale" | "martingale" | "flip_every_loss" | "two_step_flip";
+        Strategy: "no_martingale" | "martingale" | "flip_every_loss" | "two_step_flip" | "growing_flip";
         /** StreaksOut */
         StreaksOut: {
             /**

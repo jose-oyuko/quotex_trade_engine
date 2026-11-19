@@ -29,6 +29,7 @@ if the list is shorter than `N`, the owner-facing validation must reject it — 
 | `martingale` | same as `origin` | `base × m_k` | first win, or after the limit below |
 | `flip_every_loss` | flip when `k` is odd: `origin` flipped, `origin`, flipped, … | `base × m_k` | first win, or after follow-up `N` loses |
 | `two_step_flip` | flip when `(k // 2)` is odd: `origin, origin, flipped, flipped, origin, …` | `base × m_k` | first win, or after follow-up `N` loses |
+| `growing_flip` (D-83) | blocks of 1, 1, 2, 2, 3 from step 0: `origin, flipped, origin, origin, flipped, flipped, origin, origin, origin` | `base × m_k` | first win, or after follow-up `N` loses; `N` ≤ 8 (9 trades) |
 
 A win at any step ends the chain and resets everything to base. After the final follow-up loses, the
 chain ends as `exhausted` and the system returns to base for the next signal.
@@ -57,6 +58,12 @@ chain ends as `exhausted` and the system returns to base for the next signal.
 | step 2 | PUT | 250 |
 | step 3 | PUT | 300 |
 → with N = 4 the next would be CALL at `base × m4`. Chain `exhausted` after step N loses.
+
+`growing_flip` (N = 8; from CALL; a PUT start is the mirror, which is what a session pair's second leg does)
+| Step | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| Direction | CALL | PUT | CALL | CALL | PUT | PUT | CALL | CALL | CALL |
+→ chain `exhausted` if step 8 loses too. It is a flip strategy for D-9 and D-70.
 
 `martingale`: CALL 100 → CALL 200 → CALL 250 → CALL 300.
 

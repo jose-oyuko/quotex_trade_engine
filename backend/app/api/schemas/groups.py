@@ -16,6 +16,7 @@ from pydantic import (
 )
 
 from app.domain.enums import AssetSuffixMode, Broker, Strategy
+from app.engine.strategies import max_steps_of
 
 # Bounds keep a typo from becoming a 10,000-step chain or a stake with a stray zero.
 MAX_STEPS = 20
@@ -53,6 +54,11 @@ class GroupSettingsIn(BaseModel):
             raise ValueError(
                 "need exactly one multiplier per step: "
                 f"max_steps={self.max_steps}, got {len(self.multipliers)}"
+            )
+        limit = max_steps_of(self.strategy)
+        if limit is not None and self.max_steps > limit:
+            raise ValueError(
+                f"growing flip has at most {limit} steps (9 trades in all), got {self.max_steps}"
             )
         return self
 
