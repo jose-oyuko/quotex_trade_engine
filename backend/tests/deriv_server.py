@@ -54,26 +54,30 @@ class Contract:
     stake: Decimal
     profit: Decimal | None = None  # None while open
     planned: Decimal | None = None  # the scripted result, fixed when it was bought
-    entry_tick: Decimal | None = None  # set by `set_terms`, as Deriv does after the first tick
+    entry_spot: Decimal | None = None  # set by `set_terms`, as Deriv does after the first tick
     date_expiry: int | None = None
     payout: Decimal | None = None
+    exit_spot: Decimal | None = None  # set by `expire`, as Deriv does just after the end time
 
     def state(self) -> dict[str, Any]:
         settled = self.profit is not None
+        expired = settled or self.exit_spot is not None
         state: dict[str, Any] = {
             "contract_id": self.contract_id,
             "underlying_symbol": self.symbol,
             "contract_type": self.contract_type,
             "buy_price": f"{self.stake:.2f}",
             "is_sold": 1 if settled else 0,
-            "is_expired": 1 if settled else 0,
+            "is_expired": 1 if expired else 0,
             "status": ("won" if self.profit and self.profit > 0 else "lost") if settled else "open",
             "profit": f"{self.profit:.2f}" if settled else "0.00",
         }
         if self.payout is not None:
             state["payout"] = float(self.payout)
-        if self.entry_tick is not None:
-            state["entry_tick"] = float(self.entry_tick)
+        if self.entry_spot is not None:  # the live API's names (seen on the demo, 2026-11-19)
+            state["entry_spot"] = f"{self.entry_spot}"
+        if self.exit_spot is not None:
+            state["exit_spot"] = f"{self.exit_spot}"
         if self.date_expiry is not None:
             state["date_expiry"] = self.date_expiry
         return state
@@ -183,8 +187,14 @@ class FakeDerivServer:
     ) -> None:
         """What Deriv says once the contract started: its entry tick, end time and payout."""
         contract = self.contracts[contract_id]
-        contract.entry_tick, contract.date_expiry = entry, expiry
+        contract.entry_spot, contract.date_expiry = entry, expiry
         contract.payout = payout if payout is not None else contract.stake * Decimal("1.95")
+        await self._push_contract(contract, keep_watching=True)
+
+    async def expire(self, contract_id: int, exit_spot: Decimal) -> None:
+        """The update Deriv sends just after the end time: expired, its exit price, not sold yet."""
+        contract = self.contracts[contract_id]
+        contract.exit_spot = exit_spot
         await self._push_contract(contract, keep_watching=True)
 
     async def push_tick(self, symbol: str, epoch: int, quote: Decimal) -> None:

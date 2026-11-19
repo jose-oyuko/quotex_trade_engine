@@ -64,6 +64,7 @@ from app.deriv.protocol import (
     DerivAsset,
     LengthRange,
     allows,
+    deriv_exit,
     deriv_symbol,
     describe_lengths,
     duration_params,
@@ -743,6 +744,11 @@ class DerivAdapter:
             if profit is not None:
                 settled.set_result(profit)
             elif early:
+                reported = deriv_exit(contract)  # Deriv's own exit price, once it has expired
+                result = None if reported is None else early_profit(terms, reported)
+                if result is not None and not decided.done():
+                    decided.set_result(result)
+                    return
                 try_early()
 
         first = await conn.request(

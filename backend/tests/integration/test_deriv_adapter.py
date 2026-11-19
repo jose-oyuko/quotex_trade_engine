@@ -731,3 +731,16 @@ async def test_no_early_result_when_the_ticks_before_the_end_were_not_seen(rig: 
     await rig.server.settle(int(order_id), D("0.95"))
     assert (await asyncio.wait_for(waiting, 2)).profit == D("0.95")
     await deriv.disconnect()
+
+
+async def test_deriv_s_own_exit_price_decides_early_even_without_the_ticks(rig: Rig) -> None:
+    """What the live demo showed (2026-11-19): the first update after the end time carries
+    `exit_spot`, about 2 s before the contract is sold."""
+    deriv = rig.adapter(early_result=True)
+    await deriv.connect()
+    order_id, waiting = await bought_with_terms(rig, deriv, direction=Direction.PUT)
+    await rig.server.expire(int(order_id), D("99.10"))  # below the entry: the Fall wins
+    result = await asyncio.wait_for(waiting, 2)
+    assert (result.outcome, result.profit) == (TradeOutcome.WON, D("0.95"))
+    assert rig.server.contracts[int(order_id)].profit is None  # not sold yet
+    await deriv.disconnect()

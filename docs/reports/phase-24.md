@@ -118,6 +118,38 @@ These mix Quotex and Deriv, and R_75 and 1HZ75V.
      on the 18th. The risk log should have no `early_result_corrected`.
    - **If it has one:** switch the setting OFF and send me the `deriv_early_result_mismatch` log lines.
 
+## 7b. Live timeline on the demo (run by the agent, 2026-11-19, with the owner's permission)
+
+Two 1.00 trades on 1HZ75V completed; the other attempts failed on the network (below).
+
+| | trade A (lost) | trade B (won) |
+|---|---|---|
+| tick at the end second arrives | −1.39 s | −1.36 s |
+| Deriv's update "expired", with `exit_spot` | −1.29 s | −1.32 s |
+| Deriv's update "sold" (`status` won/lost) | +0.70 s | +0.71 s |
+| result used by the engine | +0.70 s | +0.71 s |
+| Deriv's result = the rule's | yes (−1.00) | yes (+0.88) |
+
+Times are by this PC's clock, which runs about 1.4 s behind Deriv's (the tick of the end second arrives at
+"−1.4 s"): the gaps are what counts. **Deriv knows the exit price about 2.0 s before it marks the contract
+sold**, and its `exit_spot` is exactly the tick of the end second, as the rule says.
+
+**Why the engine did not use it:** the live API names the prices `entry_spot` and `exit_spot` (and
+`entry_spot_time`, `exit_spot_time`), not `entry_tick` and `exit_tick` as in the published schema, so the
+engine never had the entry price and fell back to waiting. **Fixed:** both spellings are read, and Deriv's
+own `exit_spot` (in the first update after the end time) now also decides the early result, whichever of it
+and the price tick comes first. The fake Deriv sends the live names; new tests cover both paths.
+
+**Network:** 5 of 7 runs could not finish: "Deriv did not answer in time" (twice), "Could not reach Deriv
+(ReadError)", "getaddrinfo failed" (the router's DNS), and one order with no confirmation within 10 s
+(`OrderAckTimeoutError`: that 1.00 demo order may exist on Deriv). At the time the laptop was on battery and
+Windows had logged 6 Wi-Fi "missed beacons" in 30 minutes, the same pattern as on 2026-11-18.
+
+**Still to do:** one complete 3-trade timeline with the fixed code
+(`npm run deriv:check -- --asset 1HZ75V --order --timeline`), on a steady connection (laptop plugged in, or a
+cable). If all three show "result used by the engine" about 2 s before "sold" and "agrees", switch *Deriv early
+result* ON. It stays OFF until then.
+
 ## 8. Measurements
 
 See section 4. The early result's own effect can only be measured on your demo (section 7).

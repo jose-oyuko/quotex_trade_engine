@@ -12,6 +12,7 @@ from app.deriv.protocol import (
     LengthRange,
     allows,
     asset_name,
+    deriv_exit,
     deriv_symbol,
     describe_lengths,
     duration_params,
@@ -295,3 +296,12 @@ def test_a_tick_message_is_read_or_ignored() -> None:
     assert tick_of({"tick": {"epoch": 5, "quote": 101.25}}) == (5, Decimal("101.25"))
     assert tick_of({"tick": {"epoch": "5", "quote": 1}}) is None
     assert tick_of({"msg_type": "tick"}) is None
+
+
+def test_the_live_names_entry_spot_and_exit_spot_are_read() -> None:
+    terms = ContractTerms()
+    terms.update({"entry_spot": "3945.04", "contract_type": "CALL"})
+    assert terms.entry == Decimal("3945.04")
+    assert deriv_exit({"is_expired": 0, "exit_spot": "1"}) is None  # not over yet
+    assert deriv_exit({"is_expired": 1, "exit_spot": "3946.84"}) == Decimal("3946.84")
+    assert deriv_exit({"is_expired": 1}) is None

@@ -62,6 +62,9 @@ def parse_args() -> argparse.Namespace:
         help="with --order: time the result (D-82), --count trades",
     )
     parser.add_argument("--count", type=int, default=3, help="trades for --timeline (default 3)")
+    parser.add_argument(
+        "--fields", action="store_true", help="with --timeline: show the contract's fields"
+    )
     return parser.parse_args()
 
 
@@ -167,8 +170,8 @@ async def run(args: argparse.Namespace) -> int:
 CONTRACT_FIELDS = (
     "is_expired",
     "is_settleable",
-    "exit_tick",
-    "exit_tick_time",
+    "exit_spot",
+    "exit_spot_time",
     "status",
     "is_sold",
 )
@@ -202,6 +205,8 @@ async def timeline(adapter: Any, args: argparse.Namespace, amount: Decimal) -> i
             await asyncio.sleep(0.1)
         report = format_timeline(events, known_at, result.profit)
         print(report.text)
+        if getattr(args, "fields", False):
+            print(contract_fields(events))
         if report.early_s is not None:
             early_s.append(report.early_s)
         if report.sold_s is not None:
@@ -260,6 +265,26 @@ def format_timeline(
     verdict = "agrees" if agrees else "DIFFERS" if official is not None else "not seen"
     lines.append(f"  Deriv's own result: {official} ({verdict})")
     return TimelineReport("\n".join(lines), early, sold_s, agrees)
+
+
+FIELD_HINTS = ("entry", "exit", "expiry", "start", "payout", "price", "type", "tick", "spot")
+FIELD_SKIP = ("account", "login", "transaction", "balance", "currency")
+
+
+def contract_fields(events: list[tuple[float, str, Any]]) -> str:
+    """What Deriv's contract updates carry (the names and values that decide a result; nothing
+    about the account), from the first update and the first one after the end time."""
+    contracts = [data for _, kind, data in events if kind == "contract"]
+    shown = [contracts[0]] if contracts else []
+    shown += [c for c in contracts if c.get("is_expired") == 1][:1]
+    lines = []
+    for contract in shown:
+        names = sorted(contract)
+        lines.append(f"  fields of an update ({len(names)}): {', '.join(names)}")
+        for name in names:
+            if any(h in name for h in FIELD_HINTS) and not any(s in name for s in FIELD_SKIP):
+                lines.append(f"     {name} = {contract[name]!r}")
+    return "\n".join(lines)
 
 
 def _sold(contract: Any) -> bool:

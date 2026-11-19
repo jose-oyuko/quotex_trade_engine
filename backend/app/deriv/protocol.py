@@ -273,6 +273,8 @@ def socket_kind(url: str) -> AccountType | None:
 #
 # Deriv's schema for `proposal_open_contract`: the entry tick "for contracts starting immediately
 # is the next tick after the start time"; the exit tick is "the latest tick at the end time" and
+# (the live API names them `entry_spot` and `exit_spot`, seen on the demo on 2026-11-19, and sends
+# `exit_spot` in the first update after the end time, about 2 s before the contract is sold)
 # "may be a few seconds before the end time" on assets that do not tick every second. A Rise
 # (CALL) wins when the exit is strictly higher than the entry, a Fall (PUT) when strictly lower;
 # an equal exit is a loss (D-77). Deriv's own result, when it comes, is the one kept.
@@ -292,7 +294,10 @@ class ContractTerms:
     def update(self, contract: Mapping[str, Any]) -> None:
         if isinstance(contract.get("contract_type"), str):
             self.contract_type = str(contract["contract_type"])
-        if (entry := _quote(contract.get("entry_tick"))) is not None:
+        entry = _quote(contract.get("entry_spot"))
+        if entry is None:
+            entry = _quote(contract.get("entry_tick"))
+        if entry is not None:
             self.entry = entry
         expiry = contract.get("date_expiry")
         if isinstance(expiry, int) and not isinstance(expiry, bool):
@@ -322,6 +327,14 @@ def _quote(value: object) -> Decimal | None:
     except InvalidOperation:
         return None
     return quote if quote.is_finite() else None
+
+
+def deriv_exit(contract: Mapping[str, Any]) -> Decimal | None:
+    """The exit price Deriv itself reports once the contract has expired, or None."""
+    if contract.get("is_expired") != 1:
+        return None
+    exit_price = _quote(contract.get("exit_spot"))
+    return exit_price if exit_price is not None else _quote(contract.get("exit_tick"))
 
 
 def tick_of(message: Mapping[str, Any]) -> tuple[int, Decimal] | None:
