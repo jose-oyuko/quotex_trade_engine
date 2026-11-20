@@ -250,6 +250,17 @@ def test_lower_layers_never_import_the_layers_above_them() -> None:
         "engine": ("app.api", "app.services"),
         "sessions": ("app.api", "app.services"),
         "backtest": ("app.api", "app.services", "app.db", "app.deriv", "app.quotex"),
+        # consolidations and trends (D-85): pure, so the chart, backtests and live engine share it
+        "market": (
+            "app.api",
+            "app.services",
+            "app.db",
+            "app.deriv",
+            "app.quotex",
+            "app.engine",
+            "app.backtest",
+            "app.sessions",
+        ),
         "services": ("app.api",),
     }
     offenders = [

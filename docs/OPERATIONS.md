@@ -416,6 +416,26 @@ not simulated. A strategy changes how wins and losses bunch together, not the od
 with a payout under 100% the expected result is slightly negative. A backtest shows the risk you take,
 not a profit to expect.
 
+## Consolidations and trends (`npm run market:scan`)
+
+Where were the consolidations, and do the trends after them last? (decision D-85; the Market page
+comes in Phase 30.) On prices downloaded for backtests:
+
+```
+npm run market:scan -- --asset 1HZ75V --from 2026-11-12 --to 2026-11-19
+npm run market:scan -- --asset 1HZ75V --from 2026-11-12 --to 2026-11-19 --length M5
+npm run market:scan -- --asset 1HZ75V --from 2026-11-12 --to 2026-11-19 --compare
+```
+
+- `--length`: `M1`, `M5`, `M15`, `H1` or seconds.
+- `--pattern alternating|mixed|tight|overlap|choppy`, `--candles`, `--misses`, `--width`,
+  `--net-share`, `--breakout-candles`, `--breakout-by close|touch`: the definition (DOMAIN section 9).
+- `--compare`: every pattern side by side.
+
+It prints how many consolidations were found, how long trends lasted against any moment, how often the
+breakout's direction went on, and how many flip pairs went deep while trending against any time. Each
+share has its 95% range: a difference inside it is noise. Nothing is downloaded or traded.
+
 ## Real money
 
 Do not, until the demo account has run for a good while with the live checks in the phase reports

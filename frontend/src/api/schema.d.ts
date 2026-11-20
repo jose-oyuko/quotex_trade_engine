@@ -618,6 +618,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/candles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Candles
+         * @description The candles of an asset's stored prices, at most 5,000 per request (422
+         *     `invalid_market` beyond). A period without stored prices simply has no candles.
+         */
+        get: operations["candles_api_v1_market_candles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Patterns
+         * @description The consolidation patterns, each with its default settings.
+         */
+        get: operations["patterns_api_v1_market_patterns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan
+         * @description Every consolidation, breakout and trend in a period (at most 31 days), with the
+         *     statistics. 422 `invalid_market` without stored prices or with settings that do not fit.
+         */
+        post: operations["scan_api_v1_market_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prices": {
         parameters: {
             query?: never;
@@ -1985,6 +2047,11 @@ export interface components {
             type: "balance.updated";
         };
         /**
+         * BreakBy
+         * @enum {string}
+         */
+        BreakBy: "close" | "touch";
+        /**
          * BreakdownKind
          * @enum {string}
          */
@@ -2003,6 +2070,33 @@ export interface components {
             /** Label */
             label: string;
             metrics: components["schemas"]["MetricsOut"];
+        };
+        /** BreakoutOut */
+        BreakoutOut: {
+            /** Close */
+            close: number;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /**
+             * Known
+             * Format: date-time
+             * @description When the breakout was known: the last one's end.
+             */
+            known: string;
+            /**
+             * Level
+             * @description The range's high (up) or low (down) that was broken.
+             */
+            level: number;
+            /**
+             * Start
+             * Format: date-time
+             * @description The first breakout candle.
+             */
+            start: string;
         };
         /**
          * Broker
@@ -2035,6 +2129,52 @@ export interface components {
         BrokersOut: {
             /** Items */
             items: components["schemas"]["BrokerOut"][];
+        };
+        /** CandleOut */
+        CandleOut: {
+            /** Close */
+            close: number;
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+            /** Open */
+            open: number;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            /**
+             * Ticks
+             * @description Prices inside the candle.
+             */
+            ticks: number;
+        };
+        /** CandlesOut */
+        CandlesOut: {
+            /** Asset */
+            asset: string;
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /**
+             * Items
+             * @description Oldest first; a period without prices has none.
+             */
+            items: components["schemas"]["CandleOut"][];
+            /**
+             * Length
+             * @description Seconds per candle.
+             */
+            length: number;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
         };
         /** ChainAdvancedMessage */
         ChainAdvancedMessage: {
@@ -2234,6 +2374,39 @@ export interface components {
              * Format: date-time
              */
             since: string;
+        };
+        /** ConsolidationOut */
+        ConsolidationOut: {
+            breakout: components["schemas"]["BreakoutOut"] | null;
+            /** Candles */
+            candles: number;
+            /**
+             * End
+             * Format: date-time
+             * @description The end of its last candle.
+             */
+            end: string;
+            /**
+             * Ended
+             * @enum {string}
+             */
+            ended: "breakout" | "gap" | "end";
+            /**
+             * First
+             * Format: date-time
+             * @description Its first candle.
+             */
+            first: string;
+            /**
+             * Found
+             * Format: date-time
+             * @description When the pattern was complete.
+             */
+            found: string;
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
         };
         /** ControlsChangedMessage */
         ControlsChangedMessage: {
@@ -2949,6 +3122,82 @@ export interface components {
              */
             state: "logged_out" | "code_sent" | "password_needed" | "logged_in";
         };
+        /**
+         * MarketRulesIn
+         * @description What counts as a consolidation and a breakout (docs/DOMAIN.md, section 9).
+         */
+        MarketRulesIn: {
+            /** @default close */
+            breakout_by: components["schemas"]["BreakBy"];
+            /**
+             * Breakout Candles
+             * @default 2
+             */
+            breakout_candles: number;
+            /**
+             * Candles
+             * @description Candles in the pattern.
+             * @default 5
+             */
+            candles: number;
+            /**
+             * Misses
+             * @description `mixed`: candles that may not alternate.
+             * @default 1
+             */
+            misses: number;
+            /**
+             * Net Share
+             * @description `choppy`: the largest net move, as a share.
+             * @default 0.2
+             */
+            net_share: number;
+            /** @default alternating */
+            pattern: components["schemas"]["Pattern"];
+            /**
+             * Width
+             * @description `tight`: the range, in average candles.
+             * @default 2
+             */
+            width: number;
+        };
+        /** MarketStatsOut */
+        MarketStatsOut: {
+            /** @description The same, from any candle: the comparison. */
+            any_wait: components["schemas"]["SpreadOut"];
+            /**
+             * Break Even
+             * @description The share of wins that pays for the losses at 88%.
+             */
+            break_even: number;
+            /** Breakouts */
+            breakouts: number;
+            /** Candles */
+            candles: number;
+            /** Consolidations */
+            consolidations: number;
+            /** Deep */
+            deep: number;
+            /** @description Flip pairs started at any candle that went deep. */
+            deep_any: components["schemas"]["RateOut"];
+            /** @description ... started in a known consolidation. */
+            deep_consolidation: components["schemas"]["RateOut"];
+            /** @description ... started while trending. */
+            deep_trend: components["schemas"]["RateOut"];
+            /** @description Candles of the stretches that took pairs deep that lie in a consolidation. */
+            described: components["schemas"]["RateOut"];
+            /** @description The candle after a breakout went its way. */
+            first_with: components["schemas"]["RateOut"];
+            /**
+             * In Consolidation
+             * @description Share of the candles inside a consolidation.
+             */
+            in_consolidation: number;
+            /** @description Candles from a breakout until the next consolidation was found. */
+            trend_wait: components["schemas"]["SpreadOut"];
+            /** @description The trends' candles that went the breakout's way. */
+            trend_with: components["schemas"]["RateOut"];
+        };
         /** MetricsOut */
         MetricsOut: {
             /** Avg Payout Pct */
@@ -3086,6 +3335,19 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * Pattern
+         * @enum {string}
+         */
+        Pattern: "alternating" | "mixed" | "tight" | "overlap" | "choppy";
+        /** PatternsOut */
+        PatternsOut: {
+            /**
+             * Items
+             * @description Each pattern with its default settings.
+             */
+            items: components["schemas"]["MarketRulesIn"][];
+        };
         /** PhoneIn */
         PhoneIn: {
             /**
@@ -3170,6 +3432,22 @@ export interface components {
              * @enum {string}
              */
             state: "logged_out" | "working" | "pin_needed" | "logged_in";
+        };
+        /** RateOut */
+        RateOut: {
+            /** High */
+            high: number;
+            /** Hits */
+            hits: number;
+            /**
+             * Low
+             * @description The 95% range: below this is unlikely.
+             */
+            low: number;
+            /** Share */
+            share: number;
+            /** Total */
+            total: number;
         };
         /** RealTradingIn */
         RealTradingIn: {
@@ -3323,6 +3601,58 @@ export interface components {
              * @default 10
              */
             tiny_below: number;
+        };
+        /** ScanIn */
+        ScanIn: {
+            /** Asset */
+            asset: string;
+            /**
+             * Deep
+             * @description Trades lost in a row that count as deep.
+             * @default 6
+             */
+            deep: number;
+            /**
+             * End
+             * Format: date-time
+             * @description At most 31 days after `start`.
+             */
+            end: string;
+            /**
+             * Length
+             * @description Seconds per candle.
+             * @default 60
+             */
+            length: number;
+            rules?: components["schemas"]["MarketRulesIn"];
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
+        /** ScanOut */
+        ScanOut: {
+            /** Asset */
+            asset: string;
+            /** Consolidations */
+            consolidations: components["schemas"]["ConsolidationOut"][];
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Length */
+            length: number;
+            rules: components["schemas"]["MarketRulesIn"];
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+            stats: components["schemas"]["MarketStatsOut"];
+            /** Trends */
+            trends: components["schemas"]["TrendOut"][];
         };
         /** SecretIn */
         SecretIn: {
@@ -3794,6 +4124,21 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** SpreadOut */
+        SpreadOut: {
+            /** Count */
+            count: number;
+            /** Longest */
+            longest: number;
+            /** Mean */
+            mean: number;
+            /** Median */
+            median: number;
+            /** Q1 */
+            q1: number;
+            /** Q3 */
+            q3: number;
+        };
         /**
          * Strategy
          * @enum {string}
@@ -4013,6 +4358,51 @@ export interface components {
          * @enum {string}
          */
         TradeStatus: "pending" | "open" | "won" | "lost" | "draw" | "failed" | "unknown";
+        /** TrendOut */
+        TrendOut: {
+            /** Candles */
+            candles: number;
+            /** Close */
+            close: number;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "up" | "down";
+            /**
+             * End
+             * Format: date-time
+             * @description Where the next consolidation starts (or a gap, the end).
+             */
+            end: string;
+            /**
+             * Ended
+             * @enum {string}
+             */
+            ended: "consolidation" | "gap" | "end";
+            /**
+             * Move
+             * @description How far the price went the breakout's way.
+             */
+            move: number;
+            /**
+             * Open
+             * @description The breakout's close.
+             */
+            open: number;
+            /**
+             * Start
+             * Format: date-time
+             * @description The candle after the breakout.
+             */
+            start: string;
+            /**
+             * Stopped
+             * Format: date-time
+             * @description When its end was known.
+             */
+            stopped: string;
+        };
         /** UserOut */
         UserOut: {
             role: components["schemas"]["UserRole"];
@@ -6957,6 +7347,237 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ControlsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    candles_api_v1_market_candles_get: {
+        parameters: {
+            query: {
+                asset: string;
+                start: string;
+                end: string;
+                length?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandlesOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    patterns_api_v1_market_patterns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatternsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    scan_api_v1_market_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanOut"];
                 };
             };
             /** @description Not Found */

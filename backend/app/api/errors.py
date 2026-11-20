@@ -57,6 +57,7 @@ from app.services.groups import (
     InvalidGroupError,
 )
 from app.services.login_errors import EngineRunningError, WrongStepError
+from app.services.market import InvalidMarketError
 from app.services.price_history import (
     AssetBusyError,
     DownloadNotFoundError,
@@ -161,6 +162,7 @@ DOMAIN_ERRORS: dict[type[DomainError], tuple[int, str]] = {
     InvalidBacktestError: (422, "invalid_backtest"),
     BacktestRunningError: (409, "backtest_running"),
     BacktestNotFoundError: (404, "backtest_not_found"),
+    InvalidMarketError: (422, "invalid_market"),
 }
 
 HTTP_CODES = {

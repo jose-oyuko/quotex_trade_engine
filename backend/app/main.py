@@ -24,6 +24,7 @@ from app.api.routers import (
     deriv,
     engine,
     groups,
+    market,
     prices,
     quotex,
     reports,
@@ -63,6 +64,7 @@ from app.services.deriv import AccountChecker, DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.market import MarketService
 from app.services.price_history import PriceHistoryService
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
@@ -253,6 +255,7 @@ def create_app(
         app.state.backtests = BacktestService(
             store=history_store, bus=app.state.bus, tasks=app.state.tasks, clock=clock
         )
+        app.state.market = MarketService(history_store)  # consolidations and trends (D-85)
         app.state.risk_settings = RiskSettingsService(
             app.state.bus, clock, live, lambda: app.state.trading
         )
@@ -360,6 +363,7 @@ def create_app(
         brokers.router,
         prices.router,
         backtests.router,
+        market.router,
     ):
         app.include_router(router, prefix="/api/v1", dependencies=[Depends(current_user)])
     app.include_router(ws.router)  # checks the session itself, before accepting

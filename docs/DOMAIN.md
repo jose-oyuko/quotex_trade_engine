@@ -268,3 +268,44 @@ A backtest replays a session-shaped setup on stored prices (`app/backtest/replay
   known 0.5 s after the end, which is when the next candle still sees the pair as open.
 - **Nothing is guessed:** a trade whose seconds were not downloaded, or that has no price, is not
   decided. The pair is not opened (counted as "no price data"), or the chain ends there (`failed`).
+
+## 9. Consolidations, breakouts and trends (D-85)
+
+Candles of any length are made from stored prices (`app/market/candles.py`): aligned on the epoch, the
+open is the first price inside, the close the last; a period without prices has no candle (a gap).
+
+The detector (`app/market/detector.py`) reads candles one at a time and never looks ahead:
+- **Consolidation:** the last `candles` candles match a pattern:
+  - `alternating` (the owner's, default 5): every candle the opposite colour of the one before; an
+    equal candle ends the run;
+  - `mixed` (6, 1 miss): the same, but `misses` candles may fail to alternate;
+  - `tight` (8, width 2): the window's high to low is at most `width` average candles (of the 50
+    before it);
+  - `overlap` (4): every candle opens and closes inside the high and low of the one before;
+  - `choppy` (10, net 0.2): the net move is at most `net_share` of all the candles' moves.
+
+  Its range is the window's lowest low to highest high. Every candle after it belongs to the
+  consolidation until the breakout; one that stays inside while the pattern goes on matching widens
+  the range with its wicks.
+- **Breakout:** `breakout_candles` (default 2) candles in a row beyond the range on the same side, by
+  `close` (default) or `touch` (any part beyond, and not the other side). A candle beyond the range counts
+  even when it still matches the pattern. The consolidation ends where the breakout begins.
+- **Trend:** from the breakout until the next consolidation. It ends where that consolidation's first
+  candle starts, which is known only when the pattern completes (`stopped`). After a breakout the
+  detector starts afresh, so the next consolidation is made of candles after it.
+- **A gap** ends whatever was going on.
+
+**The statistics** (`app/market/stats.py`):
+- A flip pair opened on a candle goes as deep as the candles alternate after it (one leg loses the
+  first trade, flips to the candle's colour, and loses while the colours alternate; an equal candle
+  loses). *Deep* = 6 trades lost in a row by default. This is counted from candle colours; the
+  backtests replay the real trades.
+- **Describes:** the share of the candles of deep stretches that lie inside a consolidation.
+- **Deep pairs** started at any candle, while trending (from the breakout until the next consolidation
+  is found: what a trend session would trade), and in a known consolidation.
+- **Waiting:** candles from a breakout until the next consolidation is found, against the same count
+  from any candle, also started afresh.
+- **The breakout's way:** the next candle, and all the trend's candles, against 53.2% (break-even at
+  88%).
+- Every share has its 95% range (Wilson): a difference inside it is noise.
+

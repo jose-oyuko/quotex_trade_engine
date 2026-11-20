@@ -120,6 +120,10 @@ Rules:
   `PRAGMA user_version`), not by Alembic. Downloads use Deriv's public price socket on a connection of
   their own (`app/deriv/history.py`); the replay (`app/backtest/replay.py`) is pure and runs in a worker
   thread. Neither touches the execution path.
+- **Consolidations and trends (D-85)** are found by `app/market/`: pure code (candles, the detector, the
+  statistics) that reads candles one at a time and never looks ahead, so the Market page, the
+  backtests and later the live engine share it. It imports nothing above it (an architecture test).
+  `app/services/market.py` loads the stored prices and scans in a worker thread.
 
 ## 7. API surface (built in Phase 6; the complete guide is `docs/API.md`)
 

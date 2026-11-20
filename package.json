@@ -36,6 +36,7 @@
     "deriv:check": "uv run --directory backend python -m scripts.deriv_check",
     "history:download": "uv run --directory backend python -m scripts.history_download",
     "backtest": "uv run --directory backend python -m scripts.backtest",
+    "market:scan": "uv run --directory backend python -m scripts.market_scan",
     "telegram:login": "uv run --directory backend python -m scripts.telegram_cli login",
     "telegram:dialogs": "uv run --directory backend python -m scripts.telegram_cli dialogs",
     "telegram:listen": "uv run --directory backend python -m scripts.telegram_cli listen",

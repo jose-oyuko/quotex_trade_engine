@@ -1072,6 +1072,14 @@
         "title": "BalanceUpdatedMessage",
         "type": "object"
       },
+      "BreakBy": {
+        "enum": [
+          "close",
+          "touch"
+        ],
+        "title": "BreakBy",
+        "type": "string"
+      },
       "BreakdownKind": {
         "enum": [
           "group",
@@ -1129,6 +1137,48 @@
           "metrics"
         ],
         "title": "BreakdownRowOut",
+        "type": "object"
+      },
+      "BreakoutOut": {
+        "properties": {
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "direction": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "known": {
+            "description": "When the breakout was known: the last one's end.",
+            "format": "date-time",
+            "title": "Known",
+            "type": "string"
+          },
+          "level": {
+            "description": "The range's high (up) or low (down) that was broken.",
+            "title": "Level",
+            "type": "number"
+          },
+          "start": {
+            "description": "The first breakout candle.",
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "known",
+          "direction",
+          "level",
+          "close"
+        ],
+        "title": "BreakoutOut",
         "type": "object"
       },
       "Broker": {
@@ -1211,6 +1261,86 @@
           "items"
         ],
         "title": "BrokersOut",
+        "type": "object"
+      },
+      "CandleOut": {
+        "properties": {
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "high": {
+            "title": "High",
+            "type": "number"
+          },
+          "low": {
+            "title": "Low",
+            "type": "number"
+          },
+          "open": {
+            "title": "Open",
+            "type": "number"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "ticks": {
+            "description": "Prices inside the candle.",
+            "title": "Ticks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "open",
+          "high",
+          "low",
+          "close",
+          "ticks"
+        ],
+        "title": "CandleOut",
+        "type": "object"
+      },
+      "CandlesOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "items": {
+            "description": "Oldest first; a period without prices has none.",
+            "items": {
+              "$ref": "#/components/schemas/CandleOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "length": {
+            "description": "Seconds per candle.",
+            "title": "Length",
+            "type": "integer"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset",
+          "length",
+          "start",
+          "end",
+          "items"
+        ],
+        "title": "CandlesOut",
         "type": "object"
       },
       "ChainAdvancedMessage": {
@@ -1680,6 +1810,71 @@
           "since"
         ],
         "title": "ConnectionOut",
+        "type": "object"
+      },
+      "ConsolidationOut": {
+        "properties": {
+          "breakout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BreakoutOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candles": {
+            "title": "Candles",
+            "type": "integer"
+          },
+          "end": {
+            "description": "The end of its last candle.",
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "ended": {
+            "enum": [
+              "breakout",
+              "gap",
+              "end"
+            ],
+            "title": "Ended",
+            "type": "string"
+          },
+          "first": {
+            "description": "Its first candle.",
+            "format": "date-time",
+            "title": "First",
+            "type": "string"
+          },
+          "found": {
+            "description": "When the pattern was complete.",
+            "format": "date-time",
+            "title": "Found",
+            "type": "string"
+          },
+          "high": {
+            "title": "High",
+            "type": "number"
+          },
+          "low": {
+            "title": "Low",
+            "type": "number"
+          }
+        },
+        "required": [
+          "first",
+          "found",
+          "end",
+          "candles",
+          "high",
+          "low",
+          "breakout",
+          "ended"
+        ],
+        "title": "ConsolidationOut",
         "type": "object"
       },
       "ControlsChangedMessage": {
@@ -3428,6 +3623,141 @@
         "title": "LoginStatusOut",
         "type": "object"
       },
+      "MarketRulesIn": {
+        "additionalProperties": false,
+        "description": "What counts as a consolidation and a breakout (docs/DOMAIN.md, section 9).",
+        "properties": {
+          "breakout_by": {
+            "$ref": "#/components/schemas/BreakBy",
+            "default": "close"
+          },
+          "breakout_candles": {
+            "default": 2,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Breakout Candles",
+            "type": "integer"
+          },
+          "candles": {
+            "default": 5,
+            "description": "Candles in the pattern.",
+            "maximum": 50.0,
+            "minimum": 2.0,
+            "title": "Candles",
+            "type": "integer"
+          },
+          "misses": {
+            "default": 1,
+            "description": "`mixed`: candles that may not alternate.",
+            "maximum": 48.0,
+            "minimum": 0.0,
+            "title": "Misses",
+            "type": "integer"
+          },
+          "net_share": {
+            "default": 0.2,
+            "description": "`choppy`: the largest net move, as a share.",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Net Share",
+            "type": "number"
+          },
+          "pattern": {
+            "$ref": "#/components/schemas/Pattern",
+            "default": "alternating"
+          },
+          "width": {
+            "default": 2.0,
+            "description": "`tight`: the range, in average candles.",
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Width",
+            "type": "number"
+          }
+        },
+        "title": "MarketRulesIn",
+        "type": "object"
+      },
+      "MarketStatsOut": {
+        "properties": {
+          "any_wait": {
+            "$ref": "#/components/schemas/SpreadOut",
+            "description": "The same, from any candle: the comparison."
+          },
+          "break_even": {
+            "description": "The share of wins that pays for the losses at 88%.",
+            "title": "Break Even",
+            "type": "number"
+          },
+          "breakouts": {
+            "title": "Breakouts",
+            "type": "integer"
+          },
+          "candles": {
+            "title": "Candles",
+            "type": "integer"
+          },
+          "consolidations": {
+            "title": "Consolidations",
+            "type": "integer"
+          },
+          "deep": {
+            "title": "Deep",
+            "type": "integer"
+          },
+          "deep_any": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "Flip pairs started at any candle that went deep."
+          },
+          "deep_consolidation": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "... started in a known consolidation."
+          },
+          "deep_trend": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "... started while trending."
+          },
+          "described": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "Candles of the stretches that took pairs deep that lie in a consolidation."
+          },
+          "first_with": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "The candle after a breakout went its way."
+          },
+          "in_consolidation": {
+            "description": "Share of the candles inside a consolidation.",
+            "title": "In Consolidation",
+            "type": "number"
+          },
+          "trend_wait": {
+            "$ref": "#/components/schemas/SpreadOut",
+            "description": "Candles from a breakout until the next consolidation was found."
+          },
+          "trend_with": {
+            "$ref": "#/components/schemas/RateOut",
+            "description": "The trends' candles that went the breakout's way."
+          }
+        },
+        "required": [
+          "candles",
+          "consolidations",
+          "breakouts",
+          "in_consolidation",
+          "trend_wait",
+          "any_wait",
+          "first_with",
+          "trend_with",
+          "break_even",
+          "deep",
+          "deep_any",
+          "deep_trend",
+          "deep_consolidation",
+          "described"
+        ],
+        "title": "MarketStatsOut",
+        "type": "object"
+      },
       "MetricsOut": {
         "properties": {
           "avg_payout_pct": {
@@ -3799,6 +4129,34 @@
         "title": "PasswordChangeIn",
         "type": "object"
       },
+      "Pattern": {
+        "enum": [
+          "alternating",
+          "mixed",
+          "tight",
+          "overlap",
+          "choppy"
+        ],
+        "title": "Pattern",
+        "type": "string"
+      },
+      "PatternsOut": {
+        "properties": {
+          "items": {
+            "description": "Each pattern with its default settings.",
+            "items": {
+              "$ref": "#/components/schemas/MarketRulesIn"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PatternsOut",
+        "type": "object"
+      },
       "PhoneIn": {
         "additionalProperties": false,
         "properties": {
@@ -3990,6 +4348,40 @@
           "engine_running"
         ],
         "title": "QuotexLoginOut",
+        "type": "object"
+      },
+      "RateOut": {
+        "properties": {
+          "high": {
+            "title": "High",
+            "type": "number"
+          },
+          "hits": {
+            "title": "Hits",
+            "type": "integer"
+          },
+          "low": {
+            "description": "The 95% range: below this is unlikely.",
+            "title": "Low",
+            "type": "number"
+          },
+          "share": {
+            "title": "Share",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hits",
+          "total",
+          "share",
+          "low",
+          "high"
+        ],
+        "title": "RateOut",
         "type": "object"
       },
       "RealTradingIn": {
@@ -4411,6 +4803,109 @@
           }
         },
         "title": "SampleGuideOut",
+        "type": "object"
+      },
+      "ScanIn": {
+        "additionalProperties": false,
+        "properties": {
+          "asset": {
+            "maxLength": 30,
+            "minLength": 2,
+            "pattern": "^\\w+$",
+            "title": "Asset",
+            "type": "string"
+          },
+          "deep": {
+            "default": 6,
+            "description": "Trades lost in a row that count as deep.",
+            "maximum": 9.0,
+            "minimum": 2.0,
+            "title": "Deep",
+            "type": "integer"
+          },
+          "end": {
+            "description": "At most 31 days after `start`.",
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "length": {
+            "default": 60,
+            "description": "Seconds per candle.",
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Length",
+            "type": "integer"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/MarketRulesIn"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "asset",
+          "start",
+          "end"
+        ],
+        "title": "ScanIn",
+        "type": "object"
+      },
+      "ScanOut": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "consolidations": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationOut"
+            },
+            "title": "Consolidations",
+            "type": "array"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "length": {
+            "title": "Length",
+            "type": "integer"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/MarketRulesIn"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/MarketStatsOut"
+          },
+          "trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendOut"
+            },
+            "title": "Trends",
+            "type": "array"
+          }
+        },
+        "required": [
+          "asset",
+          "length",
+          "start",
+          "end",
+          "rules",
+          "consolidations",
+          "trends",
+          "stats"
+        ],
+        "title": "ScanOut",
         "type": "object"
       },
       "SecretIn": {
@@ -5614,6 +6109,44 @@
         "title": "SnapshotOut",
         "type": "object"
       },
+      "SpreadOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "longest": {
+            "title": "Longest",
+            "type": "integer"
+          },
+          "mean": {
+            "title": "Mean",
+            "type": "number"
+          },
+          "median": {
+            "title": "Median",
+            "type": "number"
+          },
+          "q1": {
+            "title": "Q1",
+            "type": "number"
+          },
+          "q3": {
+            "title": "Q3",
+            "type": "number"
+          }
+        },
+        "required": [
+          "count",
+          "mean",
+          "median",
+          "q1",
+          "q3",
+          "longest"
+        ],
+        "title": "SpreadOut",
+        "type": "object"
+      },
       "Strategy": {
         "enum": [
           "no_martingale",
@@ -6157,6 +6690,76 @@
         ],
         "title": "TradeStatus",
         "type": "string"
+      },
+      "TrendOut": {
+        "properties": {
+          "candles": {
+            "title": "Candles",
+            "type": "integer"
+          },
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "direction": {
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "end": {
+            "description": "Where the next consolidation starts (or a gap, the end).",
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "ended": {
+            "enum": [
+              "consolidation",
+              "gap",
+              "end"
+            ],
+            "title": "Ended",
+            "type": "string"
+          },
+          "move": {
+            "description": "How far the price went the breakout's way.",
+            "title": "Move",
+            "type": "number"
+          },
+          "open": {
+            "description": "The breakout's close.",
+            "title": "Open",
+            "type": "number"
+          },
+          "start": {
+            "description": "The candle after the breakout.",
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "stopped": {
+            "description": "When its end was known.",
+            "format": "date-time",
+            "title": "Stopped",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "stopped",
+          "direction",
+          "candles",
+          "open",
+          "close",
+          "move",
+          "ended"
+        ],
+        "title": "TrendOut",
+        "type": "object"
       },
       "UserOut": {
         "properties": {
@@ -9866,6 +10469,308 @@
         "summary": "Engage Kill Switch",
         "tags": [
           "control"
+        ]
+      }
+    },
+    "/api/v1/market/candles": {
+      "get": {
+        "description": "The candles of an asset's stored prices, at most 5,000 per request (422\n`invalid_market` beyond). A period without stored prices simply has no candles.",
+        "operationId": "candles_api_v1_market_candles_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "asset",
+            "required": true,
+            "schema": {
+              "maxLength": 30,
+              "minLength": 2,
+              "pattern": "^\\w+$",
+              "title": "Asset",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "length",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 86400,
+              "minimum": 1,
+              "title": "Length",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandlesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Candles",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/api/v1/market/patterns": {
+      "get": {
+        "description": "The consolidation patterns, each with its default settings.",
+        "operationId": "patterns_api_v1_market_patterns_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatternsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Patterns",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/api/v1/market/scan": {
+      "post": {
+        "description": "Every consolidation, breakout and trend in a period (at most 31 days), with the\nstatistics. 422 `invalid_market` without stored prices or with settings that do not fit.",
+        "operationId": "scan_api_v1_market_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Scan",
+        "tags": [
+          "market"
         ]
       }
     },

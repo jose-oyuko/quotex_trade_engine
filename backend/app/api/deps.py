@@ -20,6 +20,7 @@ from app.services.deriv import DerivService
 from app.services.env_import import EnvImportService
 from app.services.groups import GroupService
 from app.services.live import LiveState
+from app.services.market import MarketService
 from app.services.price_history import PriceHistoryService
 from app.services.quotex_login import QuotexLoginService
 from app.services.risk_settings import RiskSettingsService
@@ -131,6 +132,11 @@ def get_backtests(request: Request) -> BacktestService:
     return service
 
 
+def get_market(request: Request) -> MarketService:
+    service: MarketService = request.app.state.market
+    return service
+
+
 def get_controller(request: Request) -> EngineController:
     controller: EngineController = request.app.state.controller
     return controller
@@ -166,3 +172,4 @@ ConfigDep = Annotated[ConfigService, Depends(get_config)]
 VaultDep = Annotated[SecretStore, Depends(get_vault)]
 PriceHistoryDep = Annotated[PriceHistoryService, Depends(get_price_history)]
 BacktestsDep = Annotated[BacktestService, Depends(get_backtests)]
+MarketDep = Annotated[MarketService, Depends(get_market)]
