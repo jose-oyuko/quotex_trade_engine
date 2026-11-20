@@ -35,7 +35,7 @@ agent to start the next phase.
 | 27 | The backtest engine and its API (backend) | Done — committed (`c41cd66`); run on the owner's real downloaded prices |
 | 28 | The Backtest page (dashboard) | Done — committed (`7840d3d`); the owner's look in a browser pending |
 | 29 | Candles, the consolidation detector and its statistics (backend) | Done — committed (`dc9f00d`); run on two weeks of `1HZ75V` |
-| 30 | The Market page: candles, consolidations and trends on a chart | Done — committed (see git log); the owner's look in a browser pending |
+| 30 | The Market page: candles, consolidations and trends on a chart | Done — committed (`ffb47c7`); the owner's look in a browser pending |
 | 31 | Backtesting the trend sessions | Not started — planned |
 | 32 | Trend sessions live (only if Phase 31 shows they do better) | Not started — planned, conditional |
 
