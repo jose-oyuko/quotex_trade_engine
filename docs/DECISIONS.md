@@ -911,6 +911,23 @@ stored; a disagreement is marked on the trade and logged. The early path can be 
   the 0.5 s order delay), so its contract starts a second later: pairs and steps drift like they do
   live.
 
+**D-85. Consolidations, breakouts and trend sessions (Phases 29-32; agreed 2026-11-20).**
+- **The owner's starting definition** (not final: Phase 29 compares it with other patterns and suggests
+  the one that best describes the stretches that hurt chains):
+  - a consolidation is at least 5 candles in a row alternating colour; its range is their lowest low to
+    highest high, and it lasts until the breakout;
+  - a breakout is consecutive candles (2 by default) closing outside the range;
+  - a trend runs from a breakout to the next consolidation;
+  - an equal candle ends an alternating run;
+  - every number is a setting, and any candle length can be used.
+- **One detector** (`app/market/`), reading candles one at a time without looking ahead, serves the
+  Market page, the statistics, the backtests and the live sessions.
+- **Proof before trading:** the statistics compare trends after a breakout with stretches started at
+  random moments, on periods not used to choose the settings. Live trend sessions (Phase 32) are built
+  only if backtests on such periods beat always-on sessions.
+- **Chart library (approved by the owner):** TradingView Lightweight Charts (`lightweight-charts`,
+  Apache 2.0, pinned) for the Market page; it runs in the page and sends nothing anywhere.
+
 ---
 
 ## Decisions to be made later (record here when decided)

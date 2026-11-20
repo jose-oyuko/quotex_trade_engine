@@ -907,6 +907,201 @@ historical payouts.
 
 ---
 
+## Phases 29-32 — Trading the trends between consolidations (decision D-85)
+
+**Why (owner's idea, 2026-11-19/20):** chains that run through all their steps mostly happen in
+consolidations: sideways stretches where buy and sell candles alternate (the owner's chart showed one that
+took a flip chain to about step 7). The owner's view: once a consolidation ends, the market trends for a
+while before the next one. So a session should start just after a consolidation ends, run for about as long
+as a trend usually lasts (or until the next consolidation shows up), then stop and wait for the next one.
+
+**The owner's starting definition** (2026-11-20: *not to be taken as final*: Phase 29 tries other patterns
+and suggests the one that best describes the stretches that hurt chains):
+- **Consolidation:** at least **5 alternating candles** in a row (buy, sell, buy, sell, buy, or the
+  mirror).
+- **Its range:** from the lowest low to the highest high of those candles.
+- **Breakout:** **consecutive candles** breaking outside the range, above its high or below its low.
+- **Trend:** the time from a breakout until the next consolidation is found.
+- **Timeframes:** M1 and M5 first, but any candle length can be chosen, to try other timeframes later.
+- **Trading the trend:** a pair at every candle with the flip strategy.
+- **A Market page** on the dashboard where the owner can check, by eye, that the engine finds the same
+  consolidations and trends as they would.
+
+**Settings with a default the owner can change** (on the Market page, in backtests, and later in a
+session):
+
+| setting | default | meaning |
+|---|---|---|
+| candle length | M1 (60 s) | any length: 15 s, 1 min, 5 min, 15 min, 1 h … |
+| alternating candles | 5 | the least candles in a row that alternate colour |
+| breakout candles | 2 | consecutive candles needed outside the range |
+| breakout by | close | `close`: the candles close beyond the high or low; `touch`: any part of them does |
+| equal candle | ends the run | a candle that closes where it opened is neither buy nor sell, so it ends an alternating run |
+
+**One definition everywhere.** The same detector (`app/market/`, pure code, tested on hand-made candles)
+builds the candles from stored or live prices, finds the consolidations and trends, and serves:
+- the Market page;
+- the statistics;
+- the backtests;
+- later, the live sessions.
+
+So what the owner checks on the chart is exactly what trades.
+
+**The honest test.** A week of Volatility 75 (1s) showed that alternating candles do not predict the next
+candle (about 50%, 2026-11-19). The idea stands only if the stretch after a breakout trends more than the
+market does at a random moment. Phase 29 measures exactly that, on prices not used to choose the settings,
+before any money is at stake. Phase 32 (live) is built only if Phase 31 shows the trend sessions beat
+always-on sessions on such prices.
+
+---
+
+## Phase 29 — Candles, the consolidation detector and its statistics (backend)
+
+**Scope**
+- **`app/market/candles.py`:** candles of any length from stored prices (open, high, low, close, number of
+  prices). They are aligned on the epoch like session candles (M1 at :00, M5 at :00, :05 …), and a candle
+  with no price is a gap, never invented.
+- **`app/market/detector.py`:** with the settings above, finds every consolidation, breakout and trend:
+  - **consolidation:** where its alternating run starts and ends, the number of candles, the range high and
+    low; it lasts until the breakout, so candles that stop alternating but stay inside the range still
+    belong to it;
+  - **breakout:** when, in which direction, and how far the price went;
+  - **trend:** from the breakout to the next consolidation: its length in candles and minutes, and how far
+    the price moved.
+  The detector reads candles one at a time and never looks ahead, so the live engine can run the same code
+  later.
+- **Statistics** (`app/market/stats.py`):
+  - how long trends last (average, median, quartiles, longest), per asset and timeframe;
+  - **the comparison that decides:** the same figures for stretches started at random moments;
+  - does the breakout direction continue? The share of next candles going the breakout's way, against the
+    53.2% needed to break even at 88%;
+  - **the same on two separate periods**, so a setting chosen on one is checked on the other.
+- **Patterns compared (the owner's request, 2026-11-20).** The owner's alternation rule is one pattern
+  among several; each is a setting of the same detector (range, breakout and trend work the same way):
+  - `alternating`: N candles in a row alternating colour (the owner's);
+  - `mixed`: in the last N candles, most of them change colour (tolerates one candle that does not);
+  - `tight`: the last N candles fit in a range no wider than a set multiple of the average candle;
+  - `overlap`: N candles in a row, each opening and closing inside the previous candle's high and low;
+  - `choppy`: over the last N candles, the net move is a small share of all the up and down moves.
+  **How they are judged:** a flip chain loses step after step exactly while candles alternate, so a
+  stretch that hurts is a run of alternating candles long enough to take a chain deep. A pattern is better
+  when (1) more of those stretches fall inside the consolidations it finds (it describes them), and (2)
+  chains started in the trends it allows go deep less often than chains started at any moment (it is
+  useful to trade by), while still leaving enough time to trade. The report suggests one pattern and its
+  settings, and the Market page lets the owner compare them by eye.
+- **API:**
+  - `GET /market/candles?asset&length&from&to`: at most 5,000 candles a request, for the chart;
+  - `POST /market/scan`: an asset, a period, a timeframe and the settings give the consolidations,
+    breakouts and trends, plus the statistics. It runs in a worker thread and can scan weeks.
+- **`npm run market:scan`** prints the statistics in the terminal.
+
+**Acceptance criteria**
+- Hand-made candles:
+  - 5 alternating candles make a consolidation, 4 do not;
+  - an equal candle ends the run;
+  - the range is the lowest low and the highest high;
+  - 2 consecutive closes above the high make an up breakout, and one does not;
+  - `touch` against `close`;
+  - candles inside the range after the alternation stay in the consolidation;
+  - a trend ends where the next consolidation starts;
+  - a gap in the prices ends any run.
+- Candles from prices: M1 and M5 boundaries, open is the first price and close the last, gaps stay gaps.
+- The detector never looks ahead: feeding the candles one by one gives the same result as all at once.
+- The statistics on made-up candles with a known answer; the random-moment comparison.
+- API tests; `ruff`, `mypy`, the whole test suite.
+- **Run on the stored week of Volatility 75 (1s)** (and a week of Volatility 75), M1 and M5. The report
+  shows the trend lengths and the comparison with random moments: the first real answer to the owner's
+  question.
+
+---
+
+## Phase 30 — The Market page (dashboard)
+
+**Scope**
+- **A candlestick chart** of any stored asset:
+  - choose the timeframe (M1, M5, M15, H1 or any number of seconds);
+  - scroll and zoom with the mouse;
+  - jump to a date and time.
+  It loads more candles as you scroll.
+- **The definition** in a small form (alternating candles, breakout candles, close or touch). *Scan*
+  marks the chart:
+  - each consolidation as a box over its candles, from the range low to the range high;
+  - each breakout with an arrow (up or down);
+  - each trend as a shaded stretch until the next consolidation.
+- **The list of what was found:** time, number of candles, range, breakout direction, how long the trend
+  after it lasted. **Clicking a row moves the chart to it and highlights it.**
+- **The statistics** of the scan, with the random-moment comparison in words ("trends after a breakout
+  lasted a median 6 min; stretches started at random: 6 min").
+- **Assets by name:** *Volatility 75 (1s) Index (1HZ75V)*.
+
+**The chart library (decision D-85, approved by the owner 2026-11-20):** a candlestick chart with scrolling,
+zooming and boxes is a large piece of work by hand, so the page uses **TradingView Lightweight Charts** (`lightweight-charts`,
+Apache 2.0, about 45 kB, no other dependencies). It is made for exactly this and runs inside the page, with
+no TradingView account and nothing sent anywhere. It would be the first new dashboard dependency since
+Phase 7, pinned to an exact version. The pattern can be chosen on the page.
+
+**Acceptance criteria**
+- Component tests: the timeframe switch, the date jump, the settings form and its checks, the list, and
+  clicking a row asks the chart to show and mark that consolidation.
+- The marks are drawn from the API's answer (a fixture), not computed again on the page.
+- `eslint`, `tsc`, `vitest`, build, `api:check`.
+- Self-test on `npm run demo`.
+- **The owner's check:** open Volatility 75 (1s) on M1 and M5, look at a dozen consolidations the engine
+  marked, and confirm "yes, that is what I mean", or say what differs. The definition is adjusted before
+  Phase 31 if needed.
+
+---
+
+## Phase 31 — Backtesting the trend sessions
+
+**Scope**
+- **A new way for a backtest to open pairs:** "after a breakout" instead of "all through the window".
+  - **Start:** on the candle after a breakout (the detector's own breakout, at the moment it would be known
+    live, never earlier).
+  - **Stop:** after a set time (default: the median trend length from Phase 29), or as soon as a new
+    consolidation is found, whichever comes first. The running chains finish, as in any session. Then it
+    waits for the next breakout.
+  - **Pairs:** a pair at every candle, with the open-pair limit as today.
+  - **Strategy:** flip every loss by default, any of the five allowed.
+  - Optionally within a daily window and on chosen days, like a session.
+- **Compared side by side** on the same prices:
+  - trend sessions;
+  - the same pairs all through the window (what is traded today);
+  - trend sessions with the other strategies.
+  Judged on profit, worst drawdown, chains lost every step and largest stake.
+- **Two periods:** the settings are chosen on one period and judged on another. The result page says
+  which is which.
+- The Backtest page gains the start rule; the Market page can show where a backtest's pairs were opened.
+
+**Acceptance criteria**
+- Hand-made prices: pairs open only after a breakout, never before it is known; they stop on time or at
+  the next consolidation, whichever is first; running chains finish; then it waits again.
+- The detector in the backtest finds exactly what the Market page shows for the same settings.
+- Determinism, API and form tests, the whole suite.
+- **A run on at least two separate weeks of Volatility 75 (1s), M1 and M5,** against always-on sessions.
+  The report says plainly whether trend sessions did better, and on which figures.
+
+---
+
+## Phase 32 — Trend sessions live (only if Phase 31 shows they do better)
+
+**Scope (to be confirmed by the owner after Phase 31)**
+- **The engine builds candles** from the Deriv price stream it already follows (Phase 24) and runs the
+  same detector live.
+- **A session mode "trade the trends":** it waits for a breakout, then runs pairs (flip) for the set time
+  or until the next consolidation, then waits again, within the session's window and days. Limits, the kill
+  switch and the stop rules work as for any session.
+- **The Live page shows** the current state per watched asset: consolidating (with its range), trending
+  (since when, which way) or waiting.
+- **Demo first,** as always.
+
+**Acceptance criteria** are written after Phase 31, from what it showed.
+
+**Not in Phases 29-32:** other definitions of a trend (moving averages, ADX), predicting the breakout
+direction, Quotex (no price history), Telegram groups.
+
+---
+
 ## Later backlog (not scheduled)
 
 Telegram alerts to the owner; backtester over stored messages; more parsers + "test this message" tool;
