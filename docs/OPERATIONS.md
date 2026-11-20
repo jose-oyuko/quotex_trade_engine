@@ -416,10 +416,27 @@ not simulated. A strategy changes how wins and losses bunch together, not the od
 with a payout under 100% the expected result is slightly negative. A backtest shows the risk you take,
 not a profit to expect.
 
-## Consolidations and trends (`npm run market:scan`)
+## Consolidations and trends (the Market page, `npm run market:scan`)
 
-Where were the consolidations, and do the trends after them last? (decision D-85; the Market page
-comes in Phase 30.) On prices downloaded for backtests:
+Where were the consolidations, and do the trends after them last? (decision D-85.) It works on the
+prices downloaded for backtests (download them on the Backtest page first). Nothing is traded.
+
+**The Market page** (menu: *Market*):
+1. **The chart:**
+   - choose the asset and the timeframe (M1, M5, M15, M30, H1, or any number of seconds);
+   - drag to scroll and use the wheel (or pinch) to zoom; more candles load as you scroll;
+   - *Go to* jumps to a date and time (UTC).
+2. **Find consolidations:**
+   - choose the period (up to 31 days) and the pattern with its settings (yours, *alternating 5*, is
+     the default; DOMAIN section 9 explains the others) and what counts as a breakout;
+   - then *Scan*.
+3. **Read the result:**
+   - the chart shows each consolidation as a box over its range, each breakout as an arrow, and the trend
+     after it shaded green (up) or red (down) until the next consolidation;
+   - below are the statistics in words and the list of consolidations; *Show* moves the chart to one and
+     outlines it.
+
+The same from the terminal:
 
 ```
 npm run market:scan -- --asset 1HZ75V --from 2026-11-12 --to 2026-11-19

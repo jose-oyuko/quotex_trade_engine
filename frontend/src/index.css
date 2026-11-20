@@ -818,3 +818,14 @@ summary {
 .plain-list li {
   margin: 0.25rem 0;
 }
+
+/* The Market page's candlestick chart (decision D-85) */
+.candle-chart {
+  width: 100%;
+  height: min(70vh, 520px);
+  min-height: 320px;
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}

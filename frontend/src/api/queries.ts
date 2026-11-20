@@ -43,6 +43,7 @@ export const keys = {
   brokers: ['brokers'] as const,
   prices: ['prices'] as const,
   backtests: ['backtests'] as const,
+  market: ['market'] as const,
 }
 
 export function useStatus() {
@@ -286,5 +287,13 @@ export function useHealth() {
     refetchInterval: HEALTH_POLL_MS,
     retry: false, // a failed check is itself the answer: "cannot reach the backend"
     staleTime: 0,
+  })
+}
+
+export function useMarketPatterns() {
+  return useQuery({
+    queryKey: [...keys.market, 'patterns'],
+    queryFn: ({ signal }) => api.market.patterns(signal),
+    staleTime: Infinity, // fixed by the server's code
   })
 }

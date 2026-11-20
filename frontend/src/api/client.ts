@@ -7,10 +7,14 @@ import type {
   BacktestChains,
   BacktestInput,
   BacktestsOut,
+  Candles,
   Download,
   DownloadInput,
   DownloadsOut,
+  Patterns,
   PricesOut,
+  Scan,
+  ScanInput,
   AuthState,
   AuthUser,
   AccountType,
@@ -282,6 +286,18 @@ export const api = {
       }),
     cancel: (id: number) => request<Backtest>('POST', `/backtests/${String(id)}/cancel`),
     remove: (id: number) => request<undefined>('DELETE', `/backtests/${String(id)}`),
+  },
+
+  market: {
+    /** Candles of the stored prices (decision D-85), at most 5,000 per request. */
+    candles: (
+      query: { asset: string; start: string; end: string; length: number },
+      signal?: AbortSignal,
+    ) => request<Candles>('GET', '/market/candles', { query, signal }),
+    /** The consolidation patterns with their default settings. */
+    patterns: (signal?: AbortSignal) => request<Patterns>('GET', '/market/patterns', { signal }),
+    /** Every consolidation, breakout and trend in a period, with the statistics. */
+    scan: (body: ScanInput) => request<Scan>('POST', '/market/scan', { body }),
   },
 
   deriv: {

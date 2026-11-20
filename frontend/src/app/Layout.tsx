@@ -19,6 +19,7 @@ const NAV = [
   { to: '/history', label: 'History', end: false },
   { to: '/reports', label: 'Reports', end: false },
   { to: '/backtest', label: 'Backtest', end: false },
+  { to: '/market', label: 'Market', end: false },
   { to: '/settings', label: 'Settings', end: false },
 ]
 
