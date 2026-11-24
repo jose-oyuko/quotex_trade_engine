@@ -2,15 +2,28 @@
 // and trends the engine finds in them, so the owner can check by eye that it sees what they mean.
 // Everything marked on the chart comes from the server's scan; nothing is worked out again here.
 import { useMutation, useQueries, type UseQueryResult } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
-import { keys, useAssetNames, useMarketPatterns, usePrices } from '../../api/queries'
-import type { Candles, Scan, Trend } from '../../api/types'
+import {
+  keys,
+  useAssetNames,
+  useBacktestPairs,
+  useMarketPatterns,
+  usePrices,
+} from '../../api/queries'
+import type { BacktestPairs as Pairs, Candles, Scan, Trend } from '../../api/types'
 import { Button } from '../../components/Button'
 import { errorMessage } from '../../lib/errors'
 import { assetLabel } from '../backtest/assetNames'
-import { CandleChart, type ChartCandle, type ChartFocus, type ChartMarker } from './CandleChart'
+import { BacktestPairs, type ShownBacktest } from './BacktestPairs'
+import {
+  CandleChart,
+  type ChartCandle,
+  type ChartFocus,
+  type ChartMarker,
+  type PairMarker,
+} from './CandleChart'
 import { FoundList } from './FoundList'
 import {
   TIMEFRAMES,
@@ -92,6 +105,17 @@ function marks(scan: Scan | undefined, selected: number | null, length: number) 
   return { zones, markers }
 }
 
+/** Each pair on the candle (of the chart's timeframe) it opened in. */
+function pairMarks(pairs: Pairs | undefined, length: number): PairMarker[] {
+  return (pairs?.items ?? []).map((p) => {
+    const at = epochOf(p.at)
+    return {
+      time: at - (at % length),
+      result: p.lost ? 'deep' : Number(p.profit) > 0 ? 'won' : 'lost',
+    }
+  })
+}
+
 export default function MarketPage() {
   const prices = usePrices()
   const names = useAssetNames().data?.items ?? []
@@ -162,6 +186,13 @@ export default function MarketPage() {
   }, [asset, last, viewKey, mutate])
   const result = scan.data
   const { zones, markers } = marks(result, selected, length)
+  const [shownBacktest, setShownBacktest] = useState<ShownBacktest | null>(null)
+  const pairs = useBacktestPairs(shownBacktest?.id ?? null, shownBacktest?.run ?? 0).data
+  // up to 20,000 markers: worked out again only when the pairs or the timeframe change
+  const pairMarkers = useMemo(
+    () => (shownBacktest === null ? [] : pairMarks(pairs, length)),
+    [shownBacktest, pairs, length],
+  )
   const trends = result ? trendAfter(result) : new Map<number, Trend>()
 
   if (prices.isSuccess && held.length === 0) {
@@ -193,6 +224,7 @@ export default function MarketPage() {
             onChange={(e) => {
               setPicked(e.target.value)
               setForm(null)
+              setShownBacktest(null)
             }}
           >
             {held.map((h) => (
@@ -275,6 +307,7 @@ export default function MarketPage() {
         length={length}
         zones={zones}
         markers={markers}
+        pairs={pairMarkers}
         focus={current.focus}
         onVisibleChange={(from, to) => {
           need(from, to)
@@ -286,6 +319,7 @@ export default function MarketPage() {
         candles (the one chosen in the list is outlined in blue). Arrows: breakouts. Green or red
         shading: the trend after a breakout, up or down, until the next consolidation.
       </p>
+      <BacktestPairs asset={asset} shown={shownBacktest} onShow={setShownBacktest} pairs={pairs} />
       <ScanForm
         values={values}
         onChange={setForm}

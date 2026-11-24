@@ -341,6 +341,71 @@ describe('MarketPage', () => {
     expect(await screen.findByText(/No prices of 1HZ75V are stored/)).toBeVisible()
   })
 
+  it('marks where a backtest run opened its pairs, by what each made', async () => {
+    const item = {
+      id: 4,
+      name: 'Trend check',
+      state: 'done',
+      progress: 1,
+      error: null,
+      created_at: '2026-11-19T10:00:00Z',
+      finished_at: '2026-11-19T10:00:05Z',
+      asset: '1HZ75V',
+      first_day: '2026-11-18',
+      last_day: '2026-11-18',
+      strategies: ['martingale'],
+    }
+    const run = { strategy: 'martingale', max_steps: 1, multipliers: ['2'], period: 1 }
+    const detail = {
+      ...item,
+      summary: {
+        windows: 1,
+        seconds: 1,
+        strategies: [
+          { ...run, opens: 'window' },
+          { ...run, opens: 'breakout' },
+        ],
+      },
+    }
+    const pairs = {
+      total: 3,
+      items: [
+        { at: '2026-11-18T10:07:00Z', profit: '0.76', lost: false },
+        { at: '2026-11-18T10:08:00Z', profit: '-0.12', lost: false },
+        { at: '2026-11-18T10:09:30Z', profit: '-3.12', lost: true },
+      ],
+    }
+    const api = mockApi([
+      ...base,
+      scanned,
+      ['GET', '/backtests', json({ items: [item, { ...item, id: 5, asset: 'R_75' }] })],
+      ['GET', '/backtests/4', json(detail)],
+      ['GET', /^\/backtests\/4\/pairs/, json(pairs)],
+    ])
+    const user = userEvent.setup()
+    renderWith(<MarketPage />, { route: '/market' })
+    const picker = await screen.findByLabelText('Backtest')
+    expect(within(picker).getAllByRole('option')).toHaveLength(2) // none, and this asset's one
+    await user.selectOptions(picker, 'Trend check')
+    await user.selectOptions(
+      await screen.findByLabelText('Run'),
+      'Martingale ×2 · after a breakout',
+    )
+    await waitFor(() => {
+      expect(api.calls.some((c) => c.path === '/backtests/4/pairs?run=1')).toBe(true)
+    })
+    await waitFor(() => {
+      expect(props().pairs).toEqual([
+        { time: at('2026-11-18T10:07:00Z'), result: 'won' },
+        { time: at('2026-11-18T10:08:00Z'), result: 'lost' },
+        { time: at('2026-11-18T10:09:00Z'), result: 'deep' }, // on the candle it opened in
+      ])
+    })
+    expect(screen.getByText(/3 pairs marked/)).toBeVisible()
+    await user.selectOptions(screen.getByLabelText('Backtest'), 'none')
+    expect(props().pairs).toEqual([])
+  })
+
   it('sends the owner to the Backtest page when no prices are stored', async () => {
     mockApi([...base.slice(1), ['GET', '/prices', json({ items: [], running: null })]])
     renderWith(<MarketPage />, { route: '/market' })

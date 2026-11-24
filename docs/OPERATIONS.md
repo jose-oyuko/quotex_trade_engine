@@ -402,6 +402,26 @@ it without trading anything.
 4. ***Run the backtest.*** It runs in the background; the list shows its progress. A month of a
    1-second index with five strategies takes about a minute.
 
+**Trend sessions** (Phase 31, decision D-85). Under *When pairs open*, tick *Only after a breakout*
+(and keep *All through the window* to compare). Pairs then open from the candle after a breakout (when
+it is known, never earlier) until the next consolidation is found or *Stop after* candles have passed
+(20 by default, about how long a trend lasted); running chains finish, then it waits for the next
+breakout. The consolidation and the breakout are defined as on the Market page, on candles as long as
+the trade. *A second period to judge on* replays the same settings on other days: choose settings on
+the first period and trust them only if they hold on the second. The result names each column, e.g.
+*Martingale ×2, 4 · after a breakout · period 2*, and adds the hours pairs could open and the profit
+per pair. On the Market page, *A backtest's pairs* marks where a run opened its pairs.
+
+The same from the terminal:
+
+```
+npm run backtest -- --asset 1HZ75V --from 2026-10-29 --to 2026-11-04 --check-from 2026-11-12 \
+    --check-to 2026-11-18 --window 00:00-23:59 --mode every_candle --open-pairs 5 \
+    --opens window,breakout --strategy flip_every_loss:2,4,8,16,32
+```
+
+(`--pattern`, `--candles`, `--breakout-candles`, `--breakout-by`, `--trend-max` set the trends.)
+
 **Reading the result.** The comparison table puts the strategies side by side:
 - **profit**, and the **worst drawdown** (the deepest fall from a high point of the running profit: the
   money you must be able to lose on the way);
@@ -435,6 +455,9 @@ prices downloaded for backtests (download them on the Backtest page first). Noth
      after it shaded green (up) or red (down) until the next consolidation;
    - below are the statistics in words and the list of consolidations; *Show* moves the chart to one and
      outlines it.
+4. **A backtest's pairs** (once a backtest of this asset has finished): choose it and one of its runs;
+   each pair is marked on the candle it opened in: a green circle when it made money, red when it lost,
+   a red square when a leg lost every step.
 
 The same from the terminal:
 

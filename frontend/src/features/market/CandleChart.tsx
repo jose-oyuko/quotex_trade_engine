@@ -27,6 +27,12 @@ export interface ChartMarker {
   direction: 'up' | 'down'
 }
 
+/** A backtest's pair, on the candle it opened in: what it made. */
+export interface PairMarker {
+  time: number
+  result: 'won' | 'lost' | 'deep'
+}
+
 /** Show this stretch (and keep it shown until its candles have arrived). */
 export interface ChartFocus {
   from: number
@@ -39,11 +45,14 @@ export interface CandleChartProps {
   length: number
   zones: readonly Zone[]
   markers: readonly ChartMarker[]
+  pairs?: readonly PairMarker[]
   focus: ChartFocus | null
   /** The moments shown changed (scrolled, zoomed): the page loads candles around them. */
   onVisibleChange: (from: number, to: number) => void
   label: string
 }
+
+const NO_PAIRS: readonly PairMarker[] = []
 
 function cssColour(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -62,6 +71,7 @@ export function CandleChart({
   length,
   zones,
   markers,
+  pairs = NO_PAIRS,
   focus,
   onVisibleChange,
   label,
@@ -153,17 +163,26 @@ export function CandleChart({
       zones,
       candles.map((c) => c.time),
     )
+    const good = cssColour('--good', '#0a7a35')
+    const bad = cssColour('--bad', '#b42318')
     p.markers.setMarkers(
-      [...markers]
-        .sort((a, b) => a.time - b.time)
-        .map((m) => ({
+      [
+        ...markers.map((m) => ({
           time: m.time as UTCTimestamp,
           position: m.direction === 'up' ? ('belowBar' as const) : ('aboveBar' as const),
           shape: m.direction === 'up' ? ('arrowUp' as const) : ('arrowDown' as const),
-          color: cssColour(m.direction === 'up' ? '--good' : '--bad', '#888888'),
+          color: m.direction === 'up' ? good : bad,
         })),
+        ...pairs.map((m) => ({
+          time: m.time as UTCTimestamp,
+          position: 'inBar' as const,
+          shape: m.result === 'deep' ? ('square' as const) : ('circle' as const),
+          color: m.result === 'won' ? good : bad,
+          size: 0.6,
+        })),
+      ].sort((a, b) => a.time - b.time),
     )
-  }, [zones, markers, candles])
+  }, [zones, markers, pairs, candles])
 
   useEffect(() => {
     const p = parts.current

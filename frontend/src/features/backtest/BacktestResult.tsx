@@ -8,12 +8,8 @@ import { DataState } from '../../components/DataState'
 import { Money } from '../../components/Money'
 import { Pagination } from '../../components/Pagination'
 import { assetLabel } from './assetNames'
-import { STRATEGIES } from './backtestSchema'
-
-const strategyLabel = (s: StrategyResult) => {
-  const name = STRATEGIES.find((x) => x.value === s.strategy)?.label ?? s.strategy
-  return s.max_steps === 0 ? name : `${name} ×${s.multipliers.join(', ')}`
-}
+import { PATTERN_TEXT } from '../market/marketSchema'
+import { runLabel } from './backtestSchema'
 
 const percent = (part: number, whole: number) =>
   whole === 0 ? '—' : `${((100 * part) / whole).toFixed(1)}%`
@@ -37,6 +33,17 @@ function Comparison({ strategies }: { strategies: StrategyResult[] }) {
     { label: 'Largest stake', cell: (s) => <Money value={s.largest_stake} /> },
     { label: 'Most money in play at once', cell: (s) => <Money value={s.most_in_play} /> },
     { label: 'Pairs', cell: (s) => s.pairs.toLocaleString() },
+    {
+      label: 'Hours pairs could open',
+      cell: (s) =>
+        s.opens === 'breakout'
+          ? `${(s.active_s / 3600).toFixed(1)} h in ${s.spans.toLocaleString()} trends`
+          : `${(s.active_s / 3600).toFixed(1)} h`,
+    },
+    {
+      label: 'Profit per pair',
+      cell: (s) => (s.pairs === 0 ? '—' : (Number(s.profit) / s.pairs).toFixed(2)),
+    },
     { label: 'Chains', cell: (s) => s.chains.toLocaleString() },
     {
       label: 'Chains won',
@@ -68,7 +75,7 @@ function Comparison({ strategies }: { strategies: StrategyResult[] }) {
   return (
     <div className="table-wrap">
       <table>
-        <caption className="sr-only">The strategies compared</caption>
+        <caption className="sr-only">The runs compared</caption>
         <thead>
           <tr>
             <th scope="col">
@@ -76,7 +83,7 @@ function Comparison({ strategies }: { strategies: StrategyResult[] }) {
             </th>
             {strategies.map((s, i) => (
               <th key={i} scope="col">
-                {strategyLabel(s)}
+                {runLabel(s, strategies)}
               </th>
             ))}
           </tr>
@@ -96,7 +103,14 @@ function Comparison({ strategies }: { strategies: StrategyResult[] }) {
   )
 }
 
-function StrategyCharts({ result }: { result: StrategyResult }) {
+function StrategyCharts({
+  result,
+  runs,
+}: {
+  result: StrategyResult
+  runs: readonly StrategyResult[]
+}) {
+  const strategyLabel = (s: StrategyResult) => runLabel(s, runs)
   const bars = [
     ...result.won_at_step.map((n, k) => ({ label: `won at step ${String(k)}`, value: n })),
     { label: 'lost every step', value: result.exhausted },
@@ -159,6 +173,7 @@ function ChainRow({ chain }: { chain: BacktestChain }) {
 function Chains({ backtest }: { backtest: Backtest }) {
   const strategies = backtest.summary?.strategies ?? []
   const [strategy, setStrategy] = useState(0)
+  const strategyLabel = (s: StrategyResult) => runLabel(s, strategies)
   const [status, setStatus] = useState<'' | 'completed' | 'exhausted' | 'failed'>('')
   const [offset, setOffset] = useState(0)
   const limit = 25
@@ -288,9 +303,28 @@ export function BacktestResult({ id }: { id: number }) {
               <Money value={setup.base_stake} />: {summary.windows} window(s), replayed in{' '}
               {summary.seconds} s.
             </p>
+            {setup.check_first_day != null && (
+              <p className="help" role="note">
+                <strong>Period 1</strong> ({setup.first_day} to {setup.last_day}) is where the
+                settings were chosen; <strong>period 2</strong> ({setup.check_first_day} to{' '}
+                {setup.check_last_day}) judges them. Trust a difference only if it holds on both.
+              </p>
+            )}
+            {(setup.opens ?? []).includes('breakout') && (
+              <p className="help">
+                After a breakout: {PATTERN_TEXT[setup.market?.pattern ?? 'alternating']},{' '}
+                {setup.market?.candles ?? 5} candles; a breakout is{' '}
+                {setup.market?.breakout_candles ?? 2} candle(s) beyond the range by{' '}
+                {setup.market?.breakout_by === 'touch' ? 'any part' : 'their close'}; pairs stop{' '}
+                {setup.trend_max_candles == null
+                  ? 'at the next consolidation'
+                  : `after ${String(setup.trend_max_candles)} candles or at the next consolidation`}
+                .
+              </p>
+            )}
             <Comparison strategies={summary.strategies} />
             {summary.strategies.map((s, i) => (
-              <StrategyCharts key={i} result={s} />
+              <StrategyCharts key={i} result={s} runs={summary.strategies} />
             ))}
             <Chains backtest={backtest} />
           </section>

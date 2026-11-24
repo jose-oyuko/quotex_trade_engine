@@ -309,3 +309,11 @@ The detector (`app/market/detector.py`) reads candles one at a time and never lo
   88%).
 - Every share has its 95% range (Wilson): a difference inside it is noise.
 
+**Trend sessions in a backtest** (Phase 31, `app/backtest/replay.py`): the same detector reads candles
+of the trade length made from the backtest's prices, from 100 candles before a period's first window.
+Pairs may open from the moment a breakout is known (`Trend.start`) until the next consolidation is
+known (`Trend.stopped`) or `trend_max_candles` have passed, whichever is first; inside a session window
+they open as the session's mode says. Running chains finish; a stretch going on when a window opens is
+traded from the window's start. Phase 31's run on two weeks of `1HZ75V` found no advantage
+(docs/reports/phase-31.md).
+

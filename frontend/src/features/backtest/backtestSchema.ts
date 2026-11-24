@@ -1,12 +1,40 @@
 // What the backtest form accepts. It mirrors backend/app/api/schemas/backtests.py so a mistake is
 // caught while typing; the server checks everything again.
-import type { BacktestInput, PriceAsset, Session, Strategy } from '../../api/types'
+import type {
+  BacktestInput,
+  OpenRule,
+  Pattern,
+  PriceAsset,
+  Session,
+  Strategy,
+  StrategyResult,
+} from '../../api/types'
 import { GROWING_FLIP_MAX_STEPS, MAX_STEPS, STRATEGIES } from '../groups/groupSchema'
+import { PATTERNS, PATTERN_TEXT } from '../market/marketSchema'
 
 export { STRATEGIES }
 
 export const MAX_STRATEGIES = 6
 export const MAX_DAYS = 92
+/** Strategies x ways of opening x periods (the server's MAX_RUNS). */
+export const MAX_RUNS = 12
+/** Phase 29: on Volatility 75 (1s) a trend lasted about 20 candles (the median). */
+export const TREND_MAX_DEFAULT = '20'
+
+export { PATTERNS, PATTERN_TEXT }
+
+export const OPENS: { value: OpenRule; label: string; short: string }[] = [
+  {
+    value: 'window',
+    label: 'All through the window (as sessions trade today)',
+    short: 'always on',
+  },
+  {
+    value: 'breakout',
+    label: 'Only after a breakout, until the next consolidation',
+    short: 'after a breakout',
+  },
+]
 
 /** Deriv's trade lengths a backtest offers (a candle is as long as the trade). */
 export const LENGTHS = [
@@ -47,6 +75,21 @@ export interface BacktestFormValues {
   order_delay_s: string
   step_delay_s: string
   strategies: StrategyRow[]
+  /** When pairs open; both: compared side by side. */
+  opens: OpenRule[]
+  /** After a breakout: what counts as a consolidation and a breakout (as on the Market page). */
+  pattern: Pattern
+  pattern_candles: string
+  misses: string
+  width: string
+  net_share: string
+  breakout_candles: string
+  breakout_by: 'close' | 'touch'
+  /** Candles after a breakout to stop at; empty: only at the next consolidation. */
+  trend_max_candles: string
+  /** A second period that judges settings chosen on the first; both empty: none. */
+  check_first_day: string
+  check_last_day: string
 }
 
 export type FormErrors = Partial<Record<string, string>>
@@ -81,7 +124,40 @@ export function emptyBacktest(today: Date = new Date()): BacktestFormValues {
       { strategy: 'martingale', multipliers: '2, 4, 8' },
       { strategy: 'growing_flip', multipliers: '2, 4, 8, 16, 32, 64, 128, 256' },
     ],
+    opens: ['window'],
+    pattern: 'alternating',
+    pattern_candles: '5',
+    misses: '1',
+    width: '2',
+    net_share: '0.2',
+    breakout_candles: '2',
+    breakout_by: 'close',
+    trend_max_candles: TREND_MAX_DEFAULT,
+    check_first_day: '',
+    check_last_day: '',
   }
+}
+
+/** A run's name: the strategy, then how pairs opened and on which period, when the backtest
+ * has more than one of them. */
+export function runLabel(
+  run: Pick<StrategyResult, 'strategy' | 'max_steps' | 'multipliers' | 'opens' | 'period'>,
+  runs: readonly Pick<StrategyResult, 'opens' | 'period'>[] = [],
+): string {
+  const name = STRATEGIES.find((x) => x.value === run.strategy)?.label ?? run.strategy
+  const parts = [run.max_steps === 0 ? name : `${name} ×${run.multipliers.join(', ')}`]
+  const opens = run.opens
+  if (opens === 'breakout' || runs.some((r) => r.opens !== opens)) {
+    parts.push(OPENS.find((o) => o.value === opens)?.short ?? opens)
+  }
+  if (runs.some((r) => r.period === 2)) parts.push(`period ${String(run.period)}`)
+  return parts.join(' · ')
+}
+
+/** How many runs the backtest makes: every strategy, each way of opening, on each period. */
+export function runCount(values: BacktestFormValues): number {
+  const periods = values.check_first_day !== '' || values.check_last_day !== '' ? 2 : 1
+  return values.strategies.length * Math.max(values.opens.length, 1) * periods
 }
 
 export function parseMultipliers(text: string): string[] {
@@ -172,6 +248,54 @@ export function validate(values: BacktestFormValues): FormErrors {
     const problem = strategyProblem(row)
     if (problem !== null) errors[`strategies.${String(index)}`] = problem
   })
+  if (values.opens.length === 0) errors.opens = 'Choose at least one way to open pairs'
+  if (values.check_first_day !== '' || values.check_last_day !== '') {
+    if (!values.check_first_day) errors.check_first_day = 'Choose the first day, or clear both'
+    if (!values.check_last_day) errors.check_last_day = 'Choose the last day, or clear both'
+    if (values.check_first_day && values.check_last_day) {
+      const n = days(values.check_first_day, values.check_last_day)
+      if (n < 1) errors.check_last_day = 'The last day must not be before the first'
+      else if (n > MAX_DAYS) errors.check_last_day = `At most ${String(MAX_DAYS)} days`
+    }
+  }
+  if (errors.strategies === undefined && runCount(values) > MAX_RUNS) {
+    errors.strategies = `At most ${String(MAX_RUNS)} runs (strategies × ways of opening × periods): remove a strategy`
+  }
+  if (values.opens.includes('breakout')) {
+    const candles = Number(values.pattern_candles)
+    if (!WHOLE.test(values.pattern_candles) || candles < 2 || candles > 50) {
+      errors.pattern_candles = 'A whole number from 2 to 50'
+    }
+    const breakout = Number(values.breakout_candles)
+    if (!WHOLE.test(values.breakout_candles) || breakout < 1 || breakout > 10) {
+      errors.breakout_candles = 'A whole number from 1 to 10'
+    }
+    if (values.pattern === 'mixed') {
+      const misses = Number(values.misses)
+      if (!WHOLE.test(values.misses) || misses > candles - 2) {
+        errors.misses = `A whole number from 0 to ${String(Math.max(candles - 2, 0))}`
+      }
+    }
+    if (values.pattern === 'tight') {
+      const width = Number(values.width)
+      if (!DECIMAL.test(values.width) || width <= 0 || width > 20) {
+        errors.width = 'Above 0 and at most 20'
+      }
+    }
+    if (values.pattern === 'choppy') {
+      const share = Number(values.net_share)
+      if (!DECIMAL.test(values.net_share) || share <= 0 || share >= 1) {
+        errors.net_share = 'Between 0 and 1, like 0.2'
+      }
+    }
+    const most = Number(values.trend_max_candles)
+    if (
+      values.trend_max_candles !== '' &&
+      (!WHOLE.test(values.trend_max_candles) || most < 1 || most > 10_000)
+    ) {
+      errors.trend_max_candles = 'A whole number of candles, or empty for no limit'
+    }
+  }
   return errors
 }
 
@@ -202,6 +326,19 @@ export function toInput(values: BacktestFormValues): BacktestInput {
       const multipliers = parseMultipliers(row.multipliers)
       return { strategy: row.strategy, max_steps: multipliers.length, multipliers }
     }),
+    opens: OPENS.map((o) => o.value).filter((o) => values.opens.includes(o)),
+    market: {
+      pattern: values.pattern,
+      candles: Number(values.pattern_candles),
+      misses: Number(values.misses),
+      width: Number(values.width),
+      net_share: Number(values.net_share),
+      breakout_candles: Number(values.breakout_candles),
+      breakout_by: values.breakout_by,
+    },
+    trend_max_candles: values.trend_max_candles === '' ? null : Number(values.trend_max_candles),
+    check_first_day: values.check_first_day === '' ? null : values.check_first_day,
+    check_last_day: values.check_last_day === '' ? null : values.check_last_day,
   }
 }
 

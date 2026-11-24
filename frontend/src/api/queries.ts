@@ -280,6 +280,15 @@ export function useBacktestChains(id: number, filters: BacktestChainFilters) {
   })
 }
 
+export function useBacktestPairs(id: number | null, run: number) {
+  return useQuery({
+    queryKey: [...keys.backtests, id, 'pairs', run],
+    queryFn: ({ signal }) => api.backtests.pairs(id ?? 0, run, signal),
+    enabled: id !== null,
+    staleTime: Infinity, // a finished backtest never changes
+  })
+}
+
 export function useHealth() {
   return useQuery({
     queryKey: keys.health,

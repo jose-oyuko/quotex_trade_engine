@@ -6,6 +6,7 @@ import type {
   Backtest,
   BacktestChains,
   BacktestInput,
+  BacktestPairs,
   BacktestsOut,
   Candles,
   Download,
@@ -282,6 +283,12 @@ export const api = {
     chains: (id: number, filters: BacktestChainFilters, signal?: AbortSignal) =>
       request<BacktestChains>('GET', `/backtests/${String(id)}/chains`, {
         query: filters,
+        signal,
+      }),
+    /** Where a run (an index into `summary.strategies`) opened its pairs, for the chart. */
+    pairs: (id: number, run: number, signal?: AbortSignal) =>
+      request<BacktestPairs>('GET', `/backtests/${String(id)}/pairs`, {
+        query: { run },
         signal,
       }),
     cancel: (id: number) => request<Backtest>('POST', `/backtests/${String(id)}/cancel`),

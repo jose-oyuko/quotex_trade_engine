@@ -503,6 +503,16 @@ class BacktestStore(PriceStore):
             ).fetchall()
         return [ChainRow(*row) for row in rows], int(total)
 
+    def chain_outcomes(self, backtest_id: int, run: int) -> list[tuple[str, int, int, str, str]]:
+        """Every chain of a run, small: (day, pair_no, started, status, profit)."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT day, pair_no, started, status, profit FROM backtest_chains "
+                "WHERE backtest_id=? AND strategy=? ORDER BY seq",
+                (backtest_id, run),
+            ).fetchall()
+        return [(str(d), int(n), int(s), str(st), str(p)) for d, n, s, st, p in rows]
+
     def delete_backtest(self, backtest_id: int) -> bool:
         with self._db() as db:
             db.execute("DELETE FROM backtest_chains WHERE backtest_id=?", (backtest_id,))

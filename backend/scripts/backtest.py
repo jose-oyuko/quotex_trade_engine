@@ -6,6 +6,11 @@
 Download the prices first (`npm run history:download` or the Backtest page). The run is kept with
 the others, so the dashboard's Backtest page shows it too. `--strategy NAME:MULTIPLIERS` may be
 repeated (up to 6); `no_martingale` takes no multipliers.
+
+Trend sessions (Phase 31): `--opens window,breakout` replays each strategy all through the window
+and only after breakouts, side by side; `--pattern`, `--candles`, `--breakout-candles`,
+`--breakout-by` and `--trend-max` (candles, 0 = until the next consolidation) set the trends;
+`--check-from`/`--check-to` add a second period that judges the settings.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ from decimal import Decimal, InvalidOperation
 
 from pydantic import ValidationError
 
-from app.backtest.replay import BacktestSetup, StrategySetup
+from app.backtest.replay import BacktestSetup, OpenRule, StrategySetup
 from app.backtest.store import BacktestStore
 from app.core.clock import SystemClock
 from app.core.config import Settings
@@ -28,6 +33,7 @@ from app.core.tasks import TaskSupervisor
 from app.domain.enums import SessionMode, Strategy
 from app.engine.strategies import max_steps_of
 from app.events.bus import EventBus
+from app.market.detector import BreakBy, MarketRules, Pattern
 from app.services.backtests import BacktestService
 
 
@@ -46,6 +52,23 @@ def strategy(text: str) -> StrategySetup:
     return StrategySetup(kind, len(values), values)
 
 
+def opens(text: str) -> tuple[OpenRule, ...]:
+    try:
+        return tuple(OpenRule(o.strip()) for o in text.split(",") if o.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"not window/breakout: {text!r}") from exc
+
+
+def run_label(run: dict[str, object]) -> str:
+    """A column head: the strategy, and how and where it ran when that is not the default."""
+    label = str(run["strategy"])
+    if run.get("opens", "window") == "breakout":
+        label += " trend"
+    if run.get("period", 1) == 2:
+        label += " (2)"
+    return label
+
+
 def window(text: str) -> tuple[time, time]:
     start, _, end = text.partition("-")
     return time.fromisoformat(start), time.fromisoformat(end)
@@ -58,6 +81,7 @@ def table(summary: dict[str, object]) -> str:
         ("largest stake", "largest_stake"),
         ("most in play", "most_in_play"),
         ("pairs", "pairs"),
+        ("hours open", "active_s"),
         ("chains", "chains"),
         ("lost every step", "exhausted"),
         ("lost in a row", "longest_losing_run"),
@@ -66,12 +90,18 @@ def table(summary: dict[str, object]) -> str:
     ]
     strategies = summary["strategies"]
     assert isinstance(strategies, list)  # noqa: S101 - our own JSON
-    heads = [s["strategy"] for s in strategies]
-    lines = ["".ljust(17) + "".join(h.rjust(17) for h in heads)]
+    heads = [run_label(s) for s in strategies]
+    width = max(17, *(len(h) + 2 for h in heads))
+    lines = ["".ljust(17) + "".join(h.rjust(width) for h in heads)]
     for label, key in rows:
-        lines.append(label.ljust(17) + "".join(str(s[key]).rjust(17) for s in strategies))
+        cells = [
+            f"{int(s[key]) / 3600:.1f}" if key == "active_s" else str(s[key]) for s in strategies
+        ]
+        lines.append(label.ljust(17) + "".join(c.rjust(width) for c in cells))
     lines.append("\nchains won at step 0, 1, 2 ...:")
-    lines.extend(f"  {s['strategy']}: {s['won_at_step']}" for s in strategies)
+    lines.extend(f"  {run_label(s)}: {s['won_at_step']}" for s in strategies)
+    if any(s.get("period", 1) == 2 for s in strategies):
+        lines.append("\n(2): the second period, which judges settings chosen on the first")
     return "\n".join(lines)
 
 
@@ -113,7 +143,19 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--stake", type=Decimal, default=Decimal("1.00"))
     parser.add_argument("--payout", type=Decimal, default=Decimal(88), help="percent")
     parser.add_argument("--strategy", type=strategy, action="append", required=True)
+    parser.add_argument("--opens", type=opens, default=(OpenRule.WINDOW,), help="window,breakout")
+    parser.add_argument("--pattern", choices=[p.value for p in Pattern], default="alternating")
+    parser.add_argument("--candles", type=int, default=5, help="candles in the pattern")
+    parser.add_argument("--breakout-candles", type=int, default=2)
+    parser.add_argument("--breakout-by", choices=[b.value for b in BreakBy], default="close")
+    parser.add_argument(
+        "--trend-max", type=int, default=20, help="candles after a breakout; 0: no limit"
+    )
+    parser.add_argument("--check-from", type=date.fromisoformat, default=None)
+    parser.add_argument("--check-to", type=date.fromisoformat, default=None)
     args = parser.parse_args(argv)
+    if (args.check_from is None) != (args.check_to is None):
+        parser.error("--check-from and --check-to go together")
     try:
         settings = Settings()
     except ValidationError as exc:
@@ -137,6 +179,16 @@ def main(argv: list[str]) -> int:
         base_stake=args.stake,
         payout_pct=args.payout,
         strategies=tuple(args.strategy[:6]),
+        opens=args.opens,
+        market=MarketRules(
+            pattern=Pattern(args.pattern),
+            candles=args.candles,
+            breakout_candles=args.breakout_candles,
+            breakout_by=BreakBy(args.breakout_by),
+        ),
+        trend_max_candles=args.trend_max or None,
+        check_first_day=args.check_from,
+        check_last_day=args.check_to,
     )
     return asyncio.run(run(settings, setup))
 

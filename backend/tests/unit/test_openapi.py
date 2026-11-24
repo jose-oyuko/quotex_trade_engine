@@ -62,6 +62,7 @@ EXPECTED_OPERATIONS = {
     ("GET", "/api/v1/market/candles"),
     ("POST", "/api/v1/market/scan"),
     ("GET", "/api/v1/backtests/{backtest_id}/chains"),
+    ("GET", "/api/v1/backtests/{backtest_id}/pairs"),
     ("POST", "/api/v1/backtests/{backtest_id}/cancel"),
     ("GET", "/api/v1/settings"),
     ("GET", "/api/v1/settings/env-logins"),

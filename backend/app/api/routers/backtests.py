@@ -17,11 +17,13 @@ from app.api.schemas.backtests import (
     BacktestIn,
     BacktestItemOut,
     BacktestOut,
+    BacktestPairOut,
+    BacktestPairsOut,
     BacktestsOut,
     BacktestSummaryOut,
     BacktestTradeOut,
 )
-from app.backtest.replay import BacktestSetup, StrategySetup
+from app.backtest.replay import MAX_RUNS, BacktestSetup, StrategySetup
 from app.backtest.store import BacktestRow, ChainRow
 from app.domain.enums import ChainStatus, Direction
 
@@ -51,6 +53,11 @@ def _setup(body: BacktestIn) -> BacktestSetup:
         strategies=tuple(
             StrategySetup(s.strategy, s.max_steps, tuple(s.multipliers)) for s in body.strategies
         ),
+        opens=tuple(body.opens),
+        market=body.market_rules(),
+        trend_max_candles=body.trend_max_candles,
+        check_first_day=body.check_first_day,
+        check_last_day=body.check_last_day,
     )
 
 
@@ -136,13 +143,13 @@ async def get_backtest(backtest_id: int, backtests: BacktestsDep) -> BacktestOut
 async def list_chains(
     backtest_id: int,
     backtests: BacktestsDep,
-    strategy: Annotated[int | None, Query(ge=0, le=5)] = None,
+    strategy: Annotated[int | None, Query(ge=0, le=MAX_RUNS - 1)] = None,
     chain_status: Annotated[ChainStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> BacktestChainsOut:
-    """The chains of a backtest in time order, with every trade (filter by strategy index and
-    by `status`: `completed`, `exhausted`, `failed`)."""
+    """The chains of a backtest in time order, with every trade (filter by run: the index into
+    `summary.strategies`, and by `status`: `completed`, `exhausted`, `failed`)."""
     rows, total = await backtests.chains(
         backtest_id,
         strategy=strategy,
@@ -151,6 +158,21 @@ async def list_chains(
         offset=offset,
     )
     return BacktestChainsOut(items=[chain_out(row) for row in rows], total=total)
+
+
+@router.get("/{backtest_id}/pairs", response_model=BacktestPairsOut)
+async def list_pairs(
+    backtest_id: int,
+    backtests: BacktestsDep,
+    run: Annotated[int, Query(ge=0, le=MAX_RUNS - 1)] = 0,
+) -> BacktestPairsOut:
+    """Where a run opened its pairs, oldest first, with what each pair made: for the Market
+    page's chart."""
+    pairs, total = await backtests.pairs(backtest_id, run)
+    return BacktestPairsOut(
+        items=[BacktestPairOut(at=_at(p.at), profit=p.profit, lost=p.lost) for p in pairs],
+        total=total,
+    )
 
 
 @router.post("/{backtest_id}/cancel", response_model=BacktestOut)

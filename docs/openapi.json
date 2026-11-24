@@ -231,7 +231,7 @@
             "type": "integer"
           },
           "strategy": {
-            "description": "Index into the backtest's strategies.",
+            "description": "Index into the result's runs (`summary.strategies`).",
             "title": "Strategy",
             "type": "integer"
           },
@@ -302,6 +302,31 @@
             ],
             "title": "Base Stake"
           },
+          "check_first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A second period, to judge settings chosen on the first.",
+            "title": "Check First Day"
+          },
+          "check_last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Last Day"
+          },
           "duration_s": {
             "description": "The trade (and candle) length.",
             "maximum": 86400.0,
@@ -344,6 +369,10 @@
             "description": "Per window.",
             "title": "Loss Limit"
           },
+          "market": {
+            "$ref": "#/components/schemas/MarketRulesIn",
+            "description": "`breakout`: what counts as a consolidation and a breakout."
+          },
           "max_open_pairs": {
             "default": 1,
             "maximum": 50.0,
@@ -382,6 +411,16 @@
             ],
             "description": "Shown in the list; made up if empty.",
             "title": "Name"
+          },
+          "opens": {
+            "description": "When pairs open: `window` (all through it), `breakout` (only while a trend is on, after a breakout), or both, compared side by side.",
+            "items": {
+              "$ref": "#/components/schemas/OpenRule"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Opens",
+            "type": "array"
           },
           "order_delay_s": {
             "default": 0.5,
@@ -460,6 +499,21 @@
             "title": "Timezone",
             "type": "string"
           },
+          "trend_max_candles": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 20,
+            "description": "`breakout`: stop opening pairs this many candles after the breakout, or earlier at the next consolidation; null: only at the next consolidation.",
+            "title": "Trend Max Candles"
+          },
           "weekdays": {
             "description": "0 = Monday ... 6 = Sunday.",
             "items": {
@@ -498,6 +552,31 @@
             "title": "Base Stake",
             "type": "string"
           },
+          "check_first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A second period, to judge settings chosen on the first.",
+            "title": "Check First Day"
+          },
+          "check_last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Last Day"
+          },
           "duration_s": {
             "description": "The trade (and candle) length.",
             "maximum": 86400.0,
@@ -534,6 +613,10 @@
             ],
             "description": "Per window.",
             "title": "Loss Limit"
+          },
+          "market": {
+            "$ref": "#/components/schemas/MarketRulesIn",
+            "description": "`breakout`: what counts as a consolidation and a breakout."
           },
           "max_open_pairs": {
             "default": 1,
@@ -573,6 +656,16 @@
             ],
             "description": "Shown in the list; made up if empty.",
             "title": "Name"
+          },
+          "opens": {
+            "description": "When pairs open: `window` (all through it), `breakout` (only while a trend is on, after a breakout), or both, compared side by side.",
+            "items": {
+              "$ref": "#/components/schemas/OpenRule"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Opens",
+            "type": "array"
           },
           "order_delay_s": {
             "default": 0.5,
@@ -636,6 +729,21 @@
             "minLength": 1,
             "title": "Timezone",
             "type": "string"
+          },
+          "trend_max_candles": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 20,
+            "description": "`breakout`: stop opening pairs this many candles after the breakout, or earlier at the next consolidation; null: only at the next consolidation.",
+            "title": "Trend Max Candles"
           },
           "weekdays": {
             "description": "0 = Monday ... 6 = Sunday.",
@@ -858,6 +966,56 @@
           "summary"
         ],
         "title": "BacktestOut",
+        "type": "object"
+      },
+      "BacktestPairOut": {
+        "properties": {
+          "at": {
+            "description": "When the pair's first trades started.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "lost": {
+            "description": "A leg lost every step.",
+            "title": "Lost",
+            "type": "boolean"
+          },
+          "profit": {
+            "description": "Both legs together.",
+            "title": "Profit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "profit",
+          "lost"
+        ],
+        "title": "BacktestPairOut",
+        "type": "object"
+      },
+      "BacktestPairsOut": {
+        "properties": {
+          "items": {
+            "description": "Oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/BacktestPairOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "description": "All the run's pairs; `items` stops at 20,000.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "BacktestPairsOut",
         "type": "object"
       },
       "BacktestStrategyIn-Input": {
@@ -3883,6 +4041,15 @@
         "title": "NotCountedOut",
         "type": "object"
       },
+      "OpenRule": {
+        "description": "When a backtest opens pairs.",
+        "enum": [
+          "window",
+          "breakout"
+        ],
+        "title": "OpenRule",
+        "type": "string"
+      },
       "Page_ChainOut_": {
         "properties": {
           "items": {
@@ -6159,7 +6326,14 @@
         "type": "string"
       },
       "StrategyResultOut": {
+        "description": "One run: a strategy, replayed one way (`opens`) on one period.",
         "properties": {
+          "active_s": {
+            "default": 0,
+            "description": "Their seconds in all.",
+            "title": "Active S",
+            "type": "integer"
+          },
           "chains": {
             "title": "Chains",
             "type": "integer"
@@ -6182,6 +6356,18 @@
             "description": "Chains that lost every step.",
             "title": "Exhausted",
             "type": "integer"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Index into the setup's strategies (null before Phase 31).",
+            "title": "Index"
           },
           "largest_stake": {
             "title": "Largest Stake",
@@ -6218,8 +6404,18 @@
             "title": "No Data Rounds",
             "type": "integer"
           },
+          "opens": {
+            "$ref": "#/components/schemas/OpenRule",
+            "default": "window"
+          },
           "pairs": {
             "title": "Pairs",
+            "type": "integer"
+          },
+          "period": {
+            "default": 1,
+            "description": "1, or 2: the period that judges the settings.",
+            "title": "Period",
             "type": "integer"
           },
           "profit": {
@@ -6229,6 +6425,12 @@
           "skipped_rounds": {
             "description": "Candles with too many pairs open (every candle).",
             "title": "Skipped Rounds",
+            "type": "integer"
+          },
+          "spans": {
+            "default": 0,
+            "description": "Stretches in which pairs could open: windows, or trends.",
+            "title": "Spans",
             "type": "integer"
           },
           "staked": {
@@ -8068,7 +8270,7 @@
     },
     "/api/v1/backtests/{backtest_id}/chains": {
       "get": {
-        "description": "The chains of a backtest in time order, with every trade (filter by strategy index and\nby `status`: `completed`, `exhausted`, `failed`).",
+        "description": "The chains of a backtest in time order, with every trade (filter by run: the index into\n`summary.strategies`, and by `status`: `completed`, `exhausted`, `failed`).",
         "operationId": "list_chains_api_v1_backtests__backtest_id__chains_get",
         "parameters": [
           {
@@ -8087,7 +8289,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "maximum": 5,
+                  "maximum": 11,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -8211,6 +8413,111 @@
           }
         },
         "summary": "List Chains",
+        "tags": [
+          "backtests"
+        ]
+      }
+    },
+    "/api/v1/backtests/{backtest_id}/pairs": {
+      "get": {
+        "description": "Where a run opened its pairs, oldest first, with what each pair made: for the Market\npage's chart.",
+        "operationId": "list_pairs_api_v1_backtests__backtest_id__pairs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backtest_id",
+            "required": true,
+            "schema": {
+              "title": "Backtest Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "run",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 11,
+              "minimum": 0,
+              "title": "Run",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestPairsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Pairs",
         "tags": [
           "backtests"
         ]

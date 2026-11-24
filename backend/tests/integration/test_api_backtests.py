@@ -214,3 +214,65 @@ def test_a_backtest_cut_by_a_stop_is_marked_failed_and_the_setup_round_trips(
     found = store.backtest(row.id)
     assert found is not None
     assert (found.state, found.error) == ("failed", "The program stopped during the backtest.")
+
+
+async def test_trend_sessions_run_beside_always_on_ones_on_two_periods(tmp_path: Path) -> None:
+    """Phase 31: each strategy opened all through the window and after breakouts, on a first
+    period and on a second one that judges it; the Market page reads where the pairs opened."""
+    async with running_api(tmp_path) as rig:
+        await download(rig, f"{DAY}T07:50:00Z", f"{DAY}T11:30:00Z")
+        trend = body(
+            strategies=[{"strategy": "martingale", "max_steps": 2, "multipliers": ["2", "4"]}],
+            opens=["window", "breakout"],
+            market={"pattern": "alternating", "candles": 3, "breakout_candles": 1},
+            trend_max_candles=10,
+            check_first_day=DAY,
+            check_last_day=DAY,
+        )
+        response = await rig.client.post(f"{API}/backtests", json=trend)
+        assert response.status_code == 202, response.text
+        result = await finished(rig, response.json()["id"])
+        assert result["state"] == "done", result["error"]
+        runs = result["summary"]["strategies"]
+        assert [(r["opens"], r["period"], r["index"]) for r in runs] == [
+            ("window", 1, 0),
+            ("breakout", 1, 0),
+            ("window", 2, 0),
+            ("breakout", 2, 0),
+        ]
+        always, after = runs[0], runs[1]
+        assert always["spans"] == 1 and always["active_s"] == 1800
+        assert after["active_s"] <= 1800 and after["pairs"] <= always["pairs"]
+        assert result["setup"]["opens"] == ["window", "breakout"]
+        assert result["setup"]["check_first_day"] == DAY
+
+        pairs = (
+            await rig.client.get(f"{API}/backtests/{result['id']}/pairs", params={"run": 1})
+        ).json()
+        assert pairs["total"] == after["pairs"]
+        assert [p["at"] for p in pairs["items"]] == sorted(p["at"] for p in pairs["items"])
+        chains = (
+            await rig.client.get(
+                f"{API}/backtests/{result['id']}/chains", params={"strategy": 1, "limit": 200}
+            )
+        ).json()
+        assert chains["total"] == after["chains"]
+
+        half = body(check_first_day=DAY)
+        assert (await rig.client.post(f"{API}/backtests", json=half)).status_code == 422
+        four = [
+            *body()["strategies"],
+            {"strategy": "flip_every_loss", "max_steps": 1, "multipliers": ["2"]},
+        ]
+        too_many = body(
+            strategies=four, opens=["window", "breakout"], check_first_day=DAY, check_last_day=DAY
+        )  # 4 strategies x 2 ways x 2 periods: 16 runs
+        alone = await rig.client.post(f"{API}/backtests", json=body(strategies=four))
+        assert alone.status_code == 202  # the four strategies are fine on their own
+        await finished(rig, alone.json()["id"])
+        assert (await rig.client.post(f"{API}/backtests", json=too_many)).status_code == 422
+        bad_rules = body(opens=["breakout"], market={"pattern": "mixed", "candles": 4, "misses": 3})
+        refused = await rig.client.post(f"{API}/backtests", json=bad_rules)
+        assert refused.status_code == 422
+        twice = body(opens=["window", "window"])
+        assert (await rig.client.post(f"{API}/backtests", json=twice)).status_code == 422

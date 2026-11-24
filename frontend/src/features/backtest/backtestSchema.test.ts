@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { PriceAsset } from '../../api/types'
-import { coverage, emptyBacktest, parseMultipliers, toInput, validate } from './backtestSchema'
+import {
+  coverage,
+  emptyBacktest,
+  parseMultipliers,
+  runCount,
+  runLabel,
+  toInput,
+  validate,
+} from './backtestSchema'
 
 const TODAY = new Date('2026-11-19T12:00:00Z')
 
@@ -25,6 +33,67 @@ describe('the backtest form rules', () => {
     expect(body.max_pairs).toBe(10)
     expect(body.profit_target).toBeNull()
     expect(body.name).toBeNull()
+  })
+
+  it('sends the trend settings and the second period (Phase 31)', () => {
+    const values = {
+      ...emptyBacktest(TODAY),
+      opens: ['breakout' as const, 'window' as const],
+      pattern_candles: '6',
+      trend_max_candles: '',
+      check_first_day: '2026-11-10',
+      check_last_day: '2026-11-12',
+    }
+    expect(validate(values)).toEqual({})
+    expect(runCount(values)).toBe(8) // 2 strategies x 2 ways x 2 periods
+    const body = toInput(values)
+    expect(body.opens).toEqual(['window', 'breakout']) // always in the same order
+    expect(body.market).toMatchObject({ pattern: 'alternating', candles: 6, breakout_candles: 2 })
+    expect(body.trend_max_candles).toBeNull()
+    expect([body.check_first_day, body.check_last_day]).toEqual(['2026-11-10', '2026-11-12'])
+    expect(toInput(emptyBacktest(TODAY)).check_first_day).toBeNull()
+  })
+
+  it('refuses no way of opening, half a second period, too many runs, bad trend settings', () => {
+    const base = emptyBacktest(TODAY)
+    expect(validate({ ...base, opens: [] }).opens).toBe('Choose at least one way to open pairs')
+    expect(validate({ ...base, check_first_day: '2026-11-10' }).check_last_day).toMatch(
+      /Choose the last day/,
+    )
+    const many = {
+      ...base,
+      opens: ['window' as const, 'breakout' as const],
+      check_first_day: '2026-11-10',
+      check_last_day: '2026-11-10',
+      strategies: [...base.strategies, ...base.strategies],
+    }
+    expect(validate(many).strategies).toMatch(/At most 12 runs/)
+    const bad = validate({
+      ...base,
+      opens: ['breakout'],
+      pattern: 'mixed',
+      pattern_candles: '4',
+      misses: '3',
+      trend_max_candles: '0',
+    })
+    expect(bad.misses).toBe('A whole number from 0 to 2')
+    expect(bad.trend_max_candles).toMatch(/whole number of candles/)
+    // the trend settings are not checked when no pair opens after a breakout
+    expect(validate({ ...base, pattern_candles: 'x' }).pattern_candles).toBeUndefined()
+  })
+
+  it('names each run by strategy, way of opening and period when there are several', () => {
+    const run = {
+      strategy: 'martingale' as const,
+      max_steps: 2,
+      multipliers: ['2', '4'],
+      opens: 'window' as const,
+      period: 1,
+    }
+    expect(runLabel(run, [run])).toBe('Martingale ×2, 4')
+    const trend = { ...run, opens: 'breakout' as const, period: 2 }
+    expect(runLabel(run, [run, trend])).toBe('Martingale ×2, 4 · always on · period 1')
+    expect(runLabel(trend, [run, trend])).toBe('Martingale ×2, 4 · after a breakout · period 2')
   })
 
   it('reads multipliers separated by commas or spaces', () => {

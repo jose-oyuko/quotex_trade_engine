@@ -13,7 +13,7 @@ import json
 import threading
 import time as monotonic
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from functools import partial
 from typing import Any
@@ -21,10 +21,14 @@ from typing import Any
 import structlog
 
 from app.backtest.replay import (
+    MAX_RUNS,
+    WARMUP_CANDLES,
     BacktestResult,
     BacktestSetup,
     Cancelled,
+    OpenRule,
     Prices,
+    Run,
     StrategySetup,
     Totals,
     replay,
@@ -36,10 +40,12 @@ from app.core.tasks import TaskSupervisor
 from app.domain.enums import SessionMode, Strategy
 from app.events.bus import EventBus
 from app.events.types import JobChanged
+from app.market.detector import BreakBy, MarketRules, Pattern
 
 log = structlog.get_logger()
 
 MAX_DAYS = 92  # per backtest
+MAX_PAIRS_SHOWN = 20_000  # pairs a run shows on the Market page
 PROGRESS_EVERY_S = 1.0
 
 
@@ -53,6 +59,13 @@ class BacktestRunningError(DomainError):
 
 class BacktestNotFoundError(DomainError):
     pass
+
+
+@dataclass(slots=True, frozen=True)
+class PairShown:
+    at: int  # when its first trades started
+    profit: Decimal
+    lost: bool  # a leg lost every step
 
 
 @dataclass(slots=True)
@@ -111,14 +124,40 @@ class BacktestService:
             )
         )
 
+    async def pairs(self, backtest_id: int, run: int) -> tuple[list[PairShown], int]:
+        """Where a run opened its pairs, oldest first, and how many there are."""
+        await self.get(backtest_id)
+        rows = await asyncio.to_thread(self._store.chain_outcomes, backtest_id, run)
+        found: dict[tuple[str, int], PairShown] = {}
+        for day, pair_no, started, status, profit in rows:
+            key = (day, pair_no)
+            seen = found.get(key)
+            lost = status == "exhausted"
+            found[key] = (
+                PairShown(started, Decimal(profit), lost)
+                if seen is None
+                else PairShown(
+                    min(seen.at, started), seen.profit + Decimal(profit), seen.lost or lost
+                )
+            )
+        pairs = sorted(found.values(), key=lambda p: p.at)
+        return pairs[:MAX_PAIRS_SHOWN], len(pairs)
+
     async def start(self, setup: BacktestSetup, name: str | None = None) -> BacktestRow:
         """Check the setup and replay it in the background. Raises `InvalidBacktestError`,
         `BacktestRunningError`."""
-        if (setup.last_day - setup.first_day).days + 1 > MAX_DAYS:
-            raise InvalidBacktestError(f"At most {MAX_DAYS} days per backtest.")
-        windows = setup.windows()
-        if not windows:
-            raise InvalidBacktestError("No session window falls on the chosen days.")
+        for first_day, last_day in setup.periods():
+            if (last_day - first_day).days + 1 > MAX_DAYS:
+                raise InvalidBacktestError(f"At most {MAX_DAYS} days per period.")
+        if len(setup.runs()) > MAX_RUNS:
+            raise InvalidBacktestError(
+                f"At most {MAX_RUNS} runs (strategies x ways of opening x periods)."
+            )
+        for period in range(1, len(setup.periods()) + 1):
+            if not setup.windows(period):
+                which = "the chosen days" if period == 1 else "the days of the second period"
+                raise InvalidBacktestError(f"No session window falls on {which}.")
+        windows = setup.all_windows()
         if self._active is not None:
             raise BacktestRunningError("A backtest is running; wait for it or cancel it.")
         first, last = int(windows[0].start.timestamp()), int(windows[-1].end.timestamp())
@@ -201,12 +240,13 @@ class BacktestService:
                 self._active = None
 
     def _prices(self, setup: BacktestSetup) -> Prices:
-        windows = setup.windows()
+        windows = setup.all_windows()
         longest_chain_s = (max(s.max_steps for s in setup.strategies) + 1) * (
             setup.duration_s + setup.step_delay_s + setup.order_delay_s + 2
         )
-        first = int(windows[0].start.timestamp()) - 5
-        last = int(windows[-1].end.timestamp() + longest_chain_s) + setup.duration_s
+        warmup = WARMUP_CANDLES * setup.duration_s if OpenRule.BREAKOUT in setup.opens else 0
+        first = min(int(w.start.timestamp()) for w in windows) - 5 - warmup
+        last = int(max(w.end.timestamp() for w in windows) + longest_chain_s) + setup.duration_s
         times, quotes = self._store.load(setup.asset, first, last)
         return Prices(times, quotes, self._store.coverage(setup.asset))
 
@@ -214,10 +254,10 @@ class BacktestService:
         rows: list[ChainRow] = []
         seq: dict[int, int] = {}
         for chain in result.chains:
-            n = seq[chain.strategy] = seq.get(chain.strategy, 0) + 1
+            n = seq[chain.run] = seq.get(chain.run, 0) + 1
             rows.append(
                 ChainRow(
-                    strategy=chain.strategy,
+                    strategy=chain.run,
                     seq=n,
                     day=chain.day.isoformat(),
                     pair_no=chain.pair_no,
@@ -312,6 +352,23 @@ def setup_to_json(setup: BacktestSetup) -> dict[str, Any]:
         "payout_pct": str(setup.payout_pct),
         "order_delay_s": setup.order_delay_s,
         "step_delay_s": setup.step_delay_s,
+        "opens": [o.value for o in setup.opens],
+        "market": {
+            "pattern": setup.market.pattern.value,
+            "candles": setup.market.candles,
+            "misses": setup.market.misses,
+            "width": setup.market.width,
+            "net_share": setup.market.net_share,
+            "breakout_candles": setup.market.breakout_candles,
+            "breakout_by": setup.market.breakout_by.value,
+        },
+        "trend_max_candles": setup.trend_max_candles,
+        "check_first_day": None
+        if setup.check_first_day is None
+        else setup.check_first_day.isoformat(),
+        "check_last_day": None
+        if setup.check_last_day is None
+        else setup.check_last_day.isoformat(),
         "strategies": [
             {
                 "strategy": s.strategy.value,
@@ -326,6 +383,12 @@ def setup_to_json(setup: BacktestSetup) -> dict[str, Any]:
 def setup_from_json(data: dict[str, Any]) -> BacktestSetup:
     def money(value: object) -> Decimal | None:
         return None if value is None else Decimal(str(value))
+
+    def day(value: object) -> date | None:
+        return None if value is None else date.fromisoformat(str(value))
+
+    # backtests from before Phase 31 have no ways of opening, no market rules, no second period
+    market = data.get("market") or {}
 
     return BacktestSetup(
         asset=data["asset"],
@@ -354,7 +417,32 @@ def setup_from_json(data: dict[str, Any]) -> BacktestSetup:
             )
             for s in data["strategies"]
         ),
+        opens=tuple(OpenRule(o) for o in data.get("opens", [OpenRule.WINDOW.value])),
+        market=MarketRules(
+            pattern=Pattern(market.get("pattern", Pattern.ALTERNATING.value)),
+            candles=int(market.get("candles", 5)),
+            misses=int(market.get("misses", 1)),
+            width=float(market.get("width", 2.0)),
+            net_share=float(market.get("net_share", 0.2)),
+            breakout_candles=int(market.get("breakout_candles", 2)),
+            breakout_by=BreakBy(market.get("breakout_by", BreakBy.CLOSE.value)),
+        ),
+        trend_max_candles=data.get("trend_max_candles", 20),
+        check_first_day=day(data.get("check_first_day")),
+        check_last_day=day(data.get("check_last_day")),
     )
+
+
+def _strategy_json(s: StrategySetup) -> dict[str, Any]:
+    return {
+        "strategy": s.strategy.value,
+        "max_steps": s.max_steps,
+        "multipliers": [str(m) for m in s.multipliers],
+    }
+
+
+def _runs(result: BacktestResult, setup: BacktestSetup) -> list[Run]:
+    return result.runs or setup.runs()
 
 
 def _at(epoch: int | None) -> str | None:
@@ -382,6 +470,8 @@ def totals_to_json(total: Totals) -> dict[str, Any]:
         "worst_drawdown": str(total.worst_drawdown),
         "worst_drawdown_at": _at(total.worst_drawdown_at),
         "longest_losing_run": total.longest_losing_run,
+        "spans": total.spans,
+        "active_s": round(total.active_s),
         "stops": total.stops,
         "days": [
             {"day": day, "profit": str(v[0]), "chains": int(v[1]), "lost": int(v[2])}
@@ -399,11 +489,12 @@ def summary_to_json(
         "seconds": round(seconds, 1),
         "strategies": [
             {
-                "strategy": s.strategy.value,
-                "max_steps": s.max_steps,
-                "multipliers": [str(m) for m in s.multipliers],
+                **_strategy_json(setup.strategies[run.strategy]),
+                "index": run.strategy,
+                "opens": run.opens.value,
+                "period": run.period,
                 **totals_to_json(total),
             }
-            for s, total in zip(setup.strategies, result.totals, strict=True)
+            for run, total in zip(_runs(result, setup), result.totals, strict=True)
         ],
     }

@@ -9,8 +9,11 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.api.schemas.groups import MAX_BASE_STAKE, MAX_STEPS, Multiplier
+from app.api.schemas.market import MarketRulesIn
+from app.backtest.replay import MAX_RUNS, OpenRule
 from app.domain.enums import ChainStatus, Direction, SessionMode, Strategy
 from app.engine.strategies import max_steps_of
+from app.market.detector import MarketRules
 from app.signals.timezones import InvalidTimezoneError, parse_timezone
 
 Money = Annotated[Decimal, Field(gt=0, le=MAX_BASE_STAKE, max_digits=12, decimal_places=2)]
@@ -83,6 +86,28 @@ class BacktestIn(BaseModel):
     step_delay_s: float = Field(
         default=1.0, ge=0, le=60, description="From a trade's end to deciding the next step."
     )
+    opens: list[OpenRule] = Field(
+        default_factory=lambda: [OpenRule.WINDOW],
+        min_length=1,
+        max_length=2,
+        description="When pairs open: `window` (all through it), `breakout` (only while a trend "
+        "is on, after a breakout), or both, compared side by side.",
+    )
+    market: MarketRulesIn = Field(
+        default_factory=MarketRulesIn,
+        description="`breakout`: what counts as a consolidation and a breakout.",
+    )
+    trend_max_candles: int | None = Field(
+        default=20,
+        ge=1,
+        le=10_000,
+        description="`breakout`: stop opening pairs this many candles after the breakout, or "
+        "earlier at the next consolidation; null: only at the next consolidation.",
+    )
+    check_first_day: date | None = Field(
+        default=None, description="A second period, to judge settings chosen on the first."
+    )
+    check_last_day: date | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -90,6 +115,22 @@ class BacktestIn(BaseModel):
             raise ValueError("the last day must not be before the first")
         if (self.last_day - self.first_day).days + 1 > 92:
             raise ValueError("at most 92 days per backtest")
+        if (self.check_first_day is None) != (self.check_last_day is None):
+            raise ValueError("the second period needs both its first and its last day")
+        if self.check_first_day is not None and self.check_last_day is not None:
+            if self.check_last_day < self.check_first_day:
+                raise ValueError("the second period's last day must not be before its first")
+            if (self.check_last_day - self.check_first_day).days + 1 > 92:
+                raise ValueError("at most 92 days in the second period")
+        if len(set(self.opens)) != len(self.opens):
+            raise ValueError("each way of opening at most once")
+        periods = 1 if self.check_first_day is None else 2
+        if len(self.strategies) * len(self.opens) * periods > MAX_RUNS:
+            raise ValueError(f"at most {MAX_RUNS} runs: strategies x ways of opening x periods")
+        try:
+            self.market_rules()
+        except ValueError as exc:
+            raise ValueError(f"market: {exc}") from exc
         if self.start_time == self.end_time:
             raise ValueError("the start and the end of the window must differ")
         if any(not 0 <= d <= 6 for d in self.weekdays) or len(set(self.weekdays)) != len(
@@ -101,6 +142,18 @@ class BacktestIn(BaseModel):
         except InvalidTimezoneError as exc:
             raise ValueError(str(exc)) from exc
         return self
+
+    def market_rules(self) -> MarketRules:
+        m = self.market
+        return MarketRules(
+            pattern=m.pattern,
+            candles=m.candles,
+            misses=m.misses,
+            width=m.width,
+            net_share=m.net_share,
+            breakout_candles=m.breakout_candles,
+            breakout_by=m.breakout_by,
+        )
 
 
 class DayOut(BaseModel):
@@ -116,9 +169,20 @@ class EquityPointOut(BaseModel):
 
 
 class StrategyResultOut(BaseModel):
+    """One run: a strategy, replayed one way (`opens`) on one period."""
+
     strategy: Strategy
     max_steps: int
     multipliers: list[Decimal]
+    index: int | None = Field(
+        default=None, description="Index into the setup's strategies (null before Phase 31)."
+    )
+    opens: OpenRule = OpenRule.WINDOW
+    period: int = Field(default=1, description="1, or 2: the period that judges the settings.")
+    spans: int = Field(
+        default=0, description="Stretches in which pairs could open: windows, or trends."
+    )
+    active_s: int = Field(default=0, description="Their seconds in all.")
     windows: int
     pairs: int
     chains: int
@@ -181,7 +245,7 @@ class BacktestTradeOut(BaseModel):
 
 
 class BacktestChainOut(BaseModel):
-    strategy: int = Field(description="Index into the backtest's strategies.")
+    strategy: int = Field(description="Index into the result's runs (`summary.strategies`).")
     seq: int
     day: date
     pair_no: int
@@ -196,3 +260,14 @@ class BacktestChainOut(BaseModel):
 class BacktestChainsOut(BaseModel):
     items: list[BacktestChainOut]
     total: int
+
+
+class BacktestPairOut(BaseModel):
+    at: datetime = Field(description="When the pair's first trades started.")
+    profit: Decimal = Field(description="Both legs together.")
+    lost: bool = Field(description="A leg lost every step.")
+
+
+class BacktestPairsOut(BaseModel):
+    items: list[BacktestPairOut] = Field(description="Oldest first.")
+    total: int = Field(description="All the run's pairs; `items` stops at 20,000.")

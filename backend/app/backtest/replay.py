@@ -21,6 +21,18 @@ after the end, which is when the next candle sees the pair as still open.
 **What is not guessed.** A trade whose seconds were not downloaded, or that has no price in them,
 is not decided: a pair whose first trades lack prices is not opened (`no_data_rounds`), and a chain
 whose next step lacks them ends there (`failed`, "no price data").
+
+**Opening after a breakout (decision D-85, Phase 31).** Instead of all through the window, pairs
+may open only while a trend is on. The detector of `app/market/detector.py` reads candles of the
+trade length made from the same prices, from `WARMUP_CANDLES` before a period's first window. A
+trend starts when its breakout is known (the end of the last breakout candle, never earlier) and
+stops when the next consolidation is known or after `trend_max_candles`, whichever is first. Inside
+a window pairs open as the session's mode says, only in those stretches; running chains finish,
+then it waits for the next breakout. A stretch already going on when a window opens is traded from
+the window's start.
+
+**Runs.** Every strategy is replayed with every chosen way of opening, on each period: a second
+period (`check_first_day` to `check_last_day`) judges settings chosen on the first.
 """
 
 from __future__ import annotations
@@ -28,11 +40,12 @@ from __future__ import annotations
 import heapq
 import math
 import threading
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from enum import StrEnum
 from uuid import UUID
 
 from app.brokers.base import TradeOutcome
@@ -47,6 +60,8 @@ from app.domain.enums import (
 )
 from app.domain.records import SessionRecord
 from app.engine.chain import Chain, ChainSpec
+from app.market.candles import candles_from_ticks
+from app.market.detector import MarketRules, scan
 from app.sessions.schedule import Window, local_date, next_boundary, windows_between
 
 CENT = Decimal("0.01")
@@ -55,6 +70,24 @@ ON_BOUNDARY_S = 5  # the scheduler: within 5 s after a candle boundary counts as
 EQUITY_POINTS = 400  # the profit curve is thinned to about this many points
 _NOW = datetime(1970, 1, 1, tzinfo=UTC)  # the chains' own clock is not used here
 _NO_ID = UUID(int=0)
+WARMUP_CANDLES = 100  # candles before a period's first window that the detector reads first
+MAX_RUNS = 12  # strategies x ways of opening x periods
+
+
+class OpenRule(StrEnum):
+    """When a backtest opens pairs."""
+
+    WINDOW = "window"  # all through the window, like a session today
+    BREAKOUT = "breakout"  # only while a trend is on, after a breakout
+
+
+@dataclass(slots=True, frozen=True)
+class Run:
+    """One strategy replayed one way on one period (1, or 2: the period that judges)."""
+
+    strategy: int  # index into the setup's strategies
+    opens: OpenRule
+    period: int
 
 
 class Cancelled(Exception):
@@ -92,9 +125,35 @@ class BacktestSetup:
     payout_pct: Decimal = Decimal(88)
     order_delay_s: float = 0.5
     step_delay_s: float = 1.0
+    opens: tuple[OpenRule, ...] = (OpenRule.WINDOW,)
+    market: MarketRules = field(default_factory=MarketRules)
+    trend_max_candles: int | None = 20  # None: until the next consolidation only
+    check_first_day: date | None = None  # the second period, which judges the settings
+    check_last_day: date | None = None
 
-    def windows(self) -> list[Window]:
-        """The session windows that start on the chosen days."""
+    def periods(self) -> list[tuple[date, date]]:
+        """The first period, and the second one when there is one."""
+        found = [(self.first_day, self.last_day)]
+        if self.check_first_day is not None and self.check_last_day is not None:
+            found.append((self.check_first_day, self.check_last_day))
+        return found
+
+    def runs(self) -> list[Run]:
+        """Period by period, way by way, strategy by strategy."""
+        return [
+            Run(index, opens, period)
+            for period in range(1, len(self.periods()) + 1)
+            for opens in self.opens
+            for index in range(len(self.strategies))
+        ]
+
+    def all_windows(self) -> list[Window]:
+        """The windows of every period, oldest period first."""
+        return [w for period in range(1, len(self.periods()) + 1) for w in self.windows(period)]
+
+    def windows(self, period: int = 1) -> list[Window]:
+        """The session windows that start on the days of a period."""
+        first_day, last_day = self.periods()[period - 1]
         session = SessionRecord(
             name="backtest",
             enabled=True,
@@ -113,12 +172,12 @@ class BacktestSetup:
         )
         # from a day before to two days after: a zone ahead of or behind UTC still finds the
         # windows of its first and last local days
-        since = datetime.combine(self.first_day, time(0), tzinfo=UTC) - timedelta(days=1)
-        until = datetime.combine(self.last_day, time(0), tzinfo=UTC) + timedelta(days=2)
+        since = datetime.combine(first_day, time(0), tzinfo=UTC) - timedelta(days=1)
+        until = datetime.combine(last_day, time(0), tzinfo=UTC) + timedelta(days=2)
         return [
             w
             for w in windows_between(session, since, until)
-            if self.first_day <= local_date(w.start, self.timezone) <= self.last_day
+            if first_day <= local_date(w.start, self.timezone) <= last_day
         ]
 
 
@@ -180,6 +239,7 @@ class SimChain:
     status: ChainStatus
     end_reason: str
     trades: list[SimTrade]
+    run: int = 0  # index into the setup's runs
 
     @property
     def profit(self) -> Decimal:
@@ -274,6 +334,37 @@ def run_chain(
     )
 
 
+# ---- the trends ------------------------------------------------------------------------------
+
+
+def trend_spans(
+    prices: Prices, setup: BacktestSetup, first: int, last: int
+) -> list[tuple[int, int]]:
+    """When pairs may open after a breakout, between `first` and `last` (epoch seconds): from
+    the moment each breakout is known until the next consolidation is known or
+    `trend_max_candles` have passed. The detector reads the candles of the trade length one by
+    one, from `WARMUP_CANDLES` before `first`."""
+    length = setup.duration_s
+    lo = bisect_left(prices.times, first - WARMUP_CANDLES * length)
+    hi = bisect_right(prices.times, last)
+    candles = candles_from_ticks(prices.times[lo:hi], prices.quotes[lo:hi], length)
+    spans: list[tuple[int, int]] = []
+    for trend in scan(candles, setup.market, length).trends:
+        end = trend.stopped
+        if setup.trend_max_candles is not None:
+            end = min(end, trend.start + setup.trend_max_candles * length)
+        if end > trend.start and end > first and trend.start < last:
+            spans.append((trend.start, end))
+    return spans
+
+
+def _within(
+    spans: Sequence[tuple[int, int]], start: float, end: float
+) -> list[tuple[float, float]]:
+    """The parts of `spans` inside `start`..`end`."""
+    return [(max(a, start), min(b, end)) for a, b in spans if b > start and a < end]
+
+
 # ---- one window --------------------------------------------------------------------------------
 
 
@@ -284,6 +375,8 @@ class WindowResult:
     skipped_rounds: int = 0  # every_candle: the limit of open pairs was reached
     no_data_rounds: int = 0
     stopped_by: str = "window_ended"
+    spans: int = 0  # stretches in which pairs could open (the window itself, or its trends)
+    active_s: float = 0  # their seconds in all
 
 
 class _Run:
@@ -314,11 +407,19 @@ class _Run:
                     self.stopped_by = "loss_limit"
 
 
-def replay_window(prices: Prices, setup: BacktestSetup, index: int, window: Window) -> WindowResult:
+def replay_window(
+    prices: Prices,
+    setup: BacktestSetup,
+    index: int,
+    window: Window,
+    spans: Sequence[tuple[int, int]] | None = None,
+) -> WindowResult:
+    """One strategy in one window: all through it, or only in `spans` (the trends)."""
     result = WindowResult()
     run = _Run(setup)
     day = local_date(window.start, setup.timezone)
     start, end = window.start.timestamp(), window.end.timestamp()
+    active = [(start, end)] if spans is None else _within(spans, start, end)
     length = setup.duration_s
     moment = start
     open_until: list[float] = []  # every_candle: when each opened pair is over
@@ -338,30 +439,34 @@ def replay_window(prices: Prices, setup: BacktestSetup, index: int, window: Wind
             run.add(chain)
         return chains
 
-    while moment < end:
-        run.until(moment)
-        if run.stopped_by is not None:
-            result.stopped_by = run.stopped_by
-            break
-        if setup.max_pairs is not None and result.pairs >= setup.max_pairs:
-            result.stopped_by = "max_pairs"
-            break
-        if setup.mode is SessionMode.EVERY_CANDLE:
-            busy = sum(1 for t in open_until if t > moment)
-            if busy >= setup.max_open_pairs:
-                result.skipped_rounds += 1
-            else:
-                chains = open_pair(moment)
-                if chains is not None:
-                    open_until.append(max(c.known_at for c in chains))
-            moment = _next_candle(moment, length, after=True)
-            continue
-        chains = open_pair(moment)
-        if chains is None:
-            moment = _next_candle(moment, length, after=True)
-            continue
-        over = max(c.known_at for c in chains) + setup.pause_s
-        moment = _next_candle(over, length)
+    for span_start, span_end in active:
+        result.spans += 1
+        result.active_s += span_end - span_start
+        moment = max(moment, span_start)  # a pair still running from the last stretch: wait
+        while moment < span_end:
+            run.until(moment)
+            if run.stopped_by is not None:
+                result.stopped_by = run.stopped_by
+                return result
+            if setup.max_pairs is not None and result.pairs >= setup.max_pairs:
+                result.stopped_by = "max_pairs"
+                return result
+            if setup.mode is SessionMode.EVERY_CANDLE:
+                busy = sum(1 for t in open_until if t > moment)
+                if busy >= setup.max_open_pairs:
+                    result.skipped_rounds += 1
+                else:
+                    chains = open_pair(moment)
+                    if chains is not None:
+                        open_until.append(max(c.known_at for c in chains))
+                moment = _next_candle(moment, length, after=True)
+                continue
+            chains = open_pair(moment)
+            if chains is None:
+                moment = _next_candle(moment, length, after=True)
+                continue
+            over = max(c.known_at for c in chains) + setup.pause_s
+            moment = _next_candle(over, length)
     return result
 
 
@@ -399,6 +504,8 @@ class Totals:
     worst_drawdown: Decimal = Decimal(0)
     worst_drawdown_at: int | None = None  # when the trough was reached
     longest_losing_run: int = 0  # chains lost one after the other
+    spans: int = 0  # stretches in which pairs could open
+    active_s: float = 0  # their seconds in all
     stops: dict[str, int] = field(default_factory=dict)  # how windows ended
     days: dict[str, list[Decimal | int]] = field(default_factory=dict)  # day: profit, chains, lost
     equity: list[tuple[int, Decimal]] = field(default_factory=list)  # (time, running profit)
@@ -406,9 +513,10 @@ class Totals:
 
 @dataclass(slots=True)
 class BacktestResult:
-    totals: list[Totals]
+    totals: list[Totals]  # one per run, in the order of `BacktestSetup.runs()`
     chains: list[SimChain]
-    windows: int
+    windows: int  # of all periods
+    runs: list[Run] = field(default_factory=list)
 
 
 type Progress = Callable[[float], None]
@@ -421,26 +529,43 @@ def replay(
     progress: Progress | None = None,
     cancel: threading.Event | None = None,
 ) -> BacktestResult:
-    """Every strategy of the setup over every window. Raises `Cancelled`."""
-    windows = setup.windows()
-    totals = [Totals() for _ in setup.strategies]
+    """Every run of the setup (a strategy, a way of opening, a period) over every window of its
+    period. Raises `Cancelled`."""
+    runs = setup.runs()
+    windows = {period: setup.windows(period) for period in range(1, len(setup.periods()) + 1)}
+    spans: dict[int, list[tuple[int, int]]] = {}
+    if OpenRule.BREAKOUT in setup.opens:
+        for period, own_windows in windows.items():
+            if own_windows:
+                first = int(own_windows[0].start.timestamp())
+                last = int(own_windows[-1].end.timestamp())
+                spans[period] = trend_spans(prices, setup, first, last)
+    totals = [Totals() for _ in runs]
     chains: list[SimChain] = []
-    jobs = len(windows) * len(setup.strategies) or 1
+    jobs = sum(len(windows[r.period]) for r in runs) or 1
     done = 0
-    for index, total in enumerate(totals):
+    for number, (run, total) in enumerate(zip(runs, totals, strict=True)):
         own: list[SimChain] = []
-        for window in windows:
+        trends = spans.get(run.period, []) if run.opens is OpenRule.BREAKOUT else None
+        for window in windows[run.period]:
             if cancel is not None and cancel.is_set():
                 raise Cancelled
-            result = replay_window(prices, setup, index, window)
+            result = replay_window(prices, setup, run.strategy, window, trends)
             _count_window(total, result)
             own.extend(result.chains)
             done += 1
             if progress is not None:
                 progress(done / jobs)
-        _count_chains(total, own, setup.strategies[index])
+        for chain in own:
+            chain.run = number
+        _count_chains(total, own, setup.strategies[run.strategy])
         chains.extend(own)
-    return BacktestResult(totals=totals, chains=chains, windows=len(windows))
+    return BacktestResult(
+        totals=totals,
+        chains=chains,
+        windows=sum(len(w) for w in windows.values()),
+        runs=runs,
+    )
 
 
 def _count_window(total: Totals, result: WindowResult) -> None:
@@ -448,6 +573,8 @@ def _count_window(total: Totals, result: WindowResult) -> None:
     total.pairs += result.pairs
     total.skipped_rounds += result.skipped_rounds
     total.no_data_rounds += result.no_data_rounds
+    total.spans += result.spans
+    total.active_s += result.active_s
     total.stops[result.stopped_by] = total.stops.get(result.stopped_by, 0) + 1
 
 

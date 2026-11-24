@@ -57,6 +57,10 @@ const strategy = {
   worst_drawdown: '20.50',
   worst_drawdown_at: '2026-11-18T11:00:00Z',
   longest_losing_run: 3,
+  opens: 'window' as const,
+  period: 1,
+  spans: 1,
+  active_s: 14_400,
   stops: { window_ended: 1 },
   days: [{ day: '2026-11-18', profit: '-4.20', chains: 60, lost: 10 }],
   equity: [
@@ -99,6 +103,7 @@ function backtest(overrides: Partial<Backtest> = {}): Backtest {
       payout_pct: '88',
       order_delay_s: 0.5,
       step_delay_s: 1,
+      trend_max_candles: 20,
     },
     summary: {
       windows: 1,
@@ -271,7 +276,7 @@ describe('the Backtest page', () => {
       ['GET', /^\/backtests\/3\/chains/, json(chains)],
     ])
     renderWith(<BacktestPage />, { route: '/backtest?run=3' })
-    const table = await screen.findByRole('table', { name: 'The strategies compared' })
+    const table = await screen.findByRole('table', { name: 'The runs compared' })
     expect(within(table).getByRole('columnheader', { name: 'Martingale ×2, 4, 8' })).toBeVisible()
     const row = within(table).getByRole('row', { name: /Chains lost \(every step\)/ })
     expect(row).toHaveTextContent('10 (16.7%)')
@@ -280,5 +285,88 @@ describe('the Backtest page', () => {
     const list = await screen.findByRole('table', { name: 'Chains of the backtest' })
     expect(within(list).getByText('lost every step')).toBeVisible()
     expect(within(list).getByText('2 trade(s)')).toBeVisible()
+  })
+
+  it('runs trend sessions beside always-on ones, on a second period too', async () => {
+    const api = mockApi([
+      ...base,
+      ['POST', '/backtests', json(backtest({ state: 'running', summary: null, progress: 0 }), 202)],
+      ['GET', '/backtests/3', json(backtest({ state: 'running', summary: null, progress: 0.5 }))],
+    ])
+    const user = userEvent.setup()
+    renderWith(<BacktestPage />, { route: '/backtest' })
+    await screen.findByRole('table', { name: 'Stored prices' })
+    expect(screen.queryByLabelText('Stop after (candles)')).toBeNull()
+    await user.click(screen.getByLabelText('Only after a breakout, until the next consolidation'))
+    const candles = screen.getByLabelText('Candles in the pattern')
+    await user.clear(candles)
+    await user.type(candles, '6')
+    const stop = screen.getByLabelText('Stop after (candles)')
+    await user.clear(stop)
+    await user.type(stop, '15')
+    await user.type(screen.getByLabelText('First day to judge on'), '2026-11-10')
+    await user.type(screen.getByLabelText('Last day to judge on (included)'), '2026-11-11')
+    expect(screen.getByText(/8 of at most 12 runs/)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Run the backtest' }))
+    await waitFor(() => {
+      expect(api.to('POST', '/backtests')).toHaveLength(1)
+    })
+    const body = api.to('POST', '/backtests')[0]?.body as Record<string, unknown>
+    expect(body.opens).toEqual(['window', 'breakout'])
+    expect(body.market).toMatchObject({ pattern: 'alternating', candles: 6 })
+    expect(body.trend_max_candles).toBe(15)
+    expect(body.check_first_day).toBe('2026-11-10')
+    expect(body.check_last_day).toBe('2026-11-11')
+  })
+
+  it('shows which period chose the settings and which judged them', async () => {
+    const runs = [
+      { opens: 'window' as const, period: 1, pairs: 30, profit: '-4.20' },
+      { opens: 'breakout' as const, period: 1, pairs: 12, profit: '-3.60', spans: 4 },
+      { opens: 'window' as const, period: 2, pairs: 30, profit: '-2.00' },
+      { opens: 'breakout' as const, period: 2, pairs: 10, profit: '-1.00', spans: 3 },
+    ].map((r) => ({
+      strategy: 'martingale' as const,
+      max_steps: 3,
+      multipliers: ['2', '4', '8'],
+      ...strategy,
+      ...r,
+    }))
+    const finished = backtest({
+      setup: {
+        ...backtest().setup,
+        opens: ['window', 'breakout'],
+        check_first_day: '2026-11-10',
+        check_last_day: '2026-11-11',
+      },
+      summary: { windows: 2, seconds: 0.5, strategies: runs },
+    })
+    mockApi([
+      ...base.slice(0, 3),
+      ['GET', '/backtests', json({ items: [finished] })],
+      ['GET', '/sessions', json({ items: [], total: 0, limit: 200, offset: 0 })],
+      ['GET', '/backtests/3', json(finished)],
+      ['GET', /^\/backtests\/3\/chains/, json(chains)],
+    ])
+    renderWith(<BacktestPage />, { route: '/backtest?run=3' })
+    const table = await screen.findByRole('table', { name: 'The runs compared' })
+    for (const name of [
+      'Martingale ×2, 4, 8 · always on · period 1',
+      'Martingale ×2, 4, 8 · after a breakout · period 1',
+      'Martingale ×2, 4, 8 · always on · period 2',
+      'Martingale ×2, 4, 8 · after a breakout · period 2',
+    ]) {
+      expect(within(table).getByRole('columnheader', { name })).toBeVisible()
+    }
+    const perPair = within(table).getByRole('row', { name: /Profit per pair/ })
+    expect(perPair).toHaveTextContent('-0.14')
+    expect(perPair).toHaveTextContent('-0.30')
+    expect(within(table).getByRole('row', { name: /Hours pairs could open/ })).toHaveTextContent(
+      '4.0 h in 4 trends',
+    )
+    expect(screen.getByText(/judges them/)).toHaveTextContent('2026-11-10 to 2026-11-11')
+    expect(screen.getByText(/After a breakout: Alternating/)).toHaveTextContent(
+      'after 20 candles or at the next consolidation',
+    )
   })
 })

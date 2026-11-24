@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from app.backtest.replay import BacktestSetup, StrategySetup
+from app.backtest.replay import BacktestSetup, OpenRule, StrategySetup
 from app.backtest.store import BacktestStore
 from app.core.config import Settings
 from app.domain.enums import SessionMode, Strategy
-from scripts.backtest import run, strategy, window
+from scripts.backtest import opens, run, run_label, strategy, window
 
 T10 = int(datetime(2023, 11, 15, 10, 0, tzinfo=UTC).timestamp())
 
@@ -30,6 +30,13 @@ def test_a_strategy_is_typed_as_name_and_multipliers() -> None:
     with pytest.raises(argparse.ArgumentTypeError, match="not a strategy"):
         strategy("double_or_nothing:2")
     assert window("10:00-14:30") == (clock(10, 0), clock(14, 30))
+    assert opens("window,breakout") == (OpenRule.WINDOW, OpenRule.BREAKOUT)
+    with pytest.raises(argparse.ArgumentTypeError):
+        opens("sometimes")
+    assert run_label({"strategy": "martingale"}) == "martingale"
+    assert run_label({"strategy": "martingale", "opens": "breakout", "period": 2}) == (
+        "martingale trend (2)"
+    )
 
 
 async def test_a_run_prints_the_strategies_side_by_side(
@@ -67,3 +74,13 @@ async def test_a_run_prints_the_strategies_side_by_side(
     assert len(store.backtests()) == 1  # kept, so the dashboard shows it too
     assert await run(settings, replace(setup, asset="R_75")) == 2  # no prices stored
     assert "download them first" in capsys.readouterr().err
+    both = replace(
+        setup,
+        opens=(OpenRule.WINDOW, OpenRule.BREAKOUT),
+        check_first_day=date(2023, 11, 15),
+        check_last_day=date(2023, 11, 15),
+    )
+    assert await run(settings, both) == 0
+    out = capsys.readouterr().out
+    assert "martingale trend (2)" in out and "hours open" in out
+    assert "the second period, which judges" in out

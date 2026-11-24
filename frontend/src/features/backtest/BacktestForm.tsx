@@ -2,19 +2,25 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../../api/client'
 import { keys, useAssetNames, usePrices, useSessions } from '../../api/queries'
-import type { Backtest, Strategy } from '../../api/types'
+import type { Backtest, Pattern, Strategy } from '../../api/types'
 import { Button } from '../../components/Button'
 import { errorMessage } from '../../lib/errors'
 import { MODES, WEEKDAYS } from '../sessions/sessionSchema'
 import { assetLabel } from './assetNames'
 import {
   LENGTHS,
+  MAX_RUNS,
   MAX_STRATEGIES,
+  OPENS,
+  PATTERNS,
+  PATTERN_TEXT,
   STRATEGIES,
+  TREND_MAX_DEFAULT,
   coverage,
   emptyBacktest,
   fromSession,
   parseMultipliers,
+  runCount,
   toInput,
   validate,
   type BacktestFormValues,
@@ -95,6 +101,8 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
 
   const held = prices.data?.items ?? []
   const covered = coverage(held, values.asset, values.first_day, values.last_day)
+  const covered2 = coverage(held, values.asset, values.check_first_day, values.check_last_day)
+  const afterBreakout = values.opens.includes('breakout')
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const found = validate(values)
@@ -161,6 +169,22 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
               : `The prices of ${assetLabel(values.asset, names)} cover only part of these days; candles without prices are skipped and counted.`}
           </p>
         )}
+        <fieldset>
+          <legend>A second period to judge on (optional)</legend>
+          <p className="help">
+            Settings that look good on one period can be luck. Choose them on the days above, then
+            see whether they still hold on other days: the result shows both, side by side.
+          </p>
+          {text('check_first_day', 'First day to judge on', undefined, 'date')}
+          {text('check_last_day', 'Last day to judge on (included)', undefined, 'date')}
+          {covered2 !== 'all' && values.check_first_day !== '' && values.check_last_day !== '' && (
+            <p className="form-warning" role="status">
+              {covered2 === 'none'
+                ? 'No prices are stored for the second period: download them above first.'
+                : 'The prices cover only part of the second period.'}
+            </p>
+          )}
+        </fieldset>
       </fieldset>
       <fieldset>
         <legend>The session</legend>
@@ -227,6 +251,81 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
         {text('profit_target', 'Profit target per window (optional)')}
         {text('loss_limit', 'Loss limit per window (optional)')}
         {text('max_pairs', 'Most pairs per window (optional)')}
+      </fieldset>
+      <fieldset>
+        <legend>When pairs open</legend>
+        <p className="help">
+          Choose both to compare them on the same prices. After a breakout, pairs open from the
+          candle after it (when it is known, never earlier) until the next consolidation is found or
+          the time below runs out; running chains finish, then it waits for the next breakout.
+        </p>
+        <div className="days">
+          {OPENS.map((o) => (
+            <label key={o.value} className="check">
+              <input
+                type="checkbox"
+                checked={values.opens.includes(o.value)}
+                onChange={(e) => {
+                  set(
+                    'opens',
+                    e.target.checked
+                      ? [...values.opens, o.value]
+                      : values.opens.filter((v) => v !== o.value),
+                  )
+                }}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        {errors.opens !== undefined && <span className="field-error">{errors.opens}</span>}
+        {afterBreakout && (
+          <>
+            <Field
+              id="bt-pattern"
+              label="A consolidation is"
+              help="The same definitions as on the Market page, on candles as long as the trade."
+            >
+              <select
+                id="bt-pattern"
+                value={values.pattern}
+                onChange={(e) => {
+                  set('pattern', e.target.value as Pattern)
+                }}
+              >
+                {PATTERNS.map((p) => (
+                  <option key={p} value={p}>
+                    {PATTERN_TEXT[p]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {text('pattern_candles', 'Candles in the pattern')}
+            {values.pattern === 'mixed' && text('misses', 'Candles that may not alternate')}
+            {values.pattern === 'tight' &&
+              text('width', 'Range at most (average candles)', 'Like 2: two average candles.')}
+            {values.pattern === 'choppy' &&
+              text('net_share', 'Net move at most (share)', 'Like 0.2: a fifth of all the moves.')}
+            {text('breakout_candles', 'Breakout candles in a row')}
+            <Field id="bt-breakout-by" label="Breakout by">
+              <select
+                id="bt-breakout-by"
+                value={values.breakout_by}
+                onChange={(e) => {
+                  set('breakout_by', e.target.value as BacktestFormValues['breakout_by'])
+                }}
+              >
+                <option value="close">their close beyond the range</option>
+                <option value="touch">any part beyond the range</option>
+              </select>
+            </Field>
+            {text(
+              'trend_max_candles',
+              'Stop after (candles)',
+              `Or earlier, at the next consolidation. Empty: only at the next consolidation. ${TREND_MAX_DEFAULT} is how long a trend lasted on Volatility 75 (1s) (the median).`,
+            )}
+          </>
+        )}
       </fieldset>
       <fieldset>
         <legend>Strategies to compare</legend>
@@ -316,6 +415,9 @@ export function BacktestForm({ onStarted }: { onStarted: (backtest: Backtest) =>
         <Button type="submit" variant="primary" disabled={start.isPending}>
           Run the backtest
         </Button>
+        <small className="help">
+          {runCount(values)} of at most {MAX_RUNS} runs (strategies × ways of opening × periods).
+        </small>
       </div>
       {start.isError && (
         <p role="alert" className="form-error">

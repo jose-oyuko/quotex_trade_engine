@@ -218,10 +218,31 @@ export interface paths {
         };
         /**
          * List Chains
-         * @description The chains of a backtest in time order, with every trade (filter by strategy index and
-         *     by `status`: `completed`, `exhausted`, `failed`).
+         * @description The chains of a backtest in time order, with every trade (filter by run: the index into
+         *     `summary.strategies`, and by `status`: `completed`, `exhausted`, `failed`).
          */
         get: operations["list_chains_api_v1_backtests__backtest_id__chains_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{backtest_id}/pairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pairs
+         * @description Where a run opened its pairs, oldest first, with what each pair made: for the Market
+         *     page's chart.
+         */
+        get: operations["list_pairs_api_v1_backtests__backtest_id__pairs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1669,7 +1690,7 @@ export interface components {
             steps: number;
             /**
              * Strategy
-             * @description Index into the backtest's strategies.
+             * @description Index into the result's runs (`summary.strategies`).
              */
             strategy: number;
             /** Trades */
@@ -1688,6 +1709,13 @@ export interface components {
             asset: string;
             /** Base Stake */
             base_stake: number | string;
+            /**
+             * Check First Day
+             * @description A second period, to judge settings chosen on the first.
+             */
+            check_first_day?: string | null;
+            /** Check Last Day */
+            check_last_day?: string | null;
             /**
              * Duration S
              * @description The trade (and candle) length.
@@ -1716,6 +1744,8 @@ export interface components {
              * @description Per window.
              */
             loss_limit?: number | string | null;
+            /** @description `breakout`: what counts as a consolidation and a breakout. */
+            market?: components["schemas"]["MarketRulesIn"];
             /**
              * Max Open Pairs
              * @default 1
@@ -1733,6 +1763,11 @@ export interface components {
              * @description Shown in the list; made up if empty.
              */
             name?: string | null;
+            /**
+             * Opens
+             * @description When pairs open: `window` (all through it), `breakout` (only while a trend is on, after a breakout), or both, compared side by side.
+             */
+            opens?: components["schemas"]["OpenRule"][];
             /**
              * Order Delay S
              * @description From deciding a trade to its purchase.
@@ -1775,6 +1810,12 @@ export interface components {
              */
             timezone: string;
             /**
+             * Trend Max Candles
+             * @description `breakout`: stop opening pairs this many candles after the breakout, or earlier at the next consolidation; null: only at the next consolidation.
+             * @default 20
+             */
+            trend_max_candles: number | null;
+            /**
              * Weekdays
              * @description 0 = Monday ... 6 = Sunday.
              */
@@ -1786,6 +1827,13 @@ export interface components {
             asset: string;
             /** Base Stake */
             base_stake: string;
+            /**
+             * Check First Day
+             * @description A second period, to judge settings chosen on the first.
+             */
+            check_first_day?: string | null;
+            /** Check Last Day */
+            check_last_day?: string | null;
             /**
              * Duration S
              * @description The trade (and candle) length.
@@ -1814,6 +1862,8 @@ export interface components {
              * @description Per window.
              */
             loss_limit?: string | null;
+            /** @description `breakout`: what counts as a consolidation and a breakout. */
+            market?: components["schemas"]["MarketRulesIn"];
             /**
              * Max Open Pairs
              * @default 1
@@ -1831,6 +1881,11 @@ export interface components {
              * @description Shown in the list; made up if empty.
              */
             name?: string | null;
+            /**
+             * Opens
+             * @description When pairs open: `window` (all through it), `breakout` (only while a trend is on, after a breakout), or both, compared side by side.
+             */
+            opens?: components["schemas"]["OpenRule"][];
             /**
              * Order Delay S
              * @description From deciding a trade to its purchase.
@@ -1872,6 +1927,12 @@ export interface components {
              * @default UTC
              */
             timezone: string;
+            /**
+             * Trend Max Candles
+             * @description `breakout`: stop opening pairs this many candles after the breakout, or earlier at the next consolidation; null: only at the next consolidation.
+             * @default 20
+             */
+            trend_max_candles: number | null;
             /**
              * Weekdays
              * @description 0 = Monday ... 6 = Sunday.
@@ -1953,6 +2014,38 @@ export interface components {
             /** Strategies */
             strategies: components["schemas"]["Strategy"][];
             summary: components["schemas"]["BacktestSummaryOut"] | null;
+        };
+        /** BacktestPairOut */
+        BacktestPairOut: {
+            /**
+             * At
+             * Format: date-time
+             * @description When the pair's first trades started.
+             */
+            at: string;
+            /**
+             * Lost
+             * @description A leg lost every step.
+             */
+            lost: boolean;
+            /**
+             * Profit
+             * @description Both legs together.
+             */
+            profit: string;
+        };
+        /** BacktestPairsOut */
+        BacktestPairsOut: {
+            /**
+             * Items
+             * @description Oldest first.
+             */
+            items: components["schemas"]["BacktestPairOut"][];
+            /**
+             * Total
+             * @description All the run's pairs; `items` stops at 20,000.
+             */
+            total: number;
         };
         /**
          * BacktestStrategyIn
@@ -3251,6 +3344,12 @@ export interface components {
             /** Unknown */
             unknown: number;
         };
+        /**
+         * OpenRule
+         * @description When a backtest opens pairs.
+         * @enum {string}
+         */
+        OpenRule: "window" | "breakout";
         /** Page[ChainOut] */
         Page_ChainOut_: {
             /** Items */
@@ -4144,8 +4243,17 @@ export interface components {
          * @enum {string}
          */
         Strategy: "no_martingale" | "martingale" | "flip_every_loss" | "two_step_flip" | "growing_flip";
-        /** StrategyResultOut */
+        /**
+         * StrategyResultOut
+         * @description One run: a strategy, replayed one way (`opens`) on one period.
+         */
         StrategyResultOut: {
+            /**
+             * Active S
+             * @description Their seconds in all.
+             * @default 0
+             */
+            active_s: number;
             /** Chains */
             chains: number;
             /** Days */
@@ -4157,6 +4265,11 @@ export interface components {
              * @description Chains that lost every step.
              */
             exhausted: number;
+            /**
+             * Index
+             * @description Index into the setup's strategies (null before Phase 31).
+             */
+            index?: number | null;
             /** Largest Stake */
             largest_stake: string;
             /**
@@ -4183,8 +4296,16 @@ export interface components {
              * @description Pairs not opened for lack of price data.
              */
             no_data_rounds: number;
+            /** @default window */
+            opens: components["schemas"]["OpenRule"];
             /** Pairs */
             pairs: number;
+            /**
+             * Period
+             * @description 1, or 2: the period that judges the settings.
+             * @default 1
+             */
+            period: number;
             /** Profit */
             profit: string;
             /**
@@ -4192,6 +4313,12 @@ export interface components {
              * @description Candles with too many pairs open (every candle).
              */
             skipped_rounds: number;
+            /**
+             * Spans
+             * @description Stretches in which pairs could open: windows, or trends.
+             * @default 0
+             */
+            spans: number;
             /** Staked */
             staked: string;
             /**
@@ -5513,6 +5640,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BacktestChainsOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_pairs_api_v1_backtests__backtest_id__pairs_get: {
+        parameters: {
+            query?: {
+                run?: number;
+            };
+            header?: never;
+            path: {
+                backtest_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestPairsOut"];
                 };
             };
             /** @description Not Found */
