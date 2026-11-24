@@ -17,6 +17,20 @@ const STATE_TEXT: Record<EngineInfo['state'], { text: string; tone: Tone }> = {
   failed: { text: 'Could not start', tone: 'bad' },
 }
 
+/** "the Deriv app id and the Deriv demo token" */
+function pieces(labels: string[]): string {
+  return labels.map((label) => `the ${label}`).join(' and ')
+}
+
+/** What to add before the engine can start: the pieces of any ONE broker (decision D-75). */
+function startNeedsText(needs: EngineInfo['start_needs']): string {
+  const options = needs.map((need) => pieces(need.missing))
+  return (
+    `Before it can start, it needs the logins of one broker: add ${options.join(', or add ')}. ` +
+    'Store them below. Telegram is optional.'
+  )
+}
+
 const SOURCE_TEXT: Record<EngineInfo['logins'][number]['source'], string> = {
   dashboard: 'stored here',
   '.env': 'from backend/.env',
@@ -72,16 +86,18 @@ function EngineControls({ engine }: { engine: EngineInfo }) {
           <li key={login.label}>
             {login.label}:{' '}
             <Badge tone={login.present ? 'good' : login.required ? 'bad' : 'muted'}>
-              {SOURCE_TEXT[login.source]}
+              {login.source === 'missing' && !login.required
+                ? 'not set (optional)'
+                : SOURCE_TEXT[login.source]}
             </Badge>
           </li>
         ))}
       </ul>
-      {!running && missing.length > 0 && (
-        <p className="help">
-          Before it can start, add: {missing.join(', ')}. Store them below (or, for the Telegram API
-          id, in <code>backend/.env</code>).
-        </p>
+      {!running && engine.start_needs.length > 0 && (
+        <p className="help">{startNeedsText(engine.start_needs)}</p>
+      )}
+      {!running && engine.start_needs.length === 0 && missing.length > 0 && (
+        <p className="help">Before it can start, add: {missing.join(', ')}. Store them below.</p>
       )}
       <div className="form-actions">
         {!running && (

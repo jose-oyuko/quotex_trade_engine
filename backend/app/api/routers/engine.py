@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import ControllerDep, SettingsDep, VaultDep
-from app.api.schemas.engine import EngineOut, LoginItemOut
-from app.engine.logins import login_items
+from app.api.schemas.engine import BrokerNeedOut, EngineOut, LoginItemOut
+from app.engine.logins import broker_choices, login_items
 
 router = APIRouter(prefix="/engine", tags=["engine"])
 
@@ -26,6 +26,9 @@ async def engine_out(
             for i in items
         ],
         missing_logins=[i.label for i in items if i.required and not i.present],
+        start_needs=[
+            BrokerNeedOut(broker=c.broker, missing=list(c.missing)) for c in broker_choices(items)
+        ],
     )
 
 

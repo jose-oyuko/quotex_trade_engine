@@ -1348,6 +1348,31 @@
         "title": "Broker",
         "type": "string"
       },
+      "BrokerNeedOut": {
+        "properties": {
+          "broker": {
+            "enum": [
+              "Deriv",
+              "Quotex"
+            ],
+            "title": "Broker",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          }
+        },
+        "required": [
+          "broker",
+          "missing"
+        ],
+        "title": "BrokerNeedOut",
+        "type": "object"
+      },
       "BrokerOut": {
         "properties": {
           "broker": {
@@ -2614,6 +2639,7 @@
             "type": "array"
           },
           "missing_logins": {
+            "description": "Every required login not there yet (the engine cannot start while any is).",
             "items": {
               "type": "string"
             },
@@ -2636,6 +2662,14 @@
             ],
             "title": "Since"
           },
+          "start_needs": {
+            "description": "Empty when a broker is ready. Otherwise each broker with the pieces it still lacks, the closest first: those of any ONE broker are enough (decision D-75).",
+            "items": {
+              "$ref": "#/components/schemas/BrokerNeedOut"
+            },
+            "title": "Start Needs",
+            "type": "array"
+          },
           "state": {
             "enum": [
               "stopped",
@@ -2655,7 +2689,8 @@
           "since",
           "real_trading_allowed",
           "logins",
-          "missing_logins"
+          "missing_logins",
+          "start_needs"
         ],
         "title": "EngineOut",
         "type": "object"

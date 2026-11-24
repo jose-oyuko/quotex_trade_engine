@@ -67,16 +67,30 @@ describe('starting and stopping the engine', () => {
     expect(screen.queryByRole('button', { name: 'Start the engine' })).toBeNull()
   })
 
-  it('will not offer to start while a login is missing, and says which', async () => {
+  it('will not offer to start without a broker, and asks for ONE broker, not all', async () => {
     setup(() =>
       engineInfo({
-        missing_logins: ['Quotex password'],
-        logins: [{ label: 'Quotex password', present: false, source: 'missing', required: true }],
+        missing_logins: ['Quotex email', 'Quotex password', 'Deriv app id'],
+        start_needs: [
+          { broker: 'Deriv', missing: ['Deriv app id'] },
+          { broker: 'Quotex', missing: ['Quotex email', 'Quotex password'] },
+        ],
+        logins: [
+          { label: 'Deriv app id', present: false, source: 'missing', required: true },
+          { label: 'Deriv demo token', present: true, source: 'dashboard', required: true },
+          { label: 'Telegram login', present: false, source: 'missing', required: false },
+        ],
       }),
     )
     expect(await screen.findByRole('button', { name: 'Start the engine' })).toBeDisabled()
-    expect(screen.getByText(/Before it can start, add: Quotex password/)).toBeVisible()
+    expect(
+      screen.getByText(
+        'Before it can start, it needs the logins of one broker: add the Deriv app id, or add ' +
+          'the Quotex email and the Quotex password. Store them below. Telegram is optional.',
+      ),
+    ).toBeVisible()
     expect(screen.getByText('missing')).toBeVisible()
+    expect(screen.getByText('not set (optional)')).toBeVisible()
   })
 
   it('shows why the last start failed and lets the owner try again', async () => {

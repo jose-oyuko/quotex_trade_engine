@@ -15,6 +15,11 @@ class LoginItemOut(BaseModel):
     required: bool = Field(description="The engine cannot start without it.")
 
 
+class BrokerNeedOut(BaseModel):
+    broker: Literal["Deriv", "Quotex"]
+    missing: list[str]
+
+
 class EngineOut(BaseModel):
     state: Literal["stopped", "starting", "running", "stopping", "failed"]
     desired: bool = Field(description="It is started again when the application starts.")
@@ -22,7 +27,13 @@ class EngineOut(BaseModel):
     since: datetime | None
     real_trading_allowed: bool
     logins: list[LoginItemOut] = Field(description="The logins it would use, never their values.")
-    missing_logins: list[str]
+    missing_logins: list[str] = Field(
+        description="Every required login not there yet (the engine cannot start while any is)."
+    )
+    start_needs: list[BrokerNeedOut] = Field(
+        description="Empty when a broker is ready. Otherwise each broker with the pieces it "
+        "still lacks, the closest first: those of any ONE broker are enough (decision D-75)."
+    )
 
 
 class RealTradingIn(BaseModel):

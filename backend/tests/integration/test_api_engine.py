@@ -81,6 +81,9 @@ async def test_a_new_installation_has_the_engine_stopped_and_says_what_it_would_
         # one broker is enough (decision D-75): with neither, both are listed as needed
         assert "Deriv demo token" in body["missing_logins"]
         assert "Deriv real token" not in body["missing_logins"]
+        # and the page is told that either broker's pieces are enough
+        assert {need["broker"] for need in body["start_needs"]} == {"Deriv", "Quotex"}
+        assert all("Deriv real token" not in need["missing"] for need in body["start_needs"])
         # nothing that needs the engine works yet, and says how to fix it
         refused = await rig.client.post(f"{API}/kill-switch")
         assert refused.status_code == 503

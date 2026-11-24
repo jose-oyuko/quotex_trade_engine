@@ -7,6 +7,7 @@ so a wrong key is noticed instead of the engine quietly using an older password.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import SecretStr
 
@@ -26,6 +27,12 @@ STORED_LOGINS = (
     ("deriv_app_id", "deriv_app_id", "Deriv app id"),
     ("deriv_token_demo", "deriv_token_demo", "Deriv demo token"),
     ("deriv_token_real", "deriv_token_real", "Deriv real token"),
+)
+# What each broker needs before the engine can start with it (decision D-75: one is enough).
+BrokerName = Literal["Deriv", "Quotex"]
+BROKER_LOGINS: tuple[tuple[BrokerName, tuple[str, ...]], ...] = (
+    ("Deriv", ("Deriv app id", "Deriv demo token")),
+    ("Quotex", ("Quotex email", "Quotex password")),
 )
 _NUMBERS = {"telegram_api_id"}
 _TEXTS = {"deriv_app_id"}  # plain text in `Settings`, not a `SecretStr`
@@ -104,6 +111,27 @@ async def login_items(settings: Settings, vault: SecretStore) -> list[LoginItem]
         else:
             items.append(LoginItem(label, False, "missing", required=needed))
     return items
+
+
+@dataclass(slots=True, frozen=True)
+class BrokerChoice:
+    """A broker the engine could start with, and the logins it still lacks."""
+
+    broker: BrokerName
+    missing: tuple[str, ...]
+
+
+def broker_choices(items: list[LoginItem]) -> list[BrokerChoice]:
+    """Empty when some broker has all it needs. Otherwise one entry per broker with only the
+    pieces still missing, the closest broker first: adding those of any ONE broker is enough."""
+    present = {item.label for item in items if item.present}
+    choices = [
+        BrokerChoice(broker, tuple(label for label in labels if label not in present))
+        for broker, labels in BROKER_LOGINS
+    ]
+    if any(not choice.missing for choice in choices):
+        return []
+    return sorted(choices, key=lambda choice: len(choice.missing))
 
 
 async def _quotex_login(settings: Settings, vault: SecretStore) -> LoginItem:

@@ -15,6 +15,7 @@ export function engineInfo(over: Partial<EngineInfo> = {}): EngineInfo {
       { label: 'Telegram API id', present: true, source: 'dashboard', required: true },
     ],
     missing_logins: [],
+    start_needs: [],
     ...over,
   }
 }

@@ -2197,6 +2197,16 @@ export interface components {
          * @enum {string}
          */
         Broker: "quotex" | "deriv";
+        /** BrokerNeedOut */
+        BrokerNeedOut: {
+            /**
+             * Broker
+             * @enum {string}
+             */
+            broker: "Deriv" | "Quotex";
+            /** Missing */
+            missing: string[];
+        };
         /** BrokerOut */
         BrokerOut: {
             broker: components["schemas"]["Broker"];
@@ -2768,12 +2778,20 @@ export interface components {
              * @description The logins it would use, never their values.
              */
             logins: components["schemas"]["LoginItemOut"][];
-            /** Missing Logins */
+            /**
+             * Missing Logins
+             * @description Every required login not there yet (the engine cannot start while any is).
+             */
             missing_logins: string[];
             /** Real Trading Allowed */
             real_trading_allowed: boolean;
             /** Since */
             since: string | null;
+            /**
+             * Start Needs
+             * @description Empty when a broker is ready. Otherwise each broker with the pieces it still lacks, the closest first: those of any ONE broker are enough (decision D-75).
+             */
+            start_needs: components["schemas"]["BrokerNeedOut"][];
             /**
              * State
              * @enum {string}
