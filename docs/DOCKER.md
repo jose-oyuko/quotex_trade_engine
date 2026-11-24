@@ -4,9 +4,13 @@ An optional way to run the whole application (API, trading engine and dashboard)
 quickest on a Mac or Linux machine, and a tidy way to run it on a server. Nothing to install but Docker:
 no Node.js, no `uv`, no Python. On Windows, `npm start` stays the simple way.
 
-> **Not verified on a real Mac or server.** The image was built and run on Windows with Docker Desktop (see
-> [reports/docker.md](reports/docker.md) for exactly what was checked). The Telegram and Quotex logins and the
-> engine were **not** run in it against the real services. Treat the first run as a test, on the demo account.
+> **Step by step on a VPS:** [DEPLOY_VPS_DOCKER.md](DEPLOY_VPS_DOCKER.md) is the full route used on the Linode
+> server on 2026-11-24 (swap, Docker, the key, the tunnel, and the problems met on the way).
+>
+> **Not verified on a real Mac.** The image was first built and run on Windows with Docker Desktop (see
+> [reports/docker.md](reports/docker.md)); on 2026-11-24 it was built and started on a 1 GB Ubuntu VPS and the
+> dashboard opened through the tunnel. The Telegram and Quotex logins and the engine were **not** yet run in it
+> against the real services. Treat the first run as a test, on the demo account.
 
 ## The 3-minute start
 
