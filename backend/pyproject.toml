@@ -17,6 +17,9 @@ dependencies = [
     "pyquotex @ git+https://github.com/cleitonleonel/pyquotex@a50a030b425937fec4595b1ff1c226e160c52943",
     "tzdata>=2026.6",
     "cryptography>=44",
+    # Deriv (app/deriv/): its WebSocket API and its price and login pages.
+    "httpx>=0.28",
+    "websockets>=17.4",
 ]
 
 [dependency-groups]
@@ -25,8 +28,6 @@ dev = [
     "mypy>=1.13",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
-    "httpx>=0.28",
-    "websockets>=17.4",
 ]
 
 [tool.uv]
