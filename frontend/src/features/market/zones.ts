@@ -1,5 +1,5 @@
-// Boxes and shaded stretches drawn under the candles (decision D-85): a consolidation is a box from
-// its range's low to its high, a trend a band over the whole height. A "series primitive" is the
+// Rectangles and shaded stretches drawn under the candles (decision D-85): a consolidation is an
+// outlined rectangle from its range's low to its high, labelled; a trend a band over the whole height. A "series primitive" is the
 // chart library's way to draw one's own shapes; the geometry is plain functions, tested on their own.
 import type {
   IChartApiBase,
@@ -18,11 +18,13 @@ export interface Zone {
   /** Epoch seconds: the first candle's start, and the end (the next candle's start). */
   from: number
   to: number
-  /** The price range of a box; null for a band over the whole height. */
+  /** The price range of a rectangle; null for a band over the whole height. */
   top: number | null
   bottom: number | null
   kind: ZoneKind
   selected: boolean
+  /** Written above a rectangle: "Consolidation · 8 candles". */
+  label?: string
 }
 
 export interface Rect {
@@ -32,6 +34,7 @@ export interface Rect {
   height: number
   kind: ZoneKind
   selected: boolean
+  label?: string
 }
 
 export interface ZoneColours {
@@ -40,6 +43,9 @@ export interface ZoneColours {
   down: string
   selected: string
 }
+
+/** A rectangle reaches a little beyond the range, so its outline does not hide the wick tips. */
+export const PAD_PX = 3
 
 /** The position of a moment among the candles, in the chart's "logical" units: candle `i` sits at
  * `i`, so the edge before it is `i - 0.5`. A moment after the last candle lands past its end. */
@@ -54,7 +60,19 @@ export function logicalOf(times: readonly number[], epoch: number): number {
   return lo - 0.5
 }
 
-/** Where each zone is drawn, in pixels; zones off the chart or without width are left out. */
+/**
+ * The pixel position of an edge between candles (`i - 0.5`). The chart only converts whole candle
+ * positions (anything in between gives 0), so the edge is taken half a candle before candle `i`.
+ */
+export function edgeX(at: (index: number) => number | null, logical: number): number | null {
+  const index = Math.round(logical + 0.5)
+  const here = at(index)
+  const next = at(index + 1)
+  if (here === null || next === null) return null
+  return here - (next - here) / 2
+}
+
+/** Where each zone is drawn, in pixels; zones without width are left out. */
 export function zoneRects(
   zones: readonly Zone[],
   times: readonly number[],
@@ -73,8 +91,8 @@ export function zoneRects(
       const high = y(zone.top)
       const low = y(zone.bottom)
       if (high === null || low === null) continue
-      top = Math.min(high, low)
-      bottom = Math.max(high, low)
+      top = Math.min(high, low) - PAD_PX
+      bottom = Math.max(high, low) + PAD_PX
     }
     rects.push({
       x: left,
@@ -83,6 +101,7 @@ export function zoneRects(
       height: Math.max(bottom - top, 1),
       kind: zone.kind,
       selected: zone.selected,
+      ...(zone.label === undefined ? {} : { label: zone.label }),
     })
   }
   return rects
@@ -140,20 +159,38 @@ export class ZonesPrimitive implements ISeriesPrimitive {
       const rects = zoneRects(
         this.zones,
         this.times,
-        (logical) => scale.logicalToCoordinate(logical as Logical),
+        (logical) => edgeX((index) => scale.logicalToCoordinate(index as Logical), logical),
         (price) => series.priceToCoordinate(price),
         mediaSize.height,
       )
+      // the trends first, so the rectangles stay on top of their shading
       for (const r of rects) {
-        const colour = this.colours[r.kind]
-        context.globalAlpha = r.kind === 'consolidation' ? (r.selected ? 0.3 : 0.16) : 0.08
+        if (r.kind === 'consolidation') continue
+        context.globalAlpha = 0.1
+        context.fillStyle = this.colours[r.kind]
+        context.fillRect(r.x, r.y, r.width, r.height)
+      }
+      context.font = '600 11px system-ui, sans-serif'
+      context.textBaseline = 'bottom'
+      for (const r of rects) {
+        if (r.kind !== 'consolidation') continue
+        const colour = r.selected ? this.colours.selected : this.colours.consolidation
+        context.globalAlpha = r.selected ? 0.28 : 0.16
         context.fillStyle = colour
         context.fillRect(r.x, r.y, r.width, r.height)
-        if (r.kind === 'consolidation' || r.selected) {
-          context.globalAlpha = 1
-          context.lineWidth = r.selected ? 3 : 1
-          context.strokeStyle = r.selected ? this.colours.selected : colour
-          context.strokeRect(r.x, r.y, r.width, r.height)
+        context.globalAlpha = 1
+        context.lineWidth = r.selected ? 3 : 2
+        context.strokeStyle = colour
+        context.strokeRect(r.x, r.y, r.width, r.height)
+        if (r.label !== undefined) {
+          // above the rectangle, or inside its top when there is no room above
+          // a narrow rectangle gets the short part: "8 candles"
+          const text =
+            context.measureText(r.label).width <= Math.max(r.width, 90)
+              ? r.label
+              : (r.label.split(' · ')[1] ?? '')
+          const y = r.y - 3 >= 12 ? r.y - 3 : r.y + 14
+          context.fillText(text, r.x + 2, y)
         }
       }
       context.globalAlpha = 1

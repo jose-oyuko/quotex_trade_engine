@@ -162,6 +162,8 @@ const scan: Scan = {
   },
 }
 
+const scanned = ['POST', '/market/scan', json(scan)] as const
+
 const base = [
   ['GET', '/prices', json(held)],
   ['GET', '/prices/assets', json(names)],
@@ -184,7 +186,7 @@ function props(): CandleChartProps {
 
 describe('MarketPage', () => {
   it('draws the newest stored candles, and other timeframes on request', async () => {
-    const api = mockApi([...base])
+    const api = mockApi([...base, scanned])
     const user = userEvent.setup()
     renderWith(<MarketPage />, { route: '/market' })
     await waitFor(() => {
@@ -205,6 +207,12 @@ describe('MarketPage', () => {
       expect(api.calls.some((c) => c.path.includes('length=300'))).toBe(true)
     })
     expect(props().length).toBe(300)
+    // the consolidations are found again on the new timeframe
+    await waitFor(() => {
+      expect(
+        api.to('POST', '/market/scan').map((c) => (c.body as { length: number }).length),
+      ).toEqual([60, 300])
+    })
 
     await user.type(screen.getByLabelText(/or seconds/), '90')
     await user.click(screen.getByRole('button', { name: 'Use' }))
@@ -214,7 +222,7 @@ describe('MarketPage', () => {
   })
 
   it('jumps to a date and loads the candles around it', async () => {
-    const api = mockApi([...base])
+    const api = mockApi([...base, scanned])
     const user = userEvent.setup()
     renderWith(<MarketPage />, { route: '/market' })
     await screen.findByTestId('chart')
@@ -233,12 +241,20 @@ describe('MarketPage', () => {
   })
 
   it('scans with the chosen definition and marks the chart from the answer', async () => {
-    const api = mockApi([...base, ['POST', '/market/scan', json(scan)]])
+    const api = mockApi([...base, scanned])
     const user = userEvent.setup()
     renderWith(<MarketPage />, { route: '/market' })
     const form = await screen.findByRole('form', { name: 'Find consolidations' })
     await waitFor(() => {
       expect(within(form).getByLabelText('From (UTC)')).toHaveValue('2026-11-18T00:00')
+    })
+    // the last stored day is scanned with the owner's definition as soon as the page opens
+    await waitFor(() => {
+      expect(api.to('POST', '/market/scan')).toHaveLength(1)
+    })
+    expect(api.to('POST', '/market/scan')[0]?.body).toMatchObject({
+      start: '2026-11-18T00:00:00Z',
+      rules: { pattern: 'alternating', candles: 5, breakout_candles: 2, breakout_by: 'close' },
     })
 
     await user.selectOptions(within(form).getByLabelText('Pattern'), 'mixed')
@@ -249,16 +265,16 @@ describe('MarketPage', () => {
     await user.type(candles, '1')
     await user.click(within(form).getByRole('button', { name: 'Scan' }))
     expect(await within(form).findByText('From 2 to 50 candles')).toBeVisible()
-    expect(api.to('POST', '/market/scan')).toHaveLength(0)
+    expect(api.to('POST', '/market/scan')).toHaveLength(1)
 
     await user.clear(candles)
     await user.type(candles, '6')
     await user.selectOptions(within(form).getByLabelText('Breakout by'), 'touch')
     await user.click(within(form).getByRole('button', { name: 'Scan' }))
     await waitFor(() => {
-      expect(api.to('POST', '/market/scan')).toHaveLength(1)
+      expect(api.to('POST', '/market/scan')).toHaveLength(2)
     })
-    const body = api.to('POST', '/market/scan')[0]?.body as Record<string, unknown>
+    const body = api.to('POST', '/market/scan')[1]?.body as Record<string, unknown>
     expect(body).toMatchObject({
       asset: '1HZ75V',
       length: 60,
@@ -284,6 +300,7 @@ describe('MarketPage', () => {
       bottom: 1201.25,
       kind: 'consolidation',
       selected: false,
+      label: 'Consolidation · 8 candles',
     })
     expect(zones).toContainEqual(
       expect.objectContaining({ from: at('2026-11-18T10:10:00Z'), kind: 'up', top: null }),
@@ -292,10 +309,9 @@ describe('MarketPage', () => {
   })
 
   it('shows a consolidation on the chart when its row is chosen', async () => {
-    mockApi([...base, ['POST', '/market/scan', json(scan)]])
+    mockApi([...base, scanned])
     const user = userEvent.setup()
     renderWith(<MarketPage />, { route: '/market' })
-    await user.click(await screen.findByRole('button', { name: 'Scan' }))
     const table = await screen.findByRole('table', { name: 'Consolidations found' })
     const second = within(table).getAllByRole('button', { name: 'Show' })[1] as HTMLElement
     await user.click(second)
@@ -321,9 +337,7 @@ describe('MarketPage', () => {
         apiError(422, 'invalid_market', 'No prices of 1HZ75V are stored from …: download them.'),
       ],
     ])
-    const user = userEvent.setup()
     renderWith(<MarketPage />, { route: '/market' })
-    await user.click(await screen.findByRole('button', { name: 'Scan' }))
     expect(await screen.findByText(/No prices of 1HZ75V are stored/)).toBeVisible()
   })
 

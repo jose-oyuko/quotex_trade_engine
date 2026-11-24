@@ -104,7 +104,7 @@ export function CandleChart({
       borderVisible: false,
     })
     const primitive = new ZonesPrimitive({
-      consolidation: cssColour('--warn', '#8a5a00'),
+      consolidation: '#f59e0b', // amber: stands out from the green and red candles in both themes
       up: good,
       down: bad,
       selected: cssColour('--accent', '#1d5fd6'),

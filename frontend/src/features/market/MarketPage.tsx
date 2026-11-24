@@ -2,7 +2,7 @@
 // and trends the engine finds in them, so the owner can check by eye that it sees what they mean.
 // Everything marked on the chart comes from the server's scan; nothing is worked out again here.
 import { useMutation, useQueries, type UseQueryResult } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { keys, useAssetNames, useMarketPatterns, usePrices } from '../../api/queries'
@@ -79,6 +79,7 @@ function marks(scan: Scan | undefined, selected: number | null, length: number) 
       bottom: c.low,
       kind: 'consolidation',
       selected: i === selected,
+      label: `Consolidation · ${String(c.candles)} candles`,
     })
     // an arrow on the candle that confirmed the breakout (on the scan's own timeframe)
     if (c.breakout && scan.length === length) {
@@ -150,6 +151,15 @@ export default function MarketPage() {
       setSelected(null)
     },
   })
+  // scan by itself when the page opens and when the asset or timeframe changes, so the rectangles
+  // are there without pressing Scan (with the definition in the form)
+  const { mutate } = scan
+  const autoScanned = useRef('')
+  useEffect(() => {
+    if (asset === '' || last === null || autoScanned.current === viewKey) return
+    autoScanned.current = viewKey
+    mutate()
+  }, [asset, last, viewKey, mutate])
   const result = scan.data
   const { zones, markers } = marks(result, selected, length)
   const trends = result ? trendAfter(result) : new Map<number, Trend>()
@@ -272,7 +282,8 @@ export default function MarketPage() {
         label={`${lengthLabel(length)} candles of ${asset}, with the consolidations found marked as boxes`}
       />
       <p className="help">
-        Boxes: consolidations, from their range’s low to its high. Arrows: breakouts. Green or red
+        Amber rectangles: consolidations, from their range’s low to its high, labelled with their
+        candles (the one chosen in the list is outlined in blue). Arrows: breakouts. Green or red
         shading: the trend after a breakout, up or down, until the next consolidation.
       </p>
       <ScanForm

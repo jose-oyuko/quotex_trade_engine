@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { logicalOf, zoneRects, type Zone } from './zones'
+import { PAD_PX, edgeX, logicalOf, zoneRects, type Zone } from './zones'
 
 // candles at 0, 60, 120 ... 540 seconds; one candle is 10 px wide, a price unit 2 px tall
 const times = Array.from({ length: 10 }, (_, i) => i * 60)
@@ -34,13 +34,30 @@ describe('where zones are drawn', () => {
     )
     expect(box).toEqual({
       x: 115,
-      y: 280,
+      y: 280 - PAD_PX,
       width: 50,
-      height: 20,
+      height: 20 + 2 * PAD_PX,
       kind: 'consolidation',
       selected: false,
     })
     expect(band).toMatchObject({ x: 165, y: 0, width: 30, height: 400, kind: 'up' })
+  })
+
+  it('finds the edges between candles with whole candle positions only, like the chart', () => {
+    // the chart library converts whole positions only and gives 0 for anything in between: the
+    // first version asked it for 1.5, 6.5 ... and every rectangle came out 0 pixels wide
+    const chartX = (index: number) => (Number.isInteger(index) ? 100 + index * 10 : 0)
+    expect(edgeX(chartX, 1.5)).toBe(115)
+    expect(edgeX(chartX, -0.5)).toBe(95)
+    const [box] = zoneRects(
+      [zone({ label: 'Consolidation · 5 candles' })],
+      times,
+      (logical) => edgeX(chartX, logical),
+      y,
+      400,
+    )
+    expect(box).toMatchObject({ x: 115, width: 50, label: 'Consolidation · 5 candles' })
+    expect(edgeX(() => null, 1.5)).toBeNull()
   })
 
   it('leaves out zones off the chart or without width', () => {

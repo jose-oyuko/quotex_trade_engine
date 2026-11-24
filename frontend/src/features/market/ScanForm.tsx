@@ -90,8 +90,9 @@ export function ScanForm({
     <form onSubmit={submit} aria-labelledby="scan-heading" noValidate>
       <h2 id="scan-heading">Find consolidations</h2>
       <p className="help">
-        Choose the period to look at and what counts as a consolidation; <em>Scan</em> marks them on
-        the chart and lists them. Times are UTC.
+        The last stored day is scanned with your definition when the page opens. Change the period
+        or what counts as a consolidation and <em>Scan</em> again: each one is outlined on the chart
+        and listed. Times are UTC.
       </p>
       <div className="filters">
         <Field label="From (UTC)" error={errors.start}>

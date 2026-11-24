@@ -139,6 +139,34 @@ The demo was stopped afterwards.
 - **A faster chart:** building candles in SQLite instead of Python (Phase 29 suggestion) would help
   long M1 views if scrolling feels slow.
 
+## 10b. Follow-up (owner's request, 2026-11-23): clear rectangles around consolidations
+
+The owner asked for a rectangle showing where each consolidation is.
+
+**A real bug was behind it: the boxes were never drawn.**
+- A screenshot of the page in a real browser (headless Edge on the demo) showed only the breakout
+  arrows: no boxes and no trend shading.
+- Cause: the chart library converts only whole candle positions to pixels and quietly answers 0 for
+  anything in between. The box edges sit half a candle before a candle (positions like 47.5), so every
+  box came out 0 pixels wide and was skipped.
+- The page tests had not caught it, because their stand-in chart accepted any position.
+
+**Now:**
+- **The fix:** the edges are worked out from whole candle positions (`edgeX` in `zones.ts`). A test now
+  copies the library's rule (whole positions only), so this cannot slip by again.
+- **Each consolidation is an amber outlined rectangle** (2 px), from its range's low to its high with a
+  few pixels to spare, so the wick tips stay visible. It is labelled above "Consolidation · 18 candles"
+  ("18 candles" when narrow). The one chosen with *Show* is outlined in blue.
+- **The trend shading** is drawn under the rectangles.
+- **The scan runs by itself** when the page opens (the last stored day, with the definition in the
+  form) and again when the asset or timeframe changes. The rectangles are there without pressing
+  *Scan*.
+- **Checked in a real browser:** headless Edge screenshots of the demo before and after: none before;
+  after, the rectangles with labels, and the blue one after *Show*.
+- **Checks:** `vitest` 44 files, 508 passed (the page tests now expect the automatic scan and the
+  labels); `eslint`, `tsc`, `format:check` and the build are clean.
+- **Committed** with your word ("you can commit it", 2026-11-24).
+
 ## 11. Git state
 
 Committed with your permission ("commit the plan phases and get to work"): see STATUS for the hash.
